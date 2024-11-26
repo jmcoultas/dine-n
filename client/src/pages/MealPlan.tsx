@@ -31,10 +31,12 @@ export default function MealPlan() {
         description: "Your personalized meal plan is ready.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to generate meal plan. Please try again.",
+        description: error.message === "insufficient_quota" 
+          ? "Service temporarily unavailable. Please try again later."
+          : "Failed to generate meal plan. Please try again.",
         variant: "destructive",
       });
     },
@@ -138,7 +140,13 @@ export default function MealPlan() {
           </TabsContent>
 
           <TabsContent value="grocery">
-            <GroceryList items={generatedRecipes?.flatMap((r) => r.ingredients ?? []) ?? []} />
+            <GroceryList 
+              items={
+                Array.isArray(generatedRecipes) 
+                  ? generatedRecipes.flatMap(r => r.ingredients || [])
+                  : []
+              }
+            />
           </TabsContent>
         </Tabs>
       </div>
