@@ -32,9 +32,10 @@ export default function MealPlan() {
       });
     },
     onError: (error: any) => {
+      const errorType = error.response?.data?.type;
       toast({
         title: "Error",
-        description: error.message === "insufficient_quota" 
+        description: errorType === "insufficient_quota" 
           ? "Service temporarily unavailable. Please try again later."
           : "Failed to generate meal plan. Please try again.",
         variant: "destructive",

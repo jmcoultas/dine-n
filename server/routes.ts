@@ -67,9 +67,12 @@ export function registerRoutes(app: Express) {
       }
 
       res.json(suggestedRecipes);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating meal plan:", error);
-      res.status(500).json({ error: "Failed to generate meal plan" });
+      res.status(500).json({ 
+        error: "Failed to generate meal plan",
+        type: error.error?.type || error.type || 'unknown'
+      });
     }
   });
 }
