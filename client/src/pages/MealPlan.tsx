@@ -138,7 +138,7 @@ export default function MealPlan() {
           </TabsContent>
 
           <TabsContent value="grocery">
-            <GroceryList items={generatedRecipes.flatMap((r) => r.ingredients ?? [])} />
+            <GroceryList items={generatedRecipes?.flatMap((r) => r.ingredients ?? []) ?? []} />
           </TabsContent>
         </Tabs>
       </div>
