@@ -32,7 +32,12 @@ export const recipes = pgTable("recipes", {
     protein: number;
     carbs: number;
     fat: number;
-  }>(),
+  }>().notNull().default({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  }),
 });
 
 export const mealPlans = pgTable("meal_plans", {

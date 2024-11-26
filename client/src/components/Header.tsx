@@ -11,11 +11,9 @@ export default function Header() {
   return (
     <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="container flex h-16 items-center px-4">
-        <Link href="/">
-          <a className="flex items-center space-x-2">
-            <Utensils className="h-6 w-6 text-primary" />
-            <span className="font-bold">MealMaster AI</span>
-          </a>
+        <Link href="/" className="flex items-center space-x-2">
+          <Utensils className="h-6 w-6 text-primary" />
+          <span className="font-bold">MealMaster AI</span>
         </Link>
         <NavigationMenu className="ml-auto">
           <NavigationMenuList>
