@@ -14,10 +14,32 @@ export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
-  const { data: recipes = [] } = useQuery({
+  const { data: recipes = [], isLoading, isError, error } = useQuery({
     queryKey: ["recipes"],
     queryFn: fetchRecipes,
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto" />
+          <p className="text-muted-foreground">Loading recipes...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="text-center space-y-4">
+          <p className="text-lg text-red-500">Error loading recipes</p>
+          <p className="text-muted-foreground">{(error as Error)?.message || 'Please try again later'}</p>
+        </div>
+      </div>
+    );
+  }
 
   const filteredRecipes = recipes.filter((recipe) =>
     recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -38,15 +60,25 @@ export default function Recipes() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredRecipes.map((recipe) => (
+      {filteredRecipes.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredRecipes.map((recipe) => (
           <RecipeCard
             key={recipe.id}
             recipe={recipe}
             onClick={() => setSelectedRecipe(recipe)}
           />
         ))}
-      </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-[40vh]">
+          <div className="text-center space-y-4">
+            <p className="text-lg text-muted-foreground">
+              {searchTerm ? 'No recipes found matching your search' : 'No recipes available'}
+            </p>
+          </div>
+        </div>
+      )}
 
       <Dialog open={!!selectedRecipe} onOpenChange={() => setSelectedRecipe(null)}>
         <DialogContent className="max-w-3xl">
