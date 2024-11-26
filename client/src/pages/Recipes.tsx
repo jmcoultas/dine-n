@@ -63,12 +63,12 @@ export default function Recipes() {
       {filteredRecipes.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredRecipes.map((recipe) => (
-          <RecipeCard
-            key={recipe.id}
-            recipe={recipe}
-            onClick={() => setSelectedRecipe(recipe)}
-          />
-        ))}
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              onClick={() => setSelectedRecipe(recipe)}
+            />
+          ))}
         </div>
       ) : (
         <div className="flex items-center justify-center h-[40vh]">
@@ -81,80 +81,83 @@ export default function Recipes() {
       )}
 
       <Dialog open={!!selectedRecipe} onOpenChange={() => setSelectedRecipe(null)}>
-        <DialogContent className="max-w-3xl">
-          {selectedRecipe && (
-            <div className="space-y-4">
-              <DialogTitle className="text-2xl font-bold">{selectedRecipe.name}</DialogTitle>
-              <DialogDescription className="text-muted-foreground">
-                {selectedRecipe.description}
-              </DialogDescription>
-              <div className="aspect-video relative rounded-lg overflow-hidden">
-                <img
-                  src={selectedRecipe.imageUrl}
-                  alt={selectedRecipe.name}
-                  className="object-cover w-full h-full"
-                />
+        {selectedRecipe && (
+          <DialogContent className="max-w-2xl max-h-[90vh]">
+            <ScrollArea className="h-full w-full">
+              <div className="space-y-4 p-6">
+                <DialogTitle className="text-2xl font-bold">{selectedRecipe.name}</DialogTitle>
+                <DialogDescription className="text-muted-foreground">
+                  {selectedRecipe.description}
+                </DialogDescription>
+
+                <div className="aspect-video relative rounded-lg overflow-hidden">
+                  <img
+                    src={selectedRecipe.imageUrl}
+                    alt={selectedRecipe.name}
+                    className="object-cover w-full h-full"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedRecipe.tags?.map((tag) => (
+                      <Badge key={tag} variant="secondary">{tag}</Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-semibold mb-2">Ingredients</h3>
+                    <ScrollArea className="h-48">
+                      <ul className="space-y-2">
+                        {selectedRecipe.ingredients?.map((ingredient, i) => (
+                          <li key={i}>
+                            {ingredient.amount} {ingredient.unit} {ingredient.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold mb-2">Instructions</h3>
+                    <ScrollArea className="h-48">
+                      <ol className="list-decimal list-inside space-y-2">
+                        {selectedRecipe.instructions?.map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    </ScrollArea>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div>
+                    <div className="font-bold">{selectedRecipe.nutrition?.calories ?? 0}</div>
+                    <div className="text-sm text-muted-foreground">Calories</div>
+                  </div>
+                  <div>
+                    <div className="font-bold">{selectedRecipe.nutrition?.protein ?? 0}g</div>
+                    <div className="text-sm text-muted-foreground">Protein</div>
+                  </div>
+                  <div>
+                    <div className="font-bold">{selectedRecipe.nutrition?.carbs ?? 0}g</div>
+                    <div className="text-sm text-muted-foreground">Carbs</div>
+                  </div>
+                  <div>
+                    <div className="font-bold">{selectedRecipe.nutrition?.fat ?? 0}g</div>
+                    <div className="text-sm text-muted-foreground">Fat</div>
+                  </div>
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <div className="flex gap-2 flex-wrap">
-                  {selectedRecipe.tags?.map((tag) => (
-                    <Badge key={tag} variant="secondary">{tag}</Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="font-semibold mb-2">Ingredients</h3>
-                  <ScrollArea className="h-48">
-                    <ul className="space-y-2">
-                      {selectedRecipe.ingredients?.map((ingredient, i) => (
-                        <li key={i}>
-                          {ingredient.amount} {ingredient.unit} {ingredient.name}
-                        </li>
-                      ))}
-                    </ul>
-                  </ScrollArea>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">Instructions</h3>
-                  <ScrollArea className="h-48">
-                    <ol className="list-decimal list-inside space-y-2">
-                      {selectedRecipe.instructions?.map((step, i) => (
-                        <li key={i}>{step}</li>
-                      ))}
-                    </ol>
-                  </ScrollArea>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-4 gap-4 text-center">
-                <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.calories ?? 0}</div>
-                  <div className="text-sm text-muted-foreground">Calories</div>
-                </div>
-                <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.protein ?? 0}g</div>
-                  <div className="text-sm text-muted-foreground">Protein</div>
-                </div>
-                <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.carbs ?? 0}g</div>
-                  <div className="text-sm text-muted-foreground">Carbs</div>
-                </div>
-                <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.fat ?? 0}g</div>
-                  <div className="text-sm text-muted-foreground">Fat</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
+            </ScrollArea>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   );
