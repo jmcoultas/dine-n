@@ -44,7 +44,7 @@ Response should be in JSON format with the following structure:
     response_format: { type: "json_object" },
   });
 
-  const recipeData = JSON.parse(completion.choices[0].message.content);
+  const recipeData = JSON.parse(completion.choices[0].message.content || '{}');
   
   // Add a default image URL based on the recipe name
   recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(recipeData.name.split(" ").join(","))}`;

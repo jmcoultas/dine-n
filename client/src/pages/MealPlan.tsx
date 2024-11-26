@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 import MealPlanCard from "@/components/MealPlanCard";
@@ -49,6 +50,13 @@ export default function MealPlan() {
     dietary: [] as string[],
     allergies: [] as string[],
   });
+
+  const removePreference = (type: 'dietary' | 'allergies', value: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      [type]: prev[type].filter(item => item !== value)
+    }));
+  };
 
   const generateMutation = useMutation({
     mutationFn: () => generateMealPlan(preferences, 7),
@@ -124,12 +132,18 @@ export default function MealPlan() {
                 <label className="text-sm font-medium">Dietary Preferences</label>
                 <Select
                   value={preferences.dietary}
-                  onValueChange={(value) => 
-                    setPreferences(prev => ({ ...prev, dietary: [...prev.dietary, value] }))
-                  }
+                  onValueChange={(value) => {
+                    if (!preferences.dietary.includes(value)) {
+                      setPreferences(prev => ({ ...prev, dietary: [...prev.dietary, value] }))
+                    }
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select dietary preferences" />
+                    <SelectValue placeholder="Select dietary preferences">
+                      {preferences.dietary.length > 0 
+                        ? `${preferences.dietary.length} selected`
+                        : "Select dietary preferences"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {DIETARY_OPTIONS.map(option => (
@@ -139,17 +153,40 @@ export default function MealPlan() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {preferences.dietary.map(item => (
+                    <Badge 
+                      key={item}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {item}
+                      <button
+                        className="ml-1 hover:bg-muted rounded-full"
+                        onClick={() => removePreference('dietary', item)}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="text-sm font-medium">Allergies</label>
                 <Select
                   value={preferences.allergies}
-                  onValueChange={(value) =>
-                    setPreferences(prev => ({ ...prev, allergies: [...prev.allergies, value] }))
-                  }
+                  onValueChange={(value) => {
+                    if (!preferences.allergies.includes(value)) {
+                      setPreferences(prev => ({ ...prev, allergies: [...prev.allergies, value] }))
+                    }
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select allergies" />
+                    <SelectValue placeholder="Select allergies">
+                      {preferences.allergies.length > 0 
+                        ? `${preferences.allergies.length} selected`
+                        : "Select allergies"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {ALLERGY_OPTIONS.map(option => (
@@ -159,6 +196,23 @@ export default function MealPlan() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {preferences.allergies.map(item => (
+                    <Badge 
+                      key={item}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {item}
+                      <button
+                        className="ml-1 hover:bg-muted rounded-full"
+                        onClick={() => removePreference('allergies', item)}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
             <Calendar

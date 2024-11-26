@@ -54,14 +54,30 @@ export function registerRoutes(app: Express) {
       // Generate recipes for each day and meal
       for (let day = 0; day < days; day++) {
         for (let meal = 0; meal < mealsPerDay; meal++) {
-          const recipe = await generateRecipeRecommendation({
+          const recipeData = await generateRecipeRecommendation({
             dietary: preferences?.dietary || [],
             allergies: preferences?.allergies || [],
             mealType: mealTypes[meal],
           });
 
           // Insert the generated recipe into the database
-          const [newRecipe] = await db.insert(recipes).values(recipe).returning();
+          const [newRecipe] = await db.insert(recipes).values({
+            name: recipeData.name || 'Generated Recipe',
+            description: recipeData.description,
+            imageUrl: recipeData.imageUrl,
+            prepTime: recipeData.prepTime || 0,
+            cookTime: recipeData.cookTime || 0,
+            servings: recipeData.servings || 2,
+            ingredients: recipeData.ingredients || [],
+            instructions: recipeData.instructions || [],
+            tags: recipeData.tags || [],
+            nutrition: recipeData.nutrition || {
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0
+            }
+          }).returning();
           suggestedRecipes.push(newRecipe);
         }
       }
