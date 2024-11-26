@@ -89,14 +89,15 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   const dietary = params.dietary.map(d => d.toLowerCase());
   
   // Check ingredients against allergies
-  const hasAllergens = recipe.ingredients?.some(ing => 
+  const hasAllergens = recipe.ingredients?.some((ing: { name: string }) => 
     allergies.some(allergy => ing.name.toLowerCase().includes(allergy))
   );
   if (hasAllergens) return false;
   
   // Check dietary restrictions
   if (dietary.length === 0) return true; // No restrictions
-  return dietary.some(diet => recipe.tags?.some(tag => tag.toLowerCase() === diet));
+  const recipeTags = recipe.tags || [];
+  return dietary.some(diet => recipeTags.some(tag => tag.toLowerCase() === diet));
 }
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {

@@ -59,7 +59,7 @@ export default function MealPlan() {
   };
 
   const generateMutation = useMutation({
-    mutationFn: () => generateMealPlan(preferences, 7),
+    mutationFn: () => generateMealPlan(preferences, 2),
     onSuccess: (data) => {
       if (data.recipes) {
         setGeneratedRecipes(data.recipes);
@@ -278,7 +278,7 @@ export default function MealPlan() {
               {generatedRecipes.length > 0 ? (
                 <>
                   <div className="grid md:grid-cols-3 gap-6">
-                    {generatedRecipes.map((recipe, index) => (
+                    {generatedRecipes.slice(0, 6).map((recipe, index) => (
                       <MealPlanCard
                         key={recipe.id}
                         recipe={recipe}
