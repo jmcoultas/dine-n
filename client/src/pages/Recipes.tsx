@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchRecipes } from "@/lib/api";
 import RecipeCard from "@/components/RecipeCard";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +84,10 @@ export default function Recipes() {
         <DialogContent className="max-w-3xl">
           {selectedRecipe && (
             <div className="space-y-4">
+              <DialogTitle className="text-2xl font-bold">{selectedRecipe.name}</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                {selectedRecipe.description}
+              </DialogDescription>
               <div className="aspect-video relative rounded-lg overflow-hidden">
                 <img
                   src={selectedRecipe.imageUrl}
@@ -93,9 +97,6 @@ export default function Recipes() {
               </div>
               
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold">{selectedRecipe.name}</h2>
-                <p className="text-muted-foreground">{selectedRecipe.description}</p>
-                
                 <div className="flex gap-2 flex-wrap">
                   {selectedRecipe.tags?.map((tag) => (
                     <Badge key={tag} variant="secondary">{tag}</Badge>
