@@ -92,14 +92,8 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   if (hasAllergens) return false;
   
   // Check dietary restrictions
-  const isVegetarian = dietary.includes('vegetarian');
-  const isVegan = dietary.includes('vegan');
-  const tags = recipe.tags?.map(t => t.toLowerCase()) || [];
-  
-  if (isVegan && !tags.includes('vegan')) return false;
-  if (isVegetarian && !tags.includes('vegetarian')) return false;
-  
-  return true;
+  if (dietary.length === 0) return true; // No restrictions
+  return dietary.some(diet => recipe.tags?.map(t => t.toLowerCase()).includes(diet));
 }
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {

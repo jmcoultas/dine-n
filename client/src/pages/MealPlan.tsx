@@ -65,8 +65,8 @@ export default function MealPlan() {
         setGeneratedRecipes(data.recipes);
         if (data.status === 'partial') {
           toast({
-            title: "Meal plan generated with fallbacks",
-            description: "Some recipes are using fallback options due to service limitations.",
+            title: "Using fallback recipes",
+            description: "Generated meal plan with pre-defined recipes that match your preferences.",
             variant: "warning",
           });
         } else {
@@ -157,7 +157,7 @@ export default function MealPlan() {
               <div>
                 <label className="text-sm font-medium">Dietary Preferences</label>
                 <Select
-                  value={preferences.dietary}
+                  value={preferences.dietary.length > 0 ? preferences.dietary[0] : ""}
                   onValueChange={(value) => {
                     if (!preferences.dietary.includes(value)) {
                       setPreferences(prev => ({ ...prev, dietary: [...prev.dietary, value] }))
@@ -200,7 +200,7 @@ export default function MealPlan() {
               <div>
                 <label className="text-sm font-medium">Allergies</label>
                 <Select
-                  value={preferences.allergies}
+                  value={preferences.allergies.length > 0 ? preferences.allergies[0] : ""}
                   onValueChange={(value) => {
                     if (!preferences.allergies.includes(value)) {
                       setPreferences(prev => ({ ...prev, allergies: [...prev.allergies, value] }))
