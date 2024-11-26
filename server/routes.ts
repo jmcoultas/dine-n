@@ -44,11 +44,31 @@ export function registerRoutes(app: Express) {
 
   // AI Meal Plan Generation
   app.post("/api/generate-meal-plan", async (req, res) => {
-    const { preferences, days } = req.body;
-    // Mock AI response for now
-    const suggestedRecipes = await db.query.recipes.findMany({
-      limit: days * 3, // 3 meals per day
-    });
-    res.json(suggestedRecipes);
+    try {
+      const { preferences, days } = req.body;
+      const mealsPerDay = 3;
+      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
+      const suggestedRecipes: Recipe[] = [];
+
+      // Generate recipes for each day and meal
+      for (let day = 0; day < days; day++) {
+        for (let meal = 0; meal < mealsPerDay; meal++) {
+          const recipe = await generateRecipeRecommendation({
+            dietary: preferences?.dietary || [],
+            allergies: preferences?.allergies || [],
+            mealType: mealTypes[meal],
+          });
+
+          // Insert the generated recipe into the database
+          const [newRecipe] = await db.insert(recipes).values(recipe).returning();
+          suggestedRecipes.push(newRecipe);
+        }
+      }
+
+      res.json(suggestedRecipes);
+    } catch (error) {
+      console.error("Error generating meal plan:", error);
+      res.status(500).json({ error: "Failed to generate meal plan" });
+    }
   });
 }

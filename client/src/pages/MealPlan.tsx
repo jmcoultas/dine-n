@@ -17,13 +17,25 @@ export default function MealPlan() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [preferences, setPreferences] = useState({
+    dietary: [] as string[],
+    allergies: [] as string[],
+  });
+
   const generateMutation = useMutation({
-    mutationFn: () => generateMealPlan({ dietary: [], allergies: [] }, 7),
+    mutationFn: () => generateMealPlan(preferences, 7),
     onSuccess: (data) => {
       setGeneratedRecipes(data);
       toast({
         title: "Meal plan generated!",
         description: "Your personalized meal plan is ready.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to generate meal plan. Please try again.",
+        variant: "destructive",
       });
     },
   });
