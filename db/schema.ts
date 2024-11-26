@@ -38,6 +38,7 @@ export const recipes = pgTable("recipes", {
     carbs: 0,
     fat: 0
   }),
+  complexity: integer("complexity").notNull().default(1), // 1: Easy, 2: Medium, 3: Hard
 });
 
 export const mealPlans = pgTable("meal_plans", {

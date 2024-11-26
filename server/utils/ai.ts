@@ -112,8 +112,14 @@ Response should be in JSON format with the following structure:
   "ingredients": [{ "name": "ingredient", "amount": number, "unit": "unit" }],
   "instructions": ["step 1", "step 2", ...],
   "tags": ["tag1", "tag2"],
-  "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number }
-}`;
+  "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number },
+  "complexity": number (1 for easy, 2 for medium, 3 for hard)
+}
+
+Please assign complexity based on:
+- Easy (1): < 5 ingredients, < 4 steps, < 30 min total time
+- Medium (2): 5-8 ingredients, 4-6 steps, 30-60 min total time
+- Hard (3): > 8 ingredients, > 6 steps, > 60 min total time`;
 
     const completion = await openai.chat.completions.create({
       messages: [
@@ -128,6 +134,8 @@ Response should be in JSON format with the following structure:
       ],
       model: "gpt-3.5-turbo",
       response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 800,
     });
 
     const recipeData = JSON.parse(completion.choices[0].message.content || '{}');
