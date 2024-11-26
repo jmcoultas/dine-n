@@ -93,7 +93,7 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   
   // Check dietary restrictions
   if (dietary.length === 0) return true; // No restrictions
-  return dietary.some(diet => recipe.tags?.map(t => t.toLowerCase()).includes(diet));
+  return dietary.some(diet => recipe.tags?.some(tag => tag.toLowerCase() === diet));
 }
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
@@ -140,7 +140,11 @@ Response should be in JSON format with the following structure:
     console.log("OpenAI API Error:", error.message);
     
     // Get default recipe for meal type
-    let fallbackRecipe = { ...DEFAULT_RECIPES[params.mealType] };
+    let fallbackRecipe = DEFAULT_RECIPES[params.mealType];
+    if (!fallbackRecipe) {
+      fallbackRecipe = DEFAULT_RECIPES.lunch; // Use lunch as default fallback
+    }
+    fallbackRecipe = { ...fallbackRecipe };
     
     // If the default recipe doesn't meet restrictions, modify it
     if (!meetsRestrictions(fallbackRecipe, params)) {
@@ -160,7 +164,11 @@ Response should be in JSON format with the following structure:
     }
     
     // Add image URL for fallback recipe
-    fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(fallbackRecipe.name.split(" ").join(","))}`;
+    if (fallbackRecipe.name) {
+      fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(fallbackRecipe.name.split(" ").join(","))}`;
+    } else {
+      fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?healthy,food`;
+    }
     
     // Throw a custom error that includes the fallback recipe
     const customError = new Error("API_FALLBACK");
