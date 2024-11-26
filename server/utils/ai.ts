@@ -19,6 +19,7 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
     prepTime: 5,
     cookTime: 10,
     servings: 2,
+    complexity: 1,
     ingredients: [
       { name: "rolled oats", amount: 1, unit: "cup" },
       { name: "milk", amount: 2, unit: "cups" },
@@ -40,6 +41,7 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
     prepTime: 15,
     cookTime: 20,
     servings: 2,
+    complexity: 2,
     ingredients: [
       { name: "quinoa", amount: 1, unit: "cup" },
       { name: "chickpeas", amount: 1, unit: "can" },
@@ -62,6 +64,7 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
     prepTime: 15,
     cookTime: 25,
     servings: 2,
+    complexity: 2,
     ingredients: [
       { name: "salmon fillet", amount: 2, unit: "pieces" },
       { name: "broccoli", amount: 2, unit: "cups" },
@@ -161,6 +164,7 @@ Please assign complexity based on:
         ...DEFAULT_RECIPES[params.mealType],
         name: "Simple Vegetable Stir-Fry",
         description: "A quick and healthy vegetable stir-fry",
+        complexity: 1,
         ingredients: [
           { name: "mixed vegetables", amount: 4, unit: "cups" },
           { name: "rice", amount: 2, unit: "cups" },
