@@ -54,40 +54,74 @@ export function registerRoutes(app: Express) {
       // Generate recipes for each day and meal
       for (let day = 0; day < days; day++) {
         for (let meal = 0; meal < mealsPerDay; meal++) {
-          const recipeData = await generateRecipeRecommendation({
-            dietary: preferences?.dietary || [],
-            allergies: preferences?.allergies || [],
-            mealType: mealTypes[meal],
-          });
+          try {
+            const recipeData = await generateRecipeRecommendation({
+              dietary: preferences?.dietary || [],
+              allergies: preferences?.allergies || [],
+              mealType: mealTypes[meal],
+            });
 
-          // Insert the generated recipe into the database
-          const [newRecipe] = await db.insert(recipes).values({
-            name: recipeData.name || 'Generated Recipe',
-            description: recipeData.description,
-            imageUrl: recipeData.imageUrl,
-            prepTime: recipeData.prepTime || 0,
-            cookTime: recipeData.cookTime || 0,
-            servings: recipeData.servings || 2,
-            ingredients: recipeData.ingredients || [],
-            instructions: recipeData.instructions || [],
-            tags: recipeData.tags || [],
-            nutrition: recipeData.nutrition || {
-              calories: 0,
-              protein: 0,
-              carbs: 0,
-              fat: 0
+            // Insert the generated recipe into the database
+            const [newRecipe] = await db.insert(recipes).values({
+              name: recipeData.name || 'Generated Recipe',
+              description: recipeData.description,
+              imageUrl: recipeData.imageUrl,
+              prepTime: recipeData.prepTime || 0,
+              cookTime: recipeData.cookTime || 0,
+              servings: recipeData.servings || 2,
+              ingredients: recipeData.ingredients || [],
+              instructions: recipeData.instructions || [],
+              tags: recipeData.tags || [],
+              nutrition: recipeData.nutrition || {
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0
+              }
+            }).returning();
+            suggestedRecipes.push(newRecipe);
+          } catch (recipeError: any) {
+            if (recipeError.message === 'API_FALLBACK') {
+              // Use fallback recipe
+              const [newRecipe] = await db.insert(recipes).values({
+                ...recipeError.fallbackRecipe,
+                name: `${recipeError.fallbackRecipe.name} (Fallback)`,
+              }).returning();
+              suggestedRecipes.push(newRecipe);
+            } else {
+              throw recipeError;
             }
-          }).returning();
-          suggestedRecipes.push(newRecipe);
+          }
         }
       }
 
-      res.json(suggestedRecipes);
+      // If we have any recipes (either AI-generated or fallback), return them
+      if (suggestedRecipes.length > 0) {
+        res.json({
+          recipes: suggestedRecipes,
+          status: suggestedRecipes.some(r => r.name.includes('(Fallback)')) ? 'partial' : 'success'
+        });
+      } else {
+        throw new Error('Failed to generate any recipes');
+      }
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
+      
+      // Determine error type and message
+      let errorType = 'unknown';
+      let errorMessage = 'Failed to generate meal plan';
+      
+      if (error.error?.type === 'insufficient_quota' || error.type === 'insufficient_quota') {
+        errorType = 'service_unavailable';
+        errorMessage = 'Service temporarily unavailable. Please try again later.';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        errorType = 'connection_error';
+        errorMessage = 'Unable to connect to recipe service. Please check your connection.';
+      }
+      
       res.status(500).json({ 
-        error: "Failed to generate meal plan",
-        type: error.error?.type || error.type || 'unknown'
+        error: errorMessage,
+        type: errorType
       });
     }
   });

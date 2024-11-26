@@ -61,19 +61,45 @@ export default function MealPlan() {
   const generateMutation = useMutation({
     mutationFn: () => generateMealPlan(preferences, 7),
     onSuccess: (data) => {
-      setGeneratedRecipes(data);
-      toast({
-        title: "Meal plan generated!",
-        description: "Your personalized meal plan is ready.",
-      });
+      if (data.recipes) {
+        setGeneratedRecipes(data.recipes);
+        if (data.status === 'partial') {
+          toast({
+            title: "Meal plan generated with fallbacks",
+            description: "Some recipes are using fallback options due to service limitations.",
+            variant: "warning",
+          });
+        } else {
+          toast({
+            title: "Meal plan generated!",
+            description: "Your personalized meal plan is ready.",
+          });
+        }
+      }
     },
     onError: (error: any) => {
       const errorType = error.response?.data?.type;
+      let title = "Error";
+      let description = "Failed to generate meal plan. Please try again.";
+
+      switch (errorType) {
+        case "service_unavailable":
+          title = "Service Unavailable";
+          description = "Recipe generation service is temporarily unavailable. Please try again later.";
+          break;
+        case "connection_error":
+          title = "Connection Error";
+          description = "Unable to connect to the recipe service. Please check your connection.";
+          break;
+        case "invalid_preferences":
+          title = "Invalid Preferences";
+          description = "Unable to generate recipes with the selected preferences. Please adjust and try again.";
+          break;
+      }
+
       toast({
-        title: "Error",
-        description: errorType === "insufficient_quota" 
-          ? "Service temporarily unavailable. Please try again later."
-          : "Failed to generate meal plan. Please try again.",
+        title,
+        description,
         variant: "destructive",
       });
     },
@@ -226,8 +252,17 @@ export default function MealPlan() {
               onClick={() => generateMutation.mutate()}
               disabled={generateMutation.isPending}
             >
-              <Wand2 className="mr-2 h-4 w-4" />
-              Generate Meal Plan
+              {generateMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Generate Meal Plan
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>
