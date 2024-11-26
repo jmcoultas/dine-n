@@ -1,0 +1,108 @@
+import { useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Download, Search } from "lucide-react";
+
+interface GroceryItem {
+  name: string;
+  amount: number;
+  unit: string;
+}
+
+interface GroceryListProps {
+  items: GroceryItem[];
+}
+
+export default function GroceryList({ items }: GroceryListProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+
+  const filteredItems = items.filter((item) =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleCheckItem = (itemName: string) => {
+    const newCheckedItems = new Set(checkedItems);
+    if (checkedItems.has(itemName)) {
+      newCheckedItems.delete(itemName);
+    } else {
+      newCheckedItems.add(itemName);
+    }
+    setCheckedItems(newCheckedItems);
+  };
+
+  const exportList = () => {
+    const content = items
+      .map((item) => `${item.amount} ${item.unit} ${item.name}`)
+      .join("\n");
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "grocery-list.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search items..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button variant="outline" onClick={exportList}>
+          <Download className="h-4 w-4 mr-2" />
+          Export List
+        </Button>
+      </div>
+
+      <ScrollArea className="h-[500px] rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12"></TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Unit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredItems.map((item, index) => (
+              <TableRow key={index}>
+                <TableCell>
+                  <Checkbox
+                    checked={checkedItems.has(item.name)}
+                    onCheckedChange={() => handleCheckItem(item.name)}
+                  />
+                </TableCell>
+                <TableCell className={checkedItems.has(item.name) ? "line-through" : ""}>
+                  {item.name}
+                </TableCell>
+                <TableCell>{item.amount}</TableCell>
+                <TableCell>{item.unit}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ScrollArea>
+    </div>
+  );
+}
