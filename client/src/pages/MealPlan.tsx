@@ -282,7 +282,7 @@ export default function MealPlan() {
                       <MealPlanCard
                         key={recipe.id}
                         recipe={recipe}
-                        day={new Date(selectedDate.getTime() + index * 24 * 60 * 60 * 1000)}
+                        day={new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000)}
                         meal={index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"}
                       />
                     ))}
