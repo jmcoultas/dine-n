@@ -40,17 +40,13 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
             backgroundPosition: "center",
           }}
         >
-          <div className="absolute top-2 left-2 flex gap-2">
+          <div className="absolute top-2 left-2">
             <span
               className={`${
                 mealColors[meal]
               } px-2 py-1 rounded-full text-sm font-medium capitalize`}
             >
               {meal}
-            </span>
-            <span className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-              <ChefHat className="w-4 h-4" />
-              {complexityNames[recipe.complexity as keyof typeof complexityNames]}
             </span>
           </div>
         </div>
@@ -59,6 +55,12 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
             {format(day, "EEEE, MMM do")}
           </div>
           <div className="font-semibold">{recipe.name}</div>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
+              <ChefHat className="w-4 h-4" />
+              {complexityNames[recipe.complexity as keyof typeof complexityNames]}
+            </span>
+          </div>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           <div className="flex justify-between text-sm text-muted-foreground">
