@@ -18,7 +18,12 @@ export async function createMealPlan(mealPlan: Omit<MealPlan, "id">): Promise<Me
   return response.json();
 }
 
-export async function generateMealPlan(preferences: any, days: number): Promise<Recipe[]> {
+interface MealPlanPreferences {
+  dietary: string[];
+  allergies: string[];
+}
+
+export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<Recipe[]> {
   const response = await fetch(`${API_BASE}/generate-meal-plan`, {
     method: "POST",
     headers: {

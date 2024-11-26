@@ -4,12 +4,40 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { Wand2 } from "lucide-react";
 import type { Recipe } from "@db/schema";
+
+// Add dietary options
+const DIETARY_OPTIONS = [
+  "Vegetarian",
+  "Vegan",
+  "Gluten-Free",
+  "Keto",
+  "Paleo",
+  "Mediterranean"
+];
+
+// Add common allergens
+const ALLERGY_OPTIONS = [
+  "Dairy",
+  "Eggs",
+  "Tree Nuts",
+  "Peanuts",
+  "Shellfish",
+  "Wheat",
+  "Soy"
+];
 
 export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -91,6 +119,48 @@ export default function MealPlan() {
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
         <Card>
           <CardContent className="p-4">
+            <div className="space-y-4 mb-4">
+              <div>
+                <label className="text-sm font-medium">Dietary Preferences</label>
+                <Select
+                  value={preferences.dietary}
+                  onValueChange={(value) => 
+                    setPreferences(prev => ({ ...prev, dietary: [...prev.dietary, value] }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select dietary preferences" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DIETARY_OPTIONS.map(option => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Allergies</label>
+                <Select
+                  value={preferences.allergies}
+                  onValueChange={(value) =>
+                    setPreferences(prev => ({ ...prev, allergies: [...prev.allergies, value] }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select allergies" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ALLERGY_OPTIONS.map(option => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <Calendar
               mode="single"
               selected={selectedDate}
