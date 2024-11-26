@@ -103,19 +103,19 @@ export default function Recipes() {
 
               <div className="grid grid-cols-4 gap-4 text-center">
                 <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.calories}</div>
+                  <div className="font-bold">{selectedRecipe.nutrition?.calories ?? 0}</div>
                   <div className="text-sm text-muted-foreground">Calories</div>
                 </div>
                 <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.protein}g</div>
+                  <div className="font-bold">{selectedRecipe.nutrition?.protein ?? 0}g</div>
                   <div className="text-sm text-muted-foreground">Protein</div>
                 </div>
                 <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.carbs}g</div>
+                  <div className="font-bold">{selectedRecipe.nutrition?.carbs ?? 0}g</div>
                   <div className="text-sm text-muted-foreground">Carbs</div>
                 </div>
                 <div>
-                  <div className="font-bold">{selectedRecipe.nutrition?.fat}g</div>
+                  <div className="font-bold">{selectedRecipe.nutrition?.fat ?? 0}g</div>
                   <div className="text-sm text-muted-foreground">Fat</div>
                 </div>
               </div>

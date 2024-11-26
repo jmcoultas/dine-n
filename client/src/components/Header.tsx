@@ -18,17 +18,13 @@ export default function Header() {
         <NavigationMenu className="ml-auto">
           <NavigationMenuList>
             <NavigationMenuItem>
-              <Link href="/recipes">
-                <NavigationMenuLink className="px-4 py-2">
-                  Recipes
-                </NavigationMenuLink>
+              <Link href="/recipes" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
+                Recipes
               </Link>
             </NavigationMenuItem>
             <NavigationMenuItem>
-              <Link href="/meal-plan">
-                <NavigationMenuLink className="px-4 py-2">
-                  Meal Plan
-                </NavigationMenuLink>
+              <Link href="/meal-plan" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
+                Meal Plan
               </Link>
             </NavigationMenuItem>
           </NavigationMenuList>
