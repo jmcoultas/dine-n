@@ -28,8 +28,35 @@ const mealColors: Record<MealPlanCardProps["meal"], string> = {
 export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
 
-  const complexity = (recipe.complexity ?? 1) as ComplexityLevel;
-  const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0);
+  // Ensure type safety for complexity and provide default value
+  const complexity: ComplexityLevel = typeof recipe.complexity === 'number' && [1, 2, 3].includes(recipe.complexity) 
+    ? (recipe.complexity as ComplexityLevel) 
+    : 1;
+
+  // Add null checks for optional properties with default values
+  const prepTime = typeof recipe.prepTime === 'number' ? recipe.prepTime : 0;
+  const cookTime = typeof recipe.cookTime === 'number' ? recipe.cookTime : 0;
+  const totalTime = prepTime + cookTime;
+  const servings = typeof recipe.servings === 'number' ? recipe.servings : 2;
+  
+  // Ensure type safety for imageUrl
+  const imageUrl = typeof recipe.imageUrl === 'string' ? recipe.imageUrl : '';
+  
+  // Ensure type safety for description
+  const description = typeof recipe.description === 'string' ? recipe.description : '';
+
+  // Ensure type safety for nutrition properties with default values
+  const nutrition = {
+    calories: recipe.nutrition?.calories ?? 0,
+    protein: recipe.nutrition?.protein ?? 0,
+    carbs: recipe.nutrition?.carbs ?? 0,
+    fat: recipe.nutrition?.fat ?? 0,
+  };
+
+  // Ensure arrays are defined
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  const tags = Array.isArray(recipe.tags) ? recipe.tags : [];
 
   return (
     <>
@@ -40,7 +67,7 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
         <div
           className="aspect-video relative"
           style={{
-            backgroundImage: `url(${recipe.imageUrl})`,
+            backgroundImage: `url(${imageUrl})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -70,7 +97,7 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
         <CardContent className="p-4 pt-0">
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>{totalTime} min</span>
-            <span>{recipe.servings ?? 2} servings</span>
+            <span>{servings} servings</span>
           </div>
         </CardContent>
       </Card>
@@ -84,7 +111,7 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
           <div className="space-y-4">
             <div className="aspect-video relative rounded-lg overflow-hidden">
               <img
-                src={recipe.imageUrl}
+                src={imageUrl}
                 alt={recipe.name}
                 className="object-cover w-full h-full"
               />
@@ -98,20 +125,20 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
                 {totalTime} min
               </span>
               <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
-                {recipe.servings ?? 2} servings
+                {servings} servings
               </span>
             </div>
 
             <div>
               <h3 className="font-semibold mb-2">Description</h3>
-              <p className="text-muted-foreground">{recipe.description}</p>
+              <p className="text-muted-foreground">{description}</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <h3 className="font-semibold mb-2">Ingredients</h3>
                 <ul className="list-disc list-inside space-y-1">
-                  {recipe.ingredients?.map((ingredient, i) => (
+                  {ingredients.map((ingredient, i) => (
                     <li key={i}>
                       {ingredient.amount} {ingredient.unit} {ingredient.name}
                     </li>
@@ -122,7 +149,7 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
               <div>
                 <h3 className="font-semibold mb-2">Instructions</h3>
                 <ol className="list-decimal list-inside space-y-1">
-                  {recipe.instructions?.map((step, i) => (
+                  {instructions.map((step, i) => (
                     <li key={i}>{step}</li>
                   ))}
                 </ol>
@@ -133,23 +160,36 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
               <h3 className="font-semibold mb-2">Nutrition</h3>
               <div className="grid grid-cols-4 gap-4 text-center">
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition?.calories ?? 0}</div>
+                  <div className="font-semibold">{nutrition.calories}</div>
                   <div className="text-sm text-muted-foreground">Calories</div>
                 </div>
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition?.protein ?? 0}g</div>
+                  <div className="font-semibold">{nutrition.protein}g</div>
                   <div className="text-sm text-muted-foreground">Protein</div>
                 </div>
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition?.carbs ?? 0}g</div>
+                  <div className="font-semibold">{nutrition.carbs}g</div>
                   <div className="text-sm text-muted-foreground">Carbs</div>
                 </div>
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition?.fat ?? 0}g</div>
+                  <div className="font-semibold">{nutrition.fat}g</div>
                   <div className="text-sm text-muted-foreground">Fat</div>
                 </div>
               </div>
             </div>
+
+            {tags.length > 0 && (
+              <div>
+                <h3 className="font-semibold mb-2">Tags</h3>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag, i) => (
+                    <span key={i} className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
