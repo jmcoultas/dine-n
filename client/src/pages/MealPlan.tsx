@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react";
-import PreferenceModal from "@/components/PreferenceModal";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -12,22 +9,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
+import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
-import { Wand2 } from "lucide-react";
-import type { Recipe } from "@db/schema";
+import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 
-// Add dietary options
 const DIETARY_OPTIONS = [
   "Vegetarian",
   "Vegan",
   "Gluten-Free",
   "Keto",
   "Paleo",
-  "Mediterranean"
+  "Mediterranean",
+];
+
+const ALLERGY_OPTIONS = [
+  "Dairy",
+  "Eggs",
+  "Tree Nuts",
+  "Peanuts",
+  "Shellfish",
+  "Wheat",
+  "Soy",
 ];
 
 const CUISINE_OPTIONS = [
@@ -39,7 +47,7 @@ const CUISINE_OPTIONS = [
   "Thai",
   "Mediterranean",
   "American",
-  "French"
+  "French",
 ];
 
 const MEAT_TYPE_OPTIONS = [
@@ -49,38 +57,21 @@ const MEAT_TYPE_OPTIONS = [
   "Fish",
   "Lamb",
   "Turkey",
-  "None"
-];
-
-// Add common allergens
-const ALLERGY_OPTIONS = [
-  "Dairy",
-  "Eggs",
-  "Tree Nuts",
-  "Peanuts",
-  "Shellfish",
-  "Wheat",
-  "Soy"
+  "None",
 ];
 
 export default function MealPlan() {
+  // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>(() => {
+  const [generatedRecipes, setGeneratedRecipes] = useState(() => {
     const savedRecipes = localStorage.getItem('generatedRecipes');
-  useEffect(() => {
-    return () => {
-      localStorage.removeItem('generatedRecipes');
-    };
-  }, []);
     try {
       return savedRecipes ? JSON.parse(savedRecipes) : [];
     } catch {
       return [];
     }
   });
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
+  const [showPreferences, setShowPreferences] = useState(false);
   const [preferences, setPreferences] = useState({
     dietary: [] as string[],
     allergies: [] as string[],
@@ -88,13 +79,18 @@ export default function MealPlan() {
     meatTypes: [] as string[],
   });
 
-  const removePreference = (type: 'dietary' | 'allergies', value: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      [type]: prev[type].filter(item => item !== value)
-    }));
-  };
+  // Hooks
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
+  // Effects
+  useEffect(() => {
+    return () => {
+      localStorage.removeItem('generatedRecipes');
+    };
+  }, []);
+
+  // Mutations
   const generateMutation = useMutation({
     mutationFn: () => generateMealPlan(preferences, 2),
     onSuccess: (data) => {
@@ -151,7 +147,7 @@ export default function MealPlan() {
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         recipes: generatedRecipes.map((recipe, index) => ({
           recipeId: recipe.id,
-          day: new Date(selectedDate.getTime() + index * 24 * 60 * 60 * 1000).toISOString(),
+          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
           meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner",
         })),
       });
@@ -178,7 +174,13 @@ export default function MealPlan() {
     },
   });
 
-  const [showPreferences, setShowPreferences] = useState(false);
+  // Event handlers
+  const removePreference = (type: 'dietary' | 'allergies' | 'cuisine' | 'meatTypes', value: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      [type]: prev[type].filter(item => item !== value)
+    }));
+  };
 
   return (
     <div className="space-y-8">
@@ -204,6 +206,8 @@ export default function MealPlan() {
         onOpenChange={setShowPreferences}
         preferences={preferences}
         onUpdatePreferences={setPreferences}
+        isGenerating={generateMutation.isPending}
+        onGenerate={() => generateMutation.mutate()}
       />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
