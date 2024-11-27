@@ -3,15 +3,39 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { format } from "date-fns";
 import { ChefHat } from "lucide-react";
 import { useState } from "react";
-import type { Recipe } from "@db/schema";
+
+type ComplexityLevel = 1 | 2 | 3;
+
+const isValidComplexity = (value: number): value is ComplexityLevel =>
+  value === 1 || value === 2 || value === 3;
 
 interface MealPlanCardProps {
-  recipe: Recipe;
+  recipe: {
+    id: number;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    prepTime?: number;
+    cookTime?: number;
+    servings?: number;
+    ingredients?: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+    }>;
+    instructions?: string[];
+    tags?: string[];
+    nutrition?: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    complexity: ComplexityLevel;
+  };
   day: Date;
   meal: "breakfast" | "lunch" | "dinner";
 }
-
-type ComplexityLevel = 1 | 2 | 3;
 
 const complexityNames: Record<ComplexityLevel, string> = {
   1: "Easy",
@@ -28,35 +52,31 @@ const mealColors: Record<MealPlanCardProps["meal"], string> = {
 export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
 
-  // Ensure type safety for complexity and provide default value
-  const complexity: ComplexityLevel = typeof recipe.complexity === 'number' && [1, 2, 3].includes(recipe.complexity) 
-    ? (recipe.complexity as ComplexityLevel) 
+  // Ensure type safety for complexity
+  const complexity: ComplexityLevel = isValidComplexity(recipe.complexity) 
+    ? recipe.complexity 
     : 1;
 
-  // Add null checks for optional properties with default values
-  const prepTime = typeof recipe.prepTime === 'number' ? recipe.prepTime : 0;
-  const cookTime = typeof recipe.cookTime === 'number' ? recipe.cookTime : 0;
+  // Add strict null checking for optional properties
+  const prepTime = recipe.prepTime ?? 0;
+  const cookTime = recipe.cookTime ?? 0;
   const totalTime = prepTime + cookTime;
-  const servings = typeof recipe.servings === 'number' ? recipe.servings : 2;
-  
-  // Ensure type safety for imageUrl
-  const imageUrl = typeof recipe.imageUrl === 'string' ? recipe.imageUrl : '';
-  
-  // Ensure type safety for description
-  const description = typeof recipe.description === 'string' ? recipe.description : '';
+  const servings = recipe.servings ?? 2;
+  const imageUrl = recipe.imageUrl ?? '';
+  const description = recipe.description ?? '';
 
-  // Ensure type safety for nutrition properties with default values
+  // Add strict null checking for nutrition
   const nutrition = {
     calories: recipe.nutrition?.calories ?? 0,
     protein: recipe.nutrition?.protein ?? 0,
     carbs: recipe.nutrition?.carbs ?? 0,
     fat: recipe.nutrition?.fat ?? 0,
-  };
+  } as const;
 
-  // Ensure arrays are defined
-  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
-  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
-  const tags = Array.isArray(recipe.tags) ? recipe.tags : [];
+  // Ensure arrays are defined with proper typing
+  const ingredients = recipe.ingredients ?? [];
+  const instructions = recipe.instructions ?? [];
+  const tags = recipe.tags ?? [];
 
   return (
     <>
