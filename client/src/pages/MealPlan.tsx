@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PreferenceModal from "@/components/PreferenceModal";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -165,14 +166,33 @@ export default function MealPlan() {
     },
   });
 
+  const [showPreferences, setShowPreferences] = useState(false);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4">
-        <h1 className="text-4xl font-bold">Meal Planning</h1>
-        <p className="text-muted-foreground">
-          Generate a personalized meal plan and organize your grocery shopping
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-4xl font-bold">Meal Planning</h1>
+            <p className="text-muted-foreground">
+              Generate a personalized meal plan and organize your grocery shopping
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setShowPreferences(true)}
+          >
+            Set Preferences
+          </Button>
+        </div>
       </div>
+
+      <PreferenceModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+        preferences={preferences}
+        onUpdatePreferences={setPreferences}
+      />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
         <Card>

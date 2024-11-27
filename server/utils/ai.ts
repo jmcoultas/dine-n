@@ -215,7 +215,7 @@ Please assign complexity based on:
       model: "gpt-3.5-turbo",
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 800,
+      max_tokens: 1000,
     });
 
     const recipeData = JSON.parse(completion.choices[0].message.content || '{}') as Partial<Recipe>;
