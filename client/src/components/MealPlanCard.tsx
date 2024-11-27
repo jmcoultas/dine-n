@@ -128,19 +128,19 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
               <h3 className="font-semibold mb-2">Nutrition</h3>
               <div className="grid grid-cols-4 gap-4 text-center">
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition.calories}</div>
+                  <div className="font-semibold">{recipe.nutrition?.calories ?? 0}</div>
                   <div className="text-sm text-muted-foreground">Calories</div>
                 </div>
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition.protein}g</div>
+                  <div className="font-semibold">{recipe.nutrition?.protein ?? 0}g</div>
                   <div className="text-sm text-muted-foreground">Protein</div>
                 </div>
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition.carbs}g</div>
+                  <div className="font-semibold">{recipe.nutrition?.carbs ?? 0}g</div>
                   <div className="text-sm text-muted-foreground">Carbs</div>
                 </div>
                 <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{recipe.nutrition.fat}g</div>
+                  <div className="font-semibold">{recipe.nutrition?.fat ?? 0}g</div>
                   <div className="text-sm text-muted-foreground">Fat</div>
                 </div>
               </div>
