@@ -25,8 +25,12 @@ export default function Home() {
   const { toast } = useToast();
   const generateMutation = useMutation({
     mutationFn: (preferences: typeof preferences) => generateMealPlan(preferences, 2),
-    onSuccess: () => {
+    onSuccess: (data) => {
       setShowPreferences(false);
+      // Store generated recipes in localStorage before navigation
+      if (data.recipes) {
+        localStorage.setItem('generatedRecipes', JSON.stringify(data.recipes));
+      }
       setLocation("/meal-plan");
       toast({
         title: "Success!",

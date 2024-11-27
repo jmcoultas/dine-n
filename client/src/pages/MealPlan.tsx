@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PreferenceModal from "@/components/PreferenceModal";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,19 @@ const ALLERGY_OPTIONS = [
 
 export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
+  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>(() => {
+    const savedRecipes = localStorage.getItem('generatedRecipes');
+  useEffect(() => {
+    return () => {
+      localStorage.removeItem('generatedRecipes');
+    };
+  }, []);
+    try {
+      return savedRecipes ? JSON.parse(savedRecipes) : [];
+    } catch {
+      return [];
+    }
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
