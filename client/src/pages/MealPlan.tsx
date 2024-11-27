@@ -2,63 +2,14 @@ import { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
-
-const DIETARY_OPTIONS = [
-  "Vegetarian",
-  "Vegan",
-  "Gluten-Free",
-  "Keto",
-  "Paleo",
-  "Mediterranean",
-];
-
-const ALLERGY_OPTIONS = [
-  "Dairy",
-  "Eggs",
-  "Tree Nuts",
-  "Peanuts",
-  "Shellfish",
-  "Wheat",
-  "Soy",
-];
-
-const CUISINE_OPTIONS = [
-  "Italian",
-  "Mexican",
-  "Chinese",
-  "Japanese",
-  "Indian",
-  "Thai",
-  "Mediterranean",
-  "American",
-  "French",
-];
-
-const MEAT_TYPE_OPTIONS = [
-  "Chicken",
-  "Beef",
-  "Pork",
-  "Fish",
-  "Lamb",
-  "Turkey",
-  "None",
-];
 
 export default function MealPlan() {
   // State declarations
@@ -174,14 +125,6 @@ export default function MealPlan() {
     },
   });
 
-  // Event handlers
-  const removePreference = (type: 'dietary' | 'allergies' | 'cuisine' | 'meatTypes', value: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      [type]: prev[type].filter(item => item !== value)
-    }));
-  };
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4">
@@ -213,188 +156,14 @@ export default function MealPlan() {
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
         <Card>
           <CardContent className="p-4">
-            <div className="space-y-4 mb-4">
-              <div>
-                <label className="text-sm font-medium">Dietary Preferences</label>
-                <Select
-                  value={preferences.dietary.length > 0 ? preferences.dietary[0] : ""}
-                  onValueChange={(value) => {
-                    if (!preferences.dietary.includes(value)) {
-                      setPreferences(prev => ({ ...prev, dietary: [...prev.dietary, value] }))
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select dietary preferences">
-                      {preferences.dietary.length > 0 
-                        ? `${preferences.dietary.length} selected`
-                        : "Select dietary preferences"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DIETARY_OPTIONS.map(option => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {preferences.dietary.map(item => (
-                    <Badge 
-                      key={item}
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      {item}
-                      <button
-                        className="ml-1 hover:bg-muted rounded-full"
-                        onClick={() => removePreference('dietary', item)}
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Allergies</label>
-                <Select
-                  value={preferences.allergies.length > 0 ? preferences.allergies[0] : ""}
-                  onValueChange={(value) => {
-                    if (!preferences.allergies.includes(value)) {
-                      setPreferences(prev => ({ ...prev, allergies: [...prev.allergies, value] }))
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select allergies">
-                      {preferences.allergies.length > 0 
-                        ? `${preferences.allergies.length} selected`
-                        : "Select allergies"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALLERGY_OPTIONS.map(option => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {preferences.allergies.map(item => (
-                    <Badge 
-                      key={item}
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      {item}
-                      <button
-                        className="ml-1 hover:bg-muted rounded-full"
-                        onClick={() => removePreference('allergies', item)}
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Cuisine Preferences</label>
-                <Select
-                  value={preferences.cuisine.length > 0 ? preferences.cuisine[0] : ""}
-                  onValueChange={(value) => {
-                    if (!preferences.cuisine.includes(value)) {
-                      setPreferences(prev => ({ ...prev, cuisine: [...prev.cuisine, value] }))
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select cuisine preferences">
-                      {preferences.cuisine.length > 0 
-                        ? `${preferences.cuisine.length} selected`
-                        : "Select cuisine preferences"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CUISINE_OPTIONS.map(option => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {preferences.cuisine.map(item => (
-                    <Badge 
-                      key={item}
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      {item}
-                      <button
-                        className="ml-1 hover:bg-muted rounded-full"
-                        onClick={() => removePreference('cuisine', item)}
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Meat Preferences</label>
-                <Select
-                  value={preferences.meatTypes.length > 0 ? preferences.meatTypes[0] : ""}
-                  onValueChange={(value) => {
-                    if (!preferences.meatTypes.includes(value)) {
-                      setPreferences(prev => ({ ...prev, meatTypes: [...prev.meatTypes, value] }))
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select meat preferences">
-                      {preferences.meatTypes.length > 0 
-                        ? `${preferences.meatTypes.length} selected`
-                        : "Select meat preferences"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MEAT_TYPE_OPTIONS.map(option => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {preferences.meatTypes.map(item => (
-                    <Badge 
-                      key={item}
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      {item}
-                      <button
-                        className="ml-1 hover:bg-muted rounded-full"
-                        onClick={() => removePreference('meatTypes', item)}
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
             <Calendar
               mode="single"
               selected={selectedDate}
               onSelect={(date) => date && setSelectedDate(date)}
-              className="rounded-md border"
+              className="rounded-md border mb-4"
             />
             <Button
-              className="w-full mt-4"
+              className="w-full"
               onClick={() => generateMutation.mutate()}
               disabled={generateMutation.isPending}
             >
