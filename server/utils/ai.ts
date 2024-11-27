@@ -31,8 +31,8 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
       "Combine oats and milk in a pot",
       "Cook over medium heat for 5-7 minutes, stirring occasionally",
       "Top with sliced banana, berries, and honey"
-    ] as string[],
-    tags: ["breakfast", "healthy", "vegetarian"] as string[],
+    ],
+    tags: ["breakfast", "healthy", "vegetarian"],
     nutrition: { calories: 350, protein: 12, carbs: 68, fat: 6 }
   },
   lunch: {
@@ -54,8 +54,8 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
       "Dice cucumber and halve tomatoes",
       "Combine all ingredients in a bowl",
       "Drizzle with olive oil and season to taste"
-    ] as string[],
-    tags: ["lunch", "vegetarian", "healthy"] as string[],
+    ],
+    tags: ["lunch", "vegetarian", "healthy"],
     nutrition: { calories: 420, protein: 15, carbs: 62, fat: 14 }
   },
   dinner: {
@@ -77,8 +77,8 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
       "Place salmon and vegetables on a baking sheet",
       "Drizzle with olive oil and season",
       "Bake for 20-25 minutes"
-    ] as string[],
-    tags: ["dinner", "healthy", "seafood"] as string[],
+    ],
+    tags: ["dinner", "healthy", "seafood"],
     nutrition: { calories: 480, protein: 36, carbs: 22, fat: 28 }
   }
 };
@@ -88,14 +88,13 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   const allergies = params.allergies.map(a => a.toLowerCase());
   const dietary = params.dietary.map(d => d.toLowerCase());
   
-  // Fix the type checking for ingredients array
   const hasAllergens = Array.isArray(recipe.ingredients) && recipe.ingredients.some(ing => 
+    typeof ing === 'object' && 'name' in ing &&
     allergies.some(allergy => ing.name.toLowerCase().includes(allergy))
   );
   
   if (hasAllergens) return false;
   
-  // Fix the type checking for tags array
   if (dietary.length === 0) return true;
   const recipeTags = Array.isArray(recipe.tags) ? recipe.tags : [];
   return dietary.some(diet => recipeTags.map(tag => tag.toLowerCase()).includes(diet));
@@ -145,23 +144,19 @@ Please assign complexity based on:
 
     const recipeData = JSON.parse(completion.choices[0].message.content || '{}');
     
-    // Add a default image URL based on the recipe name
     recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(recipeData.name.split(" ").join(","))}`;
     
     return recipeData;
   } catch (error: any) {
     console.log("OpenAI API Error:", error.message);
     
-    // Get default recipe for meal type
     let fallbackRecipe = DEFAULT_RECIPES[params.mealType];
     if (!fallbackRecipe) {
-      fallbackRecipe = DEFAULT_RECIPES.lunch; // Use lunch as default fallback
+      fallbackRecipe = DEFAULT_RECIPES.lunch;
     }
     fallbackRecipe = { ...fallbackRecipe };
     
-    // If the default recipe doesn't meet restrictions, modify it
     if (!meetsRestrictions(fallbackRecipe, params)) {
-      // Provide a simple vegetarian/vegan alternative
       fallbackRecipe = {
         name: "Simple Vegetable Stir-Fry",
         description: "A quick and healthy vegetable stir-fry",
@@ -177,8 +172,8 @@ Please assign complexity based on:
           "Heat oil in a large pan or wok",
           "Stir-fry mixed vegetables until tender-crisp",
           "Season with soy sauce and serve over rice"
-        ] as string[],
-        tags: ["vegetarian", "vegan", "healthy"] as string[],
+        ],
+        tags: ["vegetarian", "vegan", "healthy"],
         nutrition: {
           calories: 300,
           protein: 6,
@@ -192,14 +187,12 @@ Please assign complexity based on:
       };
     }
     
-    // Add image URL for fallback recipe
     if (fallbackRecipe.name) {
       fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(fallbackRecipe.name.split(" ").join(","))}`;
     } else {
       fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?healthy,food`;
     }
     
-    // Throw a custom error that includes the fallback recipe
     const customError = new Error("API_FALLBACK");
     (customError as any).fallbackRecipe = fallbackRecipe;
     (customError as any).originalError = error;
