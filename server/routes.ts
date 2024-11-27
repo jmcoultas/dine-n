@@ -71,10 +71,10 @@ export function registerRoutes(app: Express) {
               });
 
               if (recipeData.name && !usedRecipeNames.has(recipeData.name)) {
-                const [newRecipe] = await db.insert(recipes).values({
-                  name: recipeData.name,
-                  description: recipeData.description,
-                  imageUrl: recipeData.imageUrl,
+                const recipeToInsert = {
+                  name: recipeData.name || '',
+                  description: recipeData.description || '',
+                  imageUrl: recipeData.imageUrl || '',
                   prepTime: recipeData.prepTime || 0,
                   cookTime: recipeData.cookTime || 0,
                   servings: recipeData.servings || 2,
@@ -88,7 +88,9 @@ export function registerRoutes(app: Express) {
                     fat: 0
                   },
                   complexity: recipeData.complexity || 1,
-                }).returning();
+                };
+                
+                const [newRecipe] = await db.insert(recipes).values(recipeToInsert).returning();
 
                 usedRecipeNames.add(recipeData.name);
                 suggestedRecipes.push(newRecipe);

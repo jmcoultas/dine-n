@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
+import PreferenceModal from "@/components/PreferenceModal";
 
 const HERO_IMAGES = [
   "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
@@ -8,6 +10,21 @@ const HERO_IMAGES = [
 ];
 
 export default function Home() {
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState({
+    dietary: [] as string[],
+    allergies: [] as string[],
+    cuisine: [] as string[],
+    meatTypes: [] as string[],
+  });
+  const [, setLocation] = useLocation();
+
+  const handlePreferencesSubmit = (newPreferences: typeof preferences) => {
+    setPreferences(newPreferences);
+    setShowPreferences(false);
+    setLocation("/meal-plan");
+  };
+
   return (
     <div className="space-y-16">
       <section
@@ -25,11 +42,13 @@ export default function Home() {
             Generate personalized meal plans, discover new recipes, and simplify
             your grocery shopping with our intelligent cooking companion.
           </p>
-          <Link href="/meal-plan">
-            <Button size="lg" className="bg-primary hover:bg-primary/90">
-              Start Planning
-            </Button>
-          </Link>
+          <Button 
+            size="lg" 
+            className="bg-primary hover:bg-primary/90"
+            onClick={() => setShowPreferences(true)}
+          >
+            Start Planning
+          </Button>
         </div>
       </section>
 
@@ -70,6 +89,13 @@ export default function Home() {
           </p>
         </div>
       </section>
+
+      <PreferenceModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+        preferences={preferences}
+        onUpdatePreferences={handlePreferencesSubmit}
+      />
     </div>
   );
 }
