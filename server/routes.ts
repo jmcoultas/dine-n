@@ -58,6 +58,8 @@ export function registerRoutes(app: Express) {
             const recipeData = await generateRecipeRecommendation({
               dietary: preferences?.dietary || [],
               allergies: preferences?.allergies || [],
+              cuisine: preferences?.cuisine || [],
+              meatTypes: preferences?.meatTypes || [],
               mealType: mealTypes[meal],
             });
 
