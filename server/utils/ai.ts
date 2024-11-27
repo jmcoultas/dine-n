@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
+import { Json } from "types/json";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,9 +14,31 @@ interface RecipeGenerationParams {
   mealType: "breakfast" | "lunch" | "dinner";
 }
 
-interface FallbackRecipe extends Partial<Recipe> {
+interface RecipeIngredient {
+  name: string;
+  amount: number;
+  unit: string;
+}
+
+interface RecipeNutrition {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface FallbackRecipe {
+  name: string;
+  description: string;
+  imageUrl?: string;
+  prepTime: number;
+  cookTime: number;
+  servings: number;
+  ingredients: RecipeIngredient[];
   instructions: string[];
   tags: string[];
+  nutrition: RecipeNutrition;
+  complexity: number;
 }
 
 // Default fallback recipes for different meal types
@@ -91,12 +114,17 @@ const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
 };
 
 // Helper function to check if recipe meets dietary restrictions
-function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationParams): boolean {
+function meetsRestrictions(recipe: FallbackRecipe | Partial<Recipe>, params: RecipeGenerationParams): boolean {
   const allergies = params.allergies.map(a => a.toLowerCase());
   const dietary = params.dietary.map(d => d.toLowerCase());
   
-  const hasAllergens = Array.isArray(recipe.ingredients) && recipe.ingredients.some(ing => {
-    if (typeof ing === 'object' && ing !== null && 'name' in ing && ing.name) {
+  // Check if recipe has ingredients and they're in the correct format
+  const recipeIngredients = Array.isArray(recipe.ingredients) 
+    ? recipe.ingredients
+    : [];
+  
+  const hasAllergens = recipeIngredients.some(ing => {
+    if (typeof ing === 'object' && ing !== null && 'name' in ing) {
       const ingredientName = String(ing.name).toLowerCase();
       return allergies.some(allergy => ingredientName.includes(allergy));
     }
@@ -105,7 +133,10 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   
   if (hasAllergens) return false;
   
-  const recipeTags = Array.isArray(recipe.tags) ? recipe.tags.map(tag => String(tag).toLowerCase()) : [];
+  // Ensure tags is an array before processing
+  const recipeTags = Array.isArray(recipe.tags) 
+    ? recipe.tags.map(tag => String(tag).toLowerCase())
+    : [];
   
   // Check dietary restrictions
   if (dietary.length > 0 && !dietary.some(diet => recipeTags.includes(diet.toLowerCase()))) {
@@ -121,8 +152,8 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   // Check meat preferences
   const meatTypes = params.meatTypes.map(m => m.toLowerCase());
   if (meatTypes.length > 0) {
-    if (meatTypes.includes('none') && recipe.ingredients?.some(ing => 
-      typeof ing === 'object' && ing !== null && ing.name && 
+    if (meatTypes.includes('none') && recipeIngredients.some(ing => 
+      typeof ing === 'object' && ing !== null && 'name' in ing && 
       ['chicken', 'beef', 'pork', 'fish', 'lamb', 'turkey'].some(meat => 
         String(ing.name).toLowerCase().includes(meat)
       )
@@ -131,8 +162,8 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
     }
     
     if (!meatTypes.includes('none') && !meatTypes.some(meat => 
-      recipe.ingredients?.some(ing => 
-        typeof ing === 'object' && ing !== null && ing.name && 
+      recipeIngredients.some(ing => 
+        typeof ing === 'object' && ing !== null && 'name' in ing && 
         String(ing.name).toLowerCase().includes(meat)
       )
     )) {
@@ -187,19 +218,18 @@ Please assign complexity based on:
       max_tokens: 800,
     });
 
-    const recipeData = JSON.parse(completion.choices[0].message.content || '{}');
+    const recipeData = JSON.parse(completion.choices[0].message.content || '{}') as Partial<Recipe>;
     
-    recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(recipeData.name.split(" ").join(","))}`;
+    recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
     
     return recipeData;
   } catch (error: any) {
-    console.log("OpenAI API Error:", error.message);
+    console.error("OpenAI API Error:", error.message);
     
-    let fallbackRecipe = DEFAULT_RECIPES[params.mealType];
+    let fallbackRecipe = { ...DEFAULT_RECIPES[params.mealType] };
     if (!fallbackRecipe) {
-      fallbackRecipe = DEFAULT_RECIPES.lunch;
+      fallbackRecipe = { ...DEFAULT_RECIPES.lunch };
     }
-    fallbackRecipe = { ...fallbackRecipe };
     
     if (!meetsRestrictions(fallbackRecipe, params)) {
       const simpleFallback: FallbackRecipe = {
@@ -227,8 +257,7 @@ Please assign complexity based on:
         },
         prepTime: 10,
         cookTime: 15,
-        servings: 2,
-        imageUrl: "https://source.unsplash.com/featured/?vegetable,stir,fry"
+        servings: 2
       };
       fallbackRecipe = simpleFallback;
     }
