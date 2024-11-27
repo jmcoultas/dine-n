@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
+import { generateMealPlan } from "@/lib/api";
 
 const HERO_IMAGES = [
   "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
@@ -19,10 +22,28 @@ export default function Home() {
   });
   const [, setLocation] = useLocation();
 
-  const handlePreferencesSubmit = (newPreferences: typeof preferences) => {
-    setPreferences(newPreferences);
-    setShowPreferences(false);
-    setLocation("/meal-plan");
+  const { toast } = useToast();
+  const generateMutation = useMutation({
+    mutationFn: (preferences: typeof preferences) => generateMealPlan(preferences, 2),
+    onSuccess: () => {
+      setShowPreferences(false);
+      setLocation("/meal-plan");
+      toast({
+        title: "Success!",
+        description: "Your meal plan has been generated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate meal plan. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleGenerate = () => {
+    generateMutation.mutate(preferences);
   };
 
   return (
@@ -94,7 +115,9 @@ export default function Home() {
         open={showPreferences}
         onOpenChange={setShowPreferences}
         preferences={preferences}
-        onUpdatePreferences={handlePreferencesSubmit}
+        onUpdatePreferences={setPreferences}
+        isGenerating={generateMutation.isPending}
+        onGenerate={handleGenerate}
       />
     </div>
   );
