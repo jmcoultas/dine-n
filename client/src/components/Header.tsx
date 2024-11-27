@@ -19,7 +19,7 @@ export default function Header() {
           <Utensils className="h-6 w-6 text-primary" />
           <span className="font-bold">Dine-N</span>
         </Link>
-        <NavigationMenu className="mx-auto">
+        <NavigationMenu className="ml-auto mr-4">
           <NavigationMenuList>
             <NavigationMenuItem>
               <Link href="/recipes" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
@@ -37,7 +37,6 @@ export default function Header() {
           variant="ghost"
           size="icon"
           onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          className="ml-auto"
         >
           {theme === "light" ? (
             <Moon className="h-5 w-5" />
