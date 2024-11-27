@@ -89,15 +89,15 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   const dietary = params.dietary.map(d => d.toLowerCase());
   
   // Check ingredients against allergies
-  const hasAllergens = recipe.ingredients?.some((ing: { name: string }) => 
+  const hasAllergens = recipe.ingredients?.some(ing => 
     allergies.some(allergy => ing.name.toLowerCase().includes(allergy))
   );
   if (hasAllergens) return false;
   
   // Check dietary restrictions
   if (dietary.length === 0) return true; // No restrictions
-  const recipeTags = recipe.tags || [];
-  return dietary.some(diet => recipeTags.some(tag => tag.toLowerCase() === diet));
+  const recipeTags = recipe.tags ?? [];
+  return dietary.some(diet => recipeTags.some((tag: string) => tag.toLowerCase() === diet));
 }
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
@@ -162,7 +162,6 @@ Please assign complexity based on:
     if (!meetsRestrictions(fallbackRecipe, params)) {
       // Provide a simple vegetarian/vegan alternative
       fallbackRecipe = {
-        ...DEFAULT_RECIPES[params.mealType],
         name: "Simple Vegetable Stir-Fry",
         description: "A quick and healthy vegetable stir-fry",
         complexity: 1,
@@ -172,7 +171,23 @@ Please assign complexity based on:
           { name: "olive oil", amount: 2, unit: "tablespoons" },
           { name: "soy sauce", amount: 2, unit: "tablespoons" }
         ],
+        instructions: [
+          "Cook rice according to package instructions",
+          "Heat oil in a large pan or wok",
+          "Stir-fry mixed vegetables until tender-crisp",
+          "Season with soy sauce and serve over rice"
+        ],
         tags: ["vegetarian", "vegan", "healthy"],
+        nutrition: {
+          calories: 300,
+          protein: 6,
+          carbs: 45,
+          fat: 12
+        },
+        prepTime: 10,
+        cookTime: 15,
+        servings: 2,
+        imageUrl: "https://source.unsplash.com/featured/?vegetable,stir,fry"
       };
     }
     
