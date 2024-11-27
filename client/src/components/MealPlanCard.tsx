@@ -11,20 +11,25 @@ interface MealPlanCardProps {
   meal: "breakfast" | "lunch" | "dinner";
 }
 
+type ComplexityLevel = 1 | 2 | 3;
+
+const complexityNames: Record<ComplexityLevel, string> = {
+  1: "Easy",
+  2: "Medium",
+  3: "Hard",
+};
+
+const mealColors: Record<MealPlanCardProps["meal"], string> = {
+  breakfast: "bg-yellow-100",
+  lunch: "bg-green-100",
+  dinner: "bg-blue-100",
+};
+
 export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
-  
-  const mealColors = {
-    breakfast: "bg-yellow-100",
-    lunch: "bg-green-100",
-    dinner: "bg-blue-100",
-  };
 
-  const complexityNames = {
-    1: "Easy",
-    2: "Medium",
-    3: "Hard",
-  };
+  const complexity = (recipe.complexity ?? 1) as ComplexityLevel;
+  const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0);
 
   return (
     <>
@@ -58,14 +63,14 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
           <div className="flex items-center gap-2 mt-2">
             <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
               <ChefHat className="w-4 h-4" />
-              {complexityNames[recipe.complexity as keyof typeof complexityNames]}
+              {complexityNames[complexity]}
             </span>
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{recipe.prepTime + recipe.cookTime} min</span>
-            <span>{recipe.servings} servings</span>
+            <span>{totalTime} min</span>
+            <span>{recipe.servings ?? 2} servings</span>
           </div>
         </CardContent>
       </Card>
@@ -87,13 +92,13 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
 
             <div className="flex gap-2 flex-wrap">
               <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
-                {complexityNames[recipe.complexity as keyof typeof complexityNames]}
+                {complexityNames[complexity]}
               </span>
               <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
-                {recipe.prepTime + recipe.cookTime} min
+                {totalTime} min
               </span>
               <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
-                {recipe.servings} servings
+                {recipe.servings ?? 2} servings
               </span>
             </div>
 
