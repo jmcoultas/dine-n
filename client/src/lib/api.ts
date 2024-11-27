@@ -21,6 +21,8 @@ export async function createMealPlan(mealPlan: Omit<MealPlan, "id">): Promise<Me
 interface MealPlanPreferences {
   dietary: string[];
   allergies: string[];
+  cuisine: string[];
+  meatTypes: string[];
 }
 
 export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<Recipe[]> {

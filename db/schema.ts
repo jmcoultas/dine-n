@@ -9,6 +9,8 @@ export const users = pgTable("users", {
   preferences: jsonb("preferences").$type<{
     dietary: string[];
     allergies: string[];
+    cuisine: string[];
+    meatTypes: string[];
   }>(),
 });
 

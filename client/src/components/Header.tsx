@@ -13,7 +13,7 @@ export default function Header() {
       <div className="container flex h-16 items-center px-4">
         <Link href="/" className="flex items-center space-x-2">
           <Utensils className="h-6 w-6 text-primary" />
-          <span className="font-bold">MealMaster AI</span>
+          <span className="font-bold">Dine-N</span>
         </Link>
         <NavigationMenu className="ml-auto">
           <NavigationMenuList>

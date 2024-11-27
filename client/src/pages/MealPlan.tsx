@@ -29,6 +29,28 @@ const DIETARY_OPTIONS = [
   "Mediterranean"
 ];
 
+const CUISINE_OPTIONS = [
+  "Italian",
+  "Mexican",
+  "Chinese",
+  "Japanese",
+  "Indian",
+  "Thai",
+  "Mediterranean",
+  "American",
+  "French"
+];
+
+const MEAT_TYPE_OPTIONS = [
+  "Chicken",
+  "Beef",
+  "Pork",
+  "Fish",
+  "Lamb",
+  "Turkey",
+  "None"
+];
+
 // Add common allergens
 const ALLERGY_OPTIONS = [
   "Dairy",
@@ -49,6 +71,8 @@ export default function MealPlan() {
   const [preferences, setPreferences] = useState({
     dietary: [] as string[],
     allergies: [] as string[],
+    cuisine: [] as string[],
+    meatTypes: [] as string[],
   });
 
   const removePreference = (type: 'dietary' | 'allergies', value: string) => {
@@ -233,6 +257,92 @@ export default function MealPlan() {
                       <button
                         className="ml-1 hover:bg-muted rounded-full"
                         onClick={() => removePreference('allergies', item)}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Cuisine Preferences</label>
+                <Select
+                  value={preferences.cuisine.length > 0 ? preferences.cuisine[0] : ""}
+                  onValueChange={(value) => {
+                    if (!preferences.cuisine.includes(value)) {
+                      setPreferences(prev => ({ ...prev, cuisine: [...prev.cuisine, value] }))
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select cuisine preferences">
+                      {preferences.cuisine.length > 0 
+                        ? `${preferences.cuisine.length} selected`
+                        : "Select cuisine preferences"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CUISINE_OPTIONS.map(option => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {preferences.cuisine.map(item => (
+                    <Badge 
+                      key={item}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {item}
+                      <button
+                        className="ml-1 hover:bg-muted rounded-full"
+                        onClick={() => removePreference('cuisine', item)}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Meat Preferences</label>
+                <Select
+                  value={preferences.meatTypes.length > 0 ? preferences.meatTypes[0] : ""}
+                  onValueChange={(value) => {
+                    if (!preferences.meatTypes.includes(value)) {
+                      setPreferences(prev => ({ ...prev, meatTypes: [...prev.meatTypes, value] }))
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select meat preferences">
+                      {preferences.meatTypes.length > 0 
+                        ? `${preferences.meatTypes.length} selected`
+                        : "Select meat preferences"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MEAT_TYPE_OPTIONS.map(option => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {preferences.meatTypes.map(item => (
+                    <Badge 
+                      key={item}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {item}
+                      <button
+                        className="ml-1 hover:bg-muted rounded-full"
+                        onClick={() => removePreference('meatTypes', item)}
                       >
                         ×
                       </button>

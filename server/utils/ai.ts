@@ -8,6 +8,8 @@ const openai = new OpenAI({
 interface RecipeGenerationParams {
   dietary: string[];
   allergies: string[];
+  cuisine: string[];
+  meatTypes: string[];
   mealType: "breakfast" | "lunch" | "dinner";
 }
 
@@ -93,17 +95,52 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   const allergies = params.allergies.map(a => a.toLowerCase());
   const dietary = params.dietary.map(d => d.toLowerCase());
   
-  const hasAllergens = Array.isArray(recipe.ingredients) && recipe.ingredients.some(ing => 
-    typeof ing === 'object' && 'name' in ing &&
-    typeof ing.name === 'string' &&
-    allergies.some(allergy => ing.name.toLowerCase().includes(allergy))
-  );
+  const hasAllergens = Array.isArray(recipe.ingredients) && recipe.ingredients.some(ing => {
+    if (typeof ing === 'object' && ing !== null && 'name' in ing && ing.name) {
+      const ingredientName = String(ing.name).toLowerCase();
+      return allergies.some(allergy => ingredientName.includes(allergy));
+    }
+    return false;
+  });
   
   if (hasAllergens) return false;
   
-  if (dietary.length === 0) return true;
-  const recipeTags = Array.isArray(recipe.tags) ? recipe.tags : [];
-  return dietary.some(diet => recipeTags.map(tag => tag.toLowerCase()).includes(diet));
+  const recipeTags = Array.isArray(recipe.tags) ? recipe.tags.map(tag => String(tag).toLowerCase()) : [];
+  
+  // Check dietary restrictions
+  if (dietary.length > 0 && !dietary.some(diet => recipeTags.includes(diet.toLowerCase()))) {
+    return false;
+  }
+  
+  // Check cuisine preferences
+  const cuisines = params.cuisine.map(c => c.toLowerCase());
+  if (cuisines.length > 0 && !cuisines.some(cuisine => recipeTags.includes(cuisine.toLowerCase()))) {
+    return false;
+  }
+  
+  // Check meat preferences
+  const meatTypes = params.meatTypes.map(m => m.toLowerCase());
+  if (meatTypes.length > 0) {
+    if (meatTypes.includes('none') && recipe.ingredients?.some(ing => 
+      typeof ing === 'object' && ing !== null && ing.name && 
+      ['chicken', 'beef', 'pork', 'fish', 'lamb', 'turkey'].some(meat => 
+        String(ing.name).toLowerCase().includes(meat)
+      )
+    )) {
+      return false;
+    }
+    
+    if (!meatTypes.includes('none') && !meatTypes.some(meat => 
+      recipe.ingredients?.some(ing => 
+        typeof ing === 'object' && ing !== null && ing.name && 
+        String(ing.name).toLowerCase().includes(meat)
+      )
+    )) {
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
@@ -111,6 +148,8 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
     const prompt = `Generate a detailed recipe that is suitable for ${params.mealType}.
 ${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : ""}
 ${params.allergies.length > 0 ? `Must avoid allergens: ${params.allergies.join(", ")}` : ""}
+${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : ""}
+${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : ""}
 
 Response should be in JSON format with the following structure:
 {
