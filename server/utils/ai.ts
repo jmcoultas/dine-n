@@ -11,8 +11,13 @@ interface RecipeGenerationParams {
   mealType: "breakfast" | "lunch" | "dinner";
 }
 
+interface FallbackRecipe extends Partial<Recipe> {
+  instructions: string[];
+  tags: string[];
+}
+
 // Default fallback recipes for different meal types
-const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
+const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
   breakfast: {
     name: "Classic Oatmeal with Fruits",
     description: "A healthy and filling breakfast of oatmeal topped with fresh fruits and nuts",
@@ -90,6 +95,7 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   
   const hasAllergens = Array.isArray(recipe.ingredients) && recipe.ingredients.some(ing => 
     typeof ing === 'object' && 'name' in ing &&
+    typeof ing.name === 'string' &&
     allergies.some(allergy => ing.name.toLowerCase().includes(allergy))
   );
   
@@ -157,7 +163,7 @@ Please assign complexity based on:
     fallbackRecipe = { ...fallbackRecipe };
     
     if (!meetsRestrictions(fallbackRecipe, params)) {
-      fallbackRecipe = {
+      const simpleFallback: FallbackRecipe = {
         name: "Simple Vegetable Stir-Fry",
         description: "A quick and healthy vegetable stir-fry",
         complexity: 1,
@@ -185,6 +191,7 @@ Please assign complexity based on:
         servings: 2,
         imageUrl: "https://source.unsplash.com/featured/?vegetable,stir,fry"
       };
+      fallbackRecipe = simpleFallback;
     }
     
     if (fallbackRecipe.name) {
