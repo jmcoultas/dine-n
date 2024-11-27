@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Wand2 } from "lucide-react";
 
 const STEPS = [
   {
@@ -75,6 +75,12 @@ const STEPS = [
       "Turkey",
       "None"
     ]
+  },
+  {
+    title: "Review & Generate",
+    description: "Review your preferences and generate your meal plan.",
+    field: null,
+    options: []
   }
 ];
 
@@ -93,6 +99,8 @@ interface PreferenceModalProps {
     cuisine: string[];
     meatTypes: string[];
   }) => void;
+  isGenerating?: boolean;
+  onGenerate?: () => void;
 }
 
 export default function PreferenceModal({
@@ -100,6 +108,8 @@ export default function PreferenceModal({
   onOpenChange,
   preferences,
   onUpdatePreferences,
+  isGenerating = false,
+  onGenerate,
 }: PreferenceModalProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [tempPreferences, setTempPreferences] = useState(preferences);
@@ -110,9 +120,7 @@ export default function PreferenceModal({
 
   const handleNext = () => {
     if (isLastStep) {
-      onUpdatePreferences(tempPreferences);
-      onOpenChange(false);
-      setCurrentStep(0);
+      onGenerate?.();
     } else {
       setCurrentStep((prev) => prev + 1);
     }
@@ -149,41 +157,60 @@ export default function PreferenceModal({
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
-          <Select
-            value={tempPreferences[currentStepConfig.field][0] || ""}
-            onValueChange={handleSelectPreference}
-          >
-            <SelectTrigger>
-              <SelectValue
-                placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {currentStepConfig.options.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
+          {isLastStep ? (
+            <div className="space-y-6">
+              {Object.entries(tempPreferences).map(([key, values]) => (
+                <div key={key} className="space-y-2">
+                  <h4 className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {values.length > 0 ? values.map((item) => (
+                      <Badge key={item} variant="secondary">{item}</Badge>
+                    )) : (
+                      <span className="text-sm text-muted-foreground">None selected</span>
+                    )}
+                  </div>
+                </div>
               ))}
-            </SelectContent>
-          </Select>
-
-          <div className="flex flex-wrap gap-2">
-            {tempPreferences[currentStepConfig.field].map((item) => (
-              <Badge
-                key={item}
-                variant="secondary"
-                className="flex items-center gap-1"
+            </div>
+          ) : (
+            <>
+              <Select
+                value={tempPreferences[currentStepConfig.field!][0] || ""}
+                onValueChange={handleSelectPreference}
               >
-                {item}
-                <button
-                  className="ml-1 hover:bg-muted rounded-full"
-                  onClick={() => handleRemovePreference(item)}
-                >
-                  ×
-                </button>
-              </Badge>
-            ))}
-          </div>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentStepConfig.options.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex flex-wrap gap-2">
+                {tempPreferences[currentStepConfig.field!].map((item) => (
+                  <Badge
+                    key={item}
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
+                    {item}
+                    <button
+                      className="ml-1 hover:bg-muted rounded-full"
+                      onClick={() => handleRemovePreference(item)}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter className="flex justify-between mt-6">
@@ -195,12 +222,19 @@ export default function PreferenceModal({
               </Button>
             )}
           </div>
-          <Button onClick={handleNext}>
+          <Button onClick={handleNext} disabled={isGenerating}>
             {isLastStep ? (
-              <>
-                <Check className="mr-2 h-4 w-4" />
-                Finish
-              </>
+              isGenerating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Generate Meal Plan
+                </>
+              )
             ) : (
               <>
                 Next
