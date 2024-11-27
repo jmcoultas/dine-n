@@ -5,17 +5,21 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils } from "lucide-react";
+import { Utensils, Moon, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "@/hooks/use-theme";
 
 export default function Header() {
+  const { theme, setTheme } = useTheme();
+
   return (
-    <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center px-4">
         <Link href="/" className="flex items-center space-x-2">
           <Utensils className="h-6 w-6 text-primary" />
           <span className="font-bold">Dine-N</span>
         </Link>
-        <NavigationMenu className="ml-auto">
+        <NavigationMenu className="mx-auto">
           <NavigationMenuList>
             <NavigationMenuItem>
               <Link href="/recipes" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
@@ -29,6 +33,19 @@ export default function Header() {
             </NavigationMenuItem>
           </NavigationMenuList>
         </NavigationMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+          className="ml-auto"
+        >
+          {theme === "light" ? (
+            <Moon className="h-5 w-5" />
+          ) : (
+            <Sun className="h-5 w-5" />
+          )}
+          <span className="sr-only">Toggle theme</span>
+        </Button>
       </div>
     </header>
   );
