@@ -31,8 +31,8 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
       "Combine oats and milk in a pot",
       "Cook over medium heat for 5-7 minutes, stirring occasionally",
       "Top with sliced banana, berries, and honey"
-    ],
-    tags: ["breakfast", "healthy", "vegetarian"],
+    ] as string[],
+    tags: ["breakfast", "healthy", "vegetarian"] as string[],
     nutrition: { calories: 350, protein: 12, carbs: 68, fat: 6 }
   },
   lunch: {
@@ -54,8 +54,8 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
       "Dice cucumber and halve tomatoes",
       "Combine all ingredients in a bowl",
       "Drizzle with olive oil and season to taste"
-    ],
-    tags: ["lunch", "vegetarian", "healthy"],
+    ] as string[],
+    tags: ["lunch", "vegetarian", "healthy"] as string[],
     nutrition: { calories: 420, protein: 15, carbs: 62, fat: 14 }
   },
   dinner: {
@@ -77,8 +77,8 @@ const DEFAULT_RECIPES: Record<string, Partial<Recipe>> = {
       "Place salmon and vegetables on a baking sheet",
       "Drizzle with olive oil and season",
       "Bake for 20-25 minutes"
-    ],
-    tags: ["dinner", "healthy", "seafood"],
+    ] as string[],
+    tags: ["dinner", "healthy", "seafood"] as string[],
     nutrition: { calories: 480, protein: 36, carbs: 22, fat: 28 }
   }
 };
@@ -88,16 +88,17 @@ function meetsRestrictions(recipe: Partial<Recipe>, params: RecipeGenerationPara
   const allergies = params.allergies.map(a => a.toLowerCase());
   const dietary = params.dietary.map(d => d.toLowerCase());
   
-  // Check ingredients against allergies
-  const hasAllergens = recipe.ingredients?.some(ing => 
+  // Fix the type checking for ingredients array
+  const hasAllergens = Array.isArray(recipe.ingredients) && recipe.ingredients.some(ing => 
     allergies.some(allergy => ing.name.toLowerCase().includes(allergy))
   );
+  
   if (hasAllergens) return false;
   
-  // Check dietary restrictions
-  if (dietary.length === 0) return true; // No restrictions
-  const recipeTags = recipe.tags ?? [];
-  return dietary.some(diet => recipeTags.some((tag: string) => tag.toLowerCase() === diet));
+  // Fix the type checking for tags array
+  if (dietary.length === 0) return true;
+  const recipeTags = Array.isArray(recipe.tags) ? recipe.tags : [];
+  return dietary.some(diet => recipeTags.map(tag => tag.toLowerCase()).includes(diet));
 }
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
@@ -176,8 +177,8 @@ Please assign complexity based on:
           "Heat oil in a large pan or wok",
           "Stir-fry mixed vegetables until tender-crisp",
           "Season with soy sauce and serve over rice"
-        ],
-        tags: ["vegetarian", "vegan", "healthy"],
+        ] as string[],
+        tags: ["vegetarian", "vegan", "healthy"] as string[],
         nutrition: {
           calories: 300,
           protein: 6,
