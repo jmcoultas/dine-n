@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
-import { Json } from "types/json";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,6 +11,7 @@ interface RecipeGenerationParams {
   cuisine: string[];
   meatTypes: string[];
   mealType: "breakfast" | "lunch" | "dinner";
+  excludeNames?: string[];
 }
 
 interface RecipeIngredient {

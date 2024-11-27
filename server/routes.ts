@@ -49,50 +49,71 @@ export function registerRoutes(app: Express) {
       const { preferences, days } = req.body;
       const mealsPerDay = 3;
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
-      const suggestedRecipes: Recipe[] = [];
+      const suggestedRecipes = [];
+      const usedRecipeNames = new Set<string>();
 
       // Generate recipes for each day and meal
       for (let day = 0; day < days; day++) {
         for (let meal = 0; meal < mealsPerDay; meal++) {
-          try {
-            const recipeData = await generateRecipeRecommendation({
-              dietary: preferences?.dietary || [],
-              allergies: preferences?.allergies || [],
-              cuisine: preferences?.cuisine || [],
-              meatTypes: preferences?.meatTypes || [],
-              mealType: mealTypes[meal],
-            });
+          let attempts = 0;
+          const maxAttempts = 3;
+          let recipeGenerated = false;
 
-            // Insert the generated recipe into the database
-            const [newRecipe] = await db.insert(recipes).values({
-              name: recipeData.name || 'Generated Recipe',
-              description: recipeData.description,
-              imageUrl: recipeData.imageUrl,
-              prepTime: recipeData.prepTime || 0,
-              cookTime: recipeData.cookTime || 0,
-              servings: recipeData.servings || 2,
-              ingredients: recipeData.ingredients || [],
-              instructions: recipeData.instructions || [],
-              tags: recipeData.tags || [],
-              nutrition: recipeData.nutrition || {
-                calories: 0,
-                protein: 0,
-                carbs: 0,
-                fat: 0
+          while (attempts < maxAttempts && !recipeGenerated) {
+            try {
+              const recipeData = await generateRecipeRecommendation({
+                dietary: preferences?.dietary || [],
+                allergies: preferences?.allergies || [],
+                cuisine: preferences?.cuisine || [],
+                meatTypes: preferences?.meatTypes || [],
+                mealType: mealTypes[meal],
+                excludeNames: Array.from(usedRecipeNames),
+              });
+
+              if (recipeData.name && !usedRecipeNames.has(recipeData.name)) {
+                const [newRecipe] = await db.insert(recipes).values({
+                  name: recipeData.name,
+                  description: recipeData.description,
+                  imageUrl: recipeData.imageUrl,
+                  prepTime: recipeData.prepTime || 0,
+                  cookTime: recipeData.cookTime || 0,
+                  servings: recipeData.servings || 2,
+                  ingredients: recipeData.ingredients || [],
+                  instructions: recipeData.instructions || [],
+                  tags: recipeData.tags || [],
+                  nutrition: recipeData.nutrition || {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0
+                  },
+                  complexity: recipeData.complexity || 1,
+                }).returning();
+
+                usedRecipeNames.add(recipeData.name);
+                suggestedRecipes.push(newRecipe);
+                recipeGenerated = true;
               }
-            }).returning();
-            suggestedRecipes.push(newRecipe);
-          } catch (recipeError: any) {
-            if (recipeError.message === 'API_FALLBACK') {
-              // Use fallback recipe
-              const [newRecipe] = await db.insert(recipes).values({
-                ...recipeError.fallbackRecipe,
-                name: `${recipeError.fallbackRecipe.name} (Fallback)`,
-              }).returning();
-              suggestedRecipes.push(newRecipe);
-            } else {
-              throw recipeError;
+              attempts++;
+            } catch (recipeError: any) {
+              if (recipeError.message === 'API_FALLBACK') {
+                const fallbackName = `${recipeError.fallbackRecipe.name} (${day + 1}-${mealTypes[meal]})`;
+                if (!usedRecipeNames.has(fallbackName)) {
+                  const [newRecipe] = await db.insert(recipes).values({
+                    ...recipeError.fallbackRecipe,
+                    name: fallbackName,
+                  }).returning();
+                  usedRecipeNames.add(fallbackName);
+                  suggestedRecipes.push(newRecipe);
+                  recipeGenerated = true;
+                }
+              }
+              attempts++;
             }
+          }
+
+          if (!recipeGenerated) {
+            throw new Error('Failed to generate unique recipe after maximum attempts');
           }
         }
       }
