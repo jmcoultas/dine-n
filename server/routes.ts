@@ -78,7 +78,7 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || 0,
                   cookTime: recipeData.cookTime || 0,
                   servings: recipeData.servings || 2,
-                  ingredients: JSON.stringify((recipeData.ingredients || []).map(ing => ({
+                  ingredients: JSON.stringify((recipeData.ingredients || []).map((ing: { name: string; amount: number; unit: string }) => ({
                     name: String(ing.name),
                     amount: Number(ing.amount),
                     unit: String(ing.unit)
