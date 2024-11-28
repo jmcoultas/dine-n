@@ -9,11 +9,26 @@ import { Clock, Users } from "lucide-react";
 import type { Recipe } from "@db/schema";
 
 interface RecipeCardProps {
-  recipe: Recipe;
+  recipe: {
+    id: number;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    prepTime?: number;
+    cookTime?: number;
+    servings?: number;
+  };
   onClick?: () => void;
 }
 
 export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
+  // Add null checks for optional properties
+  const imageUrl = recipe.imageUrl ?? '';
+  const description = recipe.description ?? '';
+  const prepTime = recipe.prepTime ?? 0;
+  const cookTime = recipe.cookTime ?? 0;
+  const servings = recipe.servings ?? 2;
+
   return (
     <Card
       className="hover:shadow-lg transition-shadow cursor-pointer"
@@ -22,7 +37,7 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
       <CardHeader className="p-0">
         <div className="aspect-video relative rounded-t-lg overflow-hidden">
           <img
-            src={recipe.imageUrl}
+            src={imageUrl}
             alt={recipe.name}
             className="object-cover w-full h-full"
           />
@@ -31,16 +46,16 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
       <CardContent className="p-4">
         <CardTitle className="text-xl mb-2">{recipe.name}</CardTitle>
         <CardDescription className="mb-4">
-          {recipe.description}
+          {description}
         </CardDescription>
         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <Clock className="w-4 h-4 mr-1" />
-            {recipe.prepTime + recipe.cookTime} min
+            {prepTime + cookTime} min
           </div>
           <div className="flex items-center">
             <Users className="w-4 h-4 mr-1" />
-            {recipe.servings} servings
+            {servings} servings
           </div>
         </div>
       </CardContent>
