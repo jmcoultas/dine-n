@@ -38,6 +38,7 @@ const STEPS: Step[] = [
     description: "Select any dietary restrictions or preferences you follow.",
     field: "dietary",
     options: [
+      "No Preference",
       "Vegetarian",
       "Vegan",
       "Gluten-Free",
@@ -136,11 +137,20 @@ export default function PreferenceModal({
 
   const handleSelectPreference = (value: string) => {
     const field = currentStepConfig.field;
-    if (field !== null && !tempPreferences[field].includes(value)) {
-      setTempPreferences((prev) => ({
-        ...prev,
-        [field]: [...prev[field], value]
-      }));
+    if (field !== null) {
+      if (value === "No Preference") {
+        setTempPreferences((prev) => ({
+          ...prev,
+          [field]: ["No Preference"]
+        }));
+      } else {
+        setTempPreferences((prev) => ({
+          ...prev,
+          [field]: prev[field].includes("No Preference") 
+            ? [value]
+            : [...prev[field].filter(item => item !== "No Preference"), value]
+        }));
+      }
     }
   };
 
