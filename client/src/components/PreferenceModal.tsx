@@ -16,12 +16,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowRight, Check, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 
 type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
 type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
 type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
 type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
+
+type PreferenceValue<T extends PreferenceField> = 
+  T extends "dietary" ? PreferenceType :
+  T extends "allergies" ? AllergyType :
+  T extends "cuisine" ? CuisineType :
+  T extends "meatTypes" ? MeatType :
+  never;
 
 interface Preferences {
   dietary: PreferenceType[];
@@ -52,7 +59,7 @@ const STEPS: Step[] = [
       "Keto",
       "Paleo",
       "Mediterranean"
-    ] as PreferenceType[]
+    ]
   },
   {
     title: "Allergies",
@@ -66,7 +73,7 @@ const STEPS: Step[] = [
       "Shellfish",
       "Wheat",
       "Soy"
-    ] as AllergyType[]
+    ]
   },
   {
     title: "Cuisine Preferences",
@@ -82,7 +89,7 @@ const STEPS: Step[] = [
       "Mediterranean",
       "American",
       "French"
-    ] as CuisineType[]
+    ]
   },
   {
     title: "Meat Preferences",
@@ -96,7 +103,7 @@ const STEPS: Step[] = [
       "Lamb",
       "Turkey",
       "None"
-    ] as MeatType[]
+    ]
   },
   {
     title: "Review & Generate",
@@ -110,17 +117,10 @@ interface PreferenceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preferences: Preferences;
-  onUpdatePreferences: (preferences: {
-    dietary: PreferenceType[];
-    allergies: AllergyType[];
-    cuisine: CuisineType[];
-    meatTypes: MeatType[];
-  }) => void;
+  onUpdatePreferences: (preferences: Preferences) => void;
   isGenerating?: boolean;
   onGenerate?: () => void;
 }
-
-type PreferenceValue<T extends PreferenceField> = Preferences[T][number];
 
 export default function PreferenceModal({
   open,
@@ -149,51 +149,38 @@ export default function PreferenceModal({
     setCurrentStep((prev) => prev - 1);
   };
 
-  const handleSelectPreference = (value: string) => {
-    const field = currentStepConfig.field;
-    if (field !== null) {
-      setTempPreferences((prev) => {
-        if (value === "No Preference") {
-          const updatedPreferences = {
-            ...prev,
-            [field]: ["No Preference" as PreferenceType]
-          };
-          onUpdatePreferences(updatedPreferences);
-          return updatedPreferences;
-        }
-        
-        const currentValues = prev[field];
-        const hasNoPreference = currentValues.includes("No Preference" as PreferenceValue<typeof field>);
-        
-        let newValues: Array<PreferenceValue<typeof field>>;
-        if (hasNoPreference) {
-          newValues = [value as PreferenceValue<typeof field>];
-        } else {
-          newValues = [...currentValues, value as PreferenceValue<typeof field>];
-        }
-        
-        const updatedPreferences = {
-          ...prev,
-          [field]: newValues
-        };
-        onUpdatePreferences(updatedPreferences);
-        return updatedPreferences;
-      });
-    }
+  const handleSelectPreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
+    setTempPreferences((prev) => {
+      const updatedPreferences = { ...prev };
+      
+      if (value === "No Preference" as PreferenceValue<T>) {
+        updatedPreferences[field] = ["No Preference"] as PreferenceValue<T>[];
+      } else {
+        const currentValues = prev[field] as PreferenceValue<T>[];
+        const hasNoPreference = currentValues.includes("No Preference" as PreferenceValue<T>);
+        updatedPreferences[field] = hasNoPreference ? [value] : [...currentValues, value];
+      }
+      
+      onUpdatePreferences(updatedPreferences);
+      return updatedPreferences;
+    });
   };
 
-  const handleRemovePreference = (value: string) => {
-    const field = currentStepConfig.field;
-    if (field !== null) {
-      setTempPreferences((prev) => {
-        const updatedPreferences = {
-          ...prev,
-          [field]: prev[field].filter((item) => item !== value)
-        };
-        onUpdatePreferences(updatedPreferences);
-        return updatedPreferences;
-      });
-    }
+  const handleRemovePreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
+    setTempPreferences((prev) => {
+      const currentValues = prev[field] as PreferenceValue<T>[];
+      const updatedPreferences = {
+        ...prev,
+        [field]: currentValues.filter((item) => item !== value)
+      };
+      onUpdatePreferences(updatedPreferences);
+      return updatedPreferences;
+    });
+  };
+
+  const getOptionsForField = <T extends PreferenceField>(field: T): PreferenceValue<T>[] => {
+    const step = STEPS.find(s => s.field === field);
+    return (step?.options ?? []) as PreferenceValue<T>[];
   };
 
   return (
@@ -222,23 +209,31 @@ export default function PreferenceModal({
             </div>
           ) : (
             <>
-              <Select
-                value={currentStepConfig.field ? (tempPreferences[currentStepConfig.field][0] || "") : ""}
-                onValueChange={(value: string) => handleSelectPreference(value)}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {currentStepConfig.options.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {currentStepConfig.field && (
+                <Select
+                  value={tempPreferences[currentStepConfig.field][0] ?? ""}
+                  onValueChange={(value) => {
+                    if (currentStepConfig.field) {
+                      const field = currentStepConfig.field;
+                      const typedValue = value as PreferenceValue<typeof field>;
+                      handleSelectPreference(field, typedValue);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 {currentStepConfig.field && tempPreferences[currentStepConfig.field].map((item) => (
@@ -250,7 +245,10 @@ export default function PreferenceModal({
                     {item}
                     <button
                       className="ml-1 hover:bg-muted rounded-full"
-                      onClick={() => handleRemovePreference(item)}
+                      onClick={() => handleRemovePreference(
+                        currentStepConfig.field as PreferenceField,
+                        item as PreferenceValue<typeof currentStepConfig.field>
+                      )}
                     >
                       ×
                     </button>
