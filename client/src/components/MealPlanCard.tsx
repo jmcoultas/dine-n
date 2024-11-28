@@ -45,9 +45,9 @@ const complexityNames: Record<ComplexityLevel, string> = {
 };
 
 const mealColors: Record<MealPlanCardProps["meal"], string> = {
-  breakfast: "bg-yellow-100",
-  lunch: "bg-green-100",
-  dinner: "bg-blue-100",
+  breakfast: "bg-yellow-100 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100",
+  lunch: "bg-green-100 dark:bg-green-900 text-green-900 dark:text-green-100",
+  dinner: "bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100",
 };
 
 export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCardProps) {
