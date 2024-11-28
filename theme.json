@@ -2,5 +2,17 @@
   "variant": "professional",
   "primary": "hsl(24, 80%, 50%)",
   "appearance": "system",
-  "radius": 0.75
+  "radius": 0.75,
+  "darkMode": {
+    "background": "hsl(240, 10%, 4%)",
+    "foreground": "hsl(0, 0%, 98%)",
+    "muted": "hsl(240, 4%, 16%)",
+    "mutedForeground": "hsl(240, 5%, 65%)",
+    "popover": "hsl(240, 10%, 4%)",
+    "popoverForeground": "hsl(0, 0%, 98%)",
+    "card": "hsl(240, 10%, 4%)",
+    "cardForeground": "hsl(0, 0%, 98%)",
+    "accent": "hsl(240, 4%, 16%)",
+    "accentForeground": "hsl(0, 0%, 98%)"
+  }
 }

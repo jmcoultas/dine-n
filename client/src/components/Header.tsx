@@ -12,6 +12,23 @@ import { useTheme } from "@/hooks/use-theme";
 export default function Header() {
   const { theme, setTheme } = useTheme();
 
+  const toggleTheme = () => {
+    if (theme === 'light') setTheme('dark');
+    else if (theme === 'dark') setTheme('system');
+    else setTheme('light');
+  };
+
+  const ThemeIcon = () => {
+    if (theme === 'light') return <Sun className="h-5 w-5" />;
+    if (theme === 'dark') return <Moon className="h-5 w-5" />;
+    return (
+      <div className="relative h-5 w-5">
+        <Sun className="absolute inset-0 h-5 w-5 rotate-90 transition-all dark:rotate-0" />
+        <Moon className="absolute inset-0 h-5 w-5 rotate-0 transition-all dark:-rotate-90" />
+      </div>
+    );
+  };
+
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center px-4">
@@ -37,13 +54,10 @@ export default function Header() {
           variant="ghost"
           size="icon"
           className="ml-4"
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+          onClick={toggleTheme}
+          title={`Theme: ${theme}`}
         >
-          {theme === "light" ? (
-            <Moon className="h-5 w-5" />
-          ) : (
-            <Sun className="h-5 w-5" />
-          )}
+          <ThemeIcon />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </div>

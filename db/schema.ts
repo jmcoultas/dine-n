@@ -69,6 +69,13 @@ export const groceryLists = pgTable("grocery_lists", {
   created: timestamp("created").defaultNow(),
 });
 
+export const favorites = pgTable("favorites", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer().references(() => users.id),
+  recipeId: integer().references(() => recipes.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Zod Schemas
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -78,9 +85,12 @@ export const insertMealPlanSchema = createInsertSchema(mealPlans);
 export const selectMealPlanSchema = createSelectSchema(mealPlans);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
+export const insertFavoriteSchema = createInsertSchema(favorites);
+export const selectFavoriteSchema = createSelectSchema(favorites);
 
 // Types
 export type User = z.infer<typeof selectUserSchema>;
 export type Recipe = z.infer<typeof selectRecipeSchema>;
 export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
+export type Favorite = z.infer<typeof selectFavoriteSchema>;
