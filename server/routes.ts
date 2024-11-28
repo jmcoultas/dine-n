@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { recipes, favorites } from "@db/schema";
 import { generateRecipeRecommendation } from "./utils/ai";
+import { eq, and } from "drizzle-orm";
 
 export default function setupRoutes(app: Express) {
   // Recipes

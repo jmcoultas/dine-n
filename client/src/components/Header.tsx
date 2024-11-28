@@ -19,12 +19,14 @@ export default function Header() {
   };
 
   const ThemeIcon = () => {
-    if (theme === 'light') return <Sun className="h-5 w-5" />;
-    if (theme === 'dark') return <Moon className="h-5 w-5" />;
     return (
       <div className="relative h-5 w-5">
-        <Sun className="absolute inset-0 h-5 w-5 rotate-90 transition-all dark:rotate-0" />
-        <Moon className="absolute inset-0 h-5 w-5 rotate-0 transition-all dark:-rotate-90" />
+        <Sun className={`absolute inset-0 h-5 w-5 transition-all duration-200 ${
+          theme === 'dark' ? 'rotate-0 opacity-0' : 'rotate-0 opacity-100'
+        }`} />
+        <Moon className={`absolute inset-0 h-5 w-5 transition-all duration-200 ${
+          theme === 'dark' ? 'rotate-0 opacity-100' : 'rotate-90 opacity-0'
+        }`} />
       </div>
     );
   };
