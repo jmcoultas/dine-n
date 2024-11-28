@@ -1,24 +1,29 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchRecipes, getFavorites, addToFavorites, removeFromFavorites } from "@/lib/api";
+import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import RecipeCard from "@/components/RecipeCard";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Search } from "lucide-react";
+import { fetchRecipes, getFavorites, addToFavorites, removeFromFavorites } from "@/lib/api";
 import type { Recipe } from "@db/schema";
 
 export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "favorites">("all");
+  
   const { data: favorites = [] } = useQuery({
     queryKey: ["favorites"],
     queryFn: getFavorites,
   });
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const toggleFavoriteMutation = useMutation({
     mutationFn: async (recipeId: number) => {
@@ -44,8 +49,6 @@ export default function Recipes() {
       });
     },
   });
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { data: recipes = [], isLoading, isError, error } = useQuery({
     queryKey: ["recipes"],
@@ -141,13 +144,13 @@ export default function Recipes() {
             <ScrollArea className="h-full w-full">
               <div className="space-y-4 p-6">
                 <DialogTitle className="text-2xl font-bold">{selectedRecipe.name}</DialogTitle>
-                <DialogDescription className="text-muted-foreground">
+                <p className="text-muted-foreground">
                   {selectedRecipe.description}
-                </DialogDescription>
+                </p>
 
                 <div className="aspect-video relative rounded-lg overflow-hidden">
                   <img
-                    src={selectedRecipe.imageUrl}
+                    src={selectedRecipe.imageUrl || ''}
                     alt={selectedRecipe.name}
                     className="object-cover w-full h-full"
                   />
