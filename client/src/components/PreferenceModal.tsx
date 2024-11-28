@@ -184,7 +184,7 @@ export default function PreferenceModal({
                 <div key={key} className="space-y-2">
                   <h4 className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
                   <div className="flex flex-wrap gap-2">
-                    {values.length > 0 ? values.map((item) => (
+                    {values.length > 0 ? values.map((item: PreferenceType | AllergyType | CuisineType | MeatType) => (
                       <Badge key={item} variant="secondary">{item}</Badge>
                     )) : (
                       <span className="text-sm text-muted-foreground">None selected</span>
@@ -214,7 +214,7 @@ export default function PreferenceModal({
               </Select>
 
               <div className="flex flex-wrap gap-2">
-                {currentStepConfig.field && tempPreferences[currentStepConfig.field].map((item) => (
+                {currentStepConfig.field && tempPreferences[currentStepConfig.field].map((item: PreferenceType | AllergyType | CuisineType | MeatType) => (
                   <Badge
                     key={item}
                     variant="secondary"
