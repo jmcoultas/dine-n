@@ -30,11 +30,15 @@ export default function RiveAnimation({
   });
 
   useEffect(() => {
-    if (input && value !== undefined && stateMachine) {
+    if (input && value !== undefined && stateMachine && setInputValue) {
       try {
-        setInputValue(stateMachine, input, value);
+        // Add a small delay to ensure the Rive instance is ready
+        const timer = setTimeout(() => {
+          setInputValue(stateMachine, input, value);
+        }, 100);
+        return () => clearTimeout(timer);
       } catch (error) {
-        console.error('Error setting Rive input value:', error);
+        console.warn('Warning: Could not set Rive input value');
       }
     }
   }, [stateMachine, input, value, setInputValue]);
