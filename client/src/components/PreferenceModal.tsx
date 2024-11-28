@@ -18,11 +18,25 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Check, Wand2 } from "lucide-react";
 
-const STEPS = [
+interface Preferences {
+  dietary: string[];
+  allergies: string[];
+  cuisine: string[];
+  meatTypes: string[];
+}
+
+interface Step {
+  title: string;
+  description: string;
+  field: keyof Preferences | null;
+  options: string[];
+}
+
+const STEPS: Step[] = [
   {
     title: "Dietary Preferences",
     description: "Select any dietary restrictions or preferences you follow.",
-    field: "dietary" as const,
+    field: "dietary",
     options: [
       "Vegetarian",
       "Vegan",
@@ -35,7 +49,7 @@ const STEPS = [
   {
     title: "Allergies",
     description: "Select any food allergies or intolerances.",
-    field: "allergies" as const,
+    field: "allergies",
     options: [
       "Dairy",
       "Eggs",
@@ -49,7 +63,7 @@ const STEPS = [
   {
     title: "Cuisine Preferences",
     description: "Select your preferred cuisine types.",
-    field: "cuisine" as const,
+    field: "cuisine",
     options: [
       "Italian",
       "Mexican",
@@ -65,7 +79,7 @@ const STEPS = [
   {
     title: "Meat Preferences",
     description: "Select your preferred meat types.",
-    field: "meatTypes" as const,
+    field: "meatTypes",
     options: [
       "Chicken",
       "Beef",
@@ -87,18 +101,8 @@ const STEPS = [
 interface PreferenceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  preferences: {
-    dietary: string[];
-    allergies: string[];
-    cuisine: string[];
-    meatTypes: string[];
-  };
-  onUpdatePreferences: (preferences: {
-    dietary: string[];
-    allergies: string[];
-    cuisine: string[];
-    meatTypes: string[];
-  }) => void;
+  preferences: Preferences;
+  onUpdatePreferences: (preferences: Preferences) => void;
   isGenerating?: boolean;
   onGenerate?: () => void;
 }
@@ -112,7 +116,7 @@ export default function PreferenceModal({
   onGenerate,
 }: PreferenceModalProps) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [tempPreferences, setTempPreferences] = useState(preferences);
+  const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
 
   const currentStepConfig = STEPS[currentStep];
   const isLastStep = currentStep === STEPS.length - 1;
@@ -132,20 +136,22 @@ export default function PreferenceModal({
 
   const handleSelectPreference = (value: string) => {
     const field = currentStepConfig.field;
-    if (!tempPreferences[field].includes(value)) {
+    if (field !== null && !tempPreferences[field].includes(value)) {
       setTempPreferences((prev) => ({
         ...prev,
-        [field]: [...prev[field], value],
+        [field]: [...prev[field], value]
       }));
     }
   };
 
   const handleRemovePreference = (value: string) => {
     const field = currentStepConfig.field;
-    setTempPreferences((prev) => ({
-      ...prev,
-      [field]: prev[field].filter((item) => item !== value),
-    }));
+    if (field !== null) {
+      setTempPreferences((prev) => ({
+        ...prev,
+        [field]: prev[field].filter((item) => item !== value)
+      }));
+    }
   };
 
   return (
@@ -193,7 +199,7 @@ export default function PreferenceModal({
               </Select>
 
               <div className="flex flex-wrap gap-2">
-                {tempPreferences[currentStepConfig.field!].map((item) => (
+                {currentStepConfig.field && tempPreferences[currentStepConfig.field].map((item) => (
                   <Badge
                     key={item}
                     variant="secondary"
