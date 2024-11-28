@@ -209,12 +209,12 @@ export default function MealPlan() {
                             const removedRecipe = newRecipes[index];
                             newRecipes[index] = null;
                             setGeneratedRecipes(newRecipes);
-                            localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes));
+                            localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes.filter(Boolean)));
                             
-                            // Show success message
+                            // Update localStorage and show success message
                             toast({
                               title: "Recipe removed",
-                              description: `${removedRecipe.name} has been removed from your meal plan.`,
+                              description: `${removedRecipe.name} has been removed from your meal plan and grocery list updated.`,
                             });
                           }}
                         />
