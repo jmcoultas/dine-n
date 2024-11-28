@@ -8,35 +8,23 @@ function getSystemTheme(): "dark" | "light" {
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'system';
-    return (localStorage.getItem("theme") as Theme) || "system";
+    const stored = localStorage.getItem("theme") as Theme;
+    return stored || "system";
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.add('theme-transition');
     
-    function updateTheme() {
-      const effectiveTheme = theme === "system" ? getSystemTheme() : theme;
+    if (theme === "system") {
+      const systemTheme = getSystemTheme();
       root.classList.remove("light", "dark");
-      root.classList.add(effectiveTheme);
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.remove("light", "dark");
+      root.classList.add(theme);
     }
     
-    updateTheme();
     localStorage.setItem("theme", theme);
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => {
-      if (theme === "system") {
-        updateTheme();
-      }
-    };
-    
-    mediaQuery.addEventListener("change", handleChange);
-    return () => {
-      mediaQuery.removeEventListener("change", handleChange);
-      root.classList.remove('theme-transition');
-    };
   }, [theme]);
 
   return { theme, setTheme };

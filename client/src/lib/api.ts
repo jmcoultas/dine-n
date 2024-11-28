@@ -51,24 +51,3 @@ export async function createGroceryList(groceryList: Omit<GroceryList, "id">): P
   });
   return response.json();
 }
-
-export async function getFavorites(): Promise<Recipe[]> {
-  const response = await fetch(`${API_BASE}/favorites`);
-  return response.json();
-}
-
-export async function addToFavorites(recipeId: number): Promise<void> {
-  await fetch(`${API_BASE}/favorites`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ recipeId }),
-  });
-}
-
-export async function removeFromFavorites(recipeId: number): Promise<void> {
-  await fetch(`${API_BASE}/favorites/${recipeId}`, {
-    method: "DELETE",
-  });
-}

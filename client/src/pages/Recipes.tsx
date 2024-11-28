@@ -1,54 +1,18 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { fetchRecipes } from "@/lib/api";
 import RecipeCard from "@/components/RecipeCard";
-import { fetchRecipes, getFavorites, addToFavorites, removeFromFavorites } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Search } from "lucide-react";
 import type { Recipe } from "@db/schema";
 
 export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "favorites">("all");
-  
-  const { data: favorites = [] } = useQuery({
-    queryKey: ["favorites"],
-    queryFn: getFavorites,
-  });
-
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const toggleFavoriteMutation = useMutation({
-    mutationFn: async (recipeId: number) => {
-      const isFavorite = favorites.some(f => f.recipeId === recipeId);
-      if (isFavorite) {
-        await removeFromFavorites(recipeId);
-      } else {
-        await addToFavorites(recipeId);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["favorites"] });
-      toast({
-        title: "Success",
-        description: "Favorites updated successfully",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update favorites",
-        variant: "destructive",
-      });
-    },
-  });
 
   const { data: recipes = [], isLoading, isError, error } = useQuery({
     queryKey: ["recipes"],
@@ -77,34 +41,14 @@ export default function Recipes() {
     );
   }
 
-  const displayedRecipes = activeTab === "favorites"
-    ? recipes.filter(recipe => favorites.some(f => f.recipeId === recipe.id))
-    : recipes;
-
-  const filteredRecipes = displayedRecipes.filter((recipe) =>
+  const filteredRecipes = recipes.filter((recipe) =>
     recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-4xl font-bold">Recipe Collection</h1>
-          <div className="space-x-2">
-            <Button
-              variant={activeTab === "all" ? "default" : "outline"}
-              onClick={() => setActiveTab("all")}
-            >
-              All Recipes
-            </Button>
-            <Button
-              variant={activeTab === "favorites" ? "default" : "outline"}
-              onClick={() => setActiveTab("favorites")}
-            >
-              Favorites
-            </Button>
-          </div>
-        </div>
+        <h1 className="text-4xl font-bold">Recipe Collection</h1>
         <div className="relative">
           <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
           <Input
@@ -123,8 +67,6 @@ export default function Recipes() {
               key={recipe.id}
               recipe={recipe}
               onClick={() => setSelectedRecipe(recipe)}
-              isFavorite={favorites.some(f => f.recipeId === recipe.id)}
-              onFavoriteToggle={(recipeId) => toggleFavoriteMutation.mutate(recipeId)}
             />
           ))}
         </div>
@@ -144,13 +86,13 @@ export default function Recipes() {
             <ScrollArea className="h-full w-full">
               <div className="space-y-4 p-6">
                 <DialogTitle className="text-2xl font-bold">{selectedRecipe.name}</DialogTitle>
-                <p className="text-muted-foreground">
+                <DialogDescription className="text-muted-foreground">
                   {selectedRecipe.description}
-                </p>
+                </DialogDescription>
 
                 <div className="aspect-video relative rounded-lg overflow-hidden">
                   <img
-                    src={selectedRecipe.imageUrl || ''}
+                    src={selectedRecipe.imageUrl}
                     alt={selectedRecipe.name}
                     className="object-cover w-full h-full"
                   />
