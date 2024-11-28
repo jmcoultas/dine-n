@@ -5,10 +5,9 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils } from "lucide-react";
+import { Utensils, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
-import RiveAnimation from "@/components/RiveAnimation";
 
 export default function Header() {
   const { theme, setTheme } = useTheme();
@@ -37,16 +36,14 @@ export default function Header() {
         <Button
           variant="ghost"
           size="icon"
-          className="ml-4 p-0 h-10 w-10"
+          className="ml-4"
           onClick={() => setTheme(theme === "light" ? "dark" : "light")}
         >
-          <RiveAnimation
-            src="/switcher.riv"
-            stateMachine="State Machine 1"
-            input="active"
-            value={theme === 'dark'}
-            className="w-full h-full"
-          />
+          {theme === "light" ? (
+            <Moon className="h-5 w-5" />
+          ) : (
+            <Sun className="h-5 w-5" />
+          )}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </div>

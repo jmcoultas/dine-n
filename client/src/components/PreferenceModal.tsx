@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import RiveAnimation from "@/components/RiveAnimation";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -243,13 +242,7 @@ export default function PreferenceModal({
             {isLastStep ? (
               isGenerating ? (
                 <>
-                  <div className="w-6 h-6 mr-2">
-                    <RiveAnimation 
-                      src="/switcher.riv"
-                      stateMachine="State Machine 1"
-                      className="w-full h-full"
-                    />
-                  </div>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current mr-2" />
                   Generating...
                 </>
               ) : (

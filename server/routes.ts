@@ -78,19 +78,19 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || 0,
                   cookTime: recipeData.cookTime || 0,
                   servings: recipeData.servings || 2,
-                  ingredients: (recipeData.ingredients || []).map((ing: { name: string; amount: number; unit: string }) => ({
+                  ingredients: (recipeData.ingredients || []).map(ing => ({
                     name: String(ing.name),
                     amount: Number(ing.amount),
                     unit: String(ing.unit)
                   })),
                   instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
                   tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
-                  nutrition: JSON.stringify(typeof recipeData.nutrition === 'object' ? recipeData.nutrition : {
+                  nutrition: typeof recipeData.nutrition === 'object' ? recipeData.nutrition : {
                     calories: 0,
                     protein: 0,
                     carbs: 0,
                     fat: 0
-                  }),
+                  },
                   complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1,
                 };
                 
