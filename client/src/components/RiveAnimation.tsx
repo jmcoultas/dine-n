@@ -18,7 +18,7 @@ export default function RiveAnimation({
   input,
   value 
 }: RiveAnimationProps) {
-  const { RiveComponent, setInputValue } = useRive({
+  const { rive, RiveComponent } = useRive({
     src,
     stateMachines: stateMachine ? [stateMachine] : undefined,
     artboard,
@@ -30,18 +30,18 @@ export default function RiveAnimation({
   });
 
   useEffect(() => {
-    if (input && value !== undefined && stateMachine && setInputValue) {
+    if (rive && input && value !== undefined && stateMachine) {
       try {
-        // Add a small delay to ensure the Rive instance is ready
-        const timer = setTimeout(() => {
-          setInputValue(stateMachine, input, value);
-        }, 100);
-        return () => clearTimeout(timer);
+        const inputs = rive.stateMachineInputs(stateMachine);
+        const booleanInput = inputs.find(i => i.name === input);
+        if (booleanInput) {
+          booleanInput.value = value;
+        }
       } catch (error) {
-        console.warn('Warning: Could not set Rive input value');
+        console.warn('Warning: Could not set Rive input value', error);
       }
     }
-  }, [stateMachine, input, value, setInputValue]);
+  }, [rive, stateMachine, input, value]);
 
   return (
     <div className={className}>
