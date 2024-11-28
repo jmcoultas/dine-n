@@ -93,7 +93,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
             backgroundPosition: "center",
           }}
         >
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
             <span
               className={`${
                 mealColors[meal]
@@ -101,26 +101,24 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
             >
               {meal}
             </span>
-          </div>
-        </div>
-        <CardHeader className="p-4">
-          <div className="text-sm text-muted-foreground">
-            {format(day, "EEEE, MMM do")}
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">{recipe.name}</div>
             {onRemove && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove();
                 }}
-                className="text-muted-foreground hover:text-destructive"
+                className="bg-background/80 hover:bg-background text-foreground rounded-full w-6 h-6 flex items-center justify-center transition-colors"
               >
                 ×
               </button>
             )}
           </div>
+        </div>
+        <CardHeader className="p-4">
+          <div className="text-sm text-muted-foreground">
+            {format(day, "EEEE, MMM do")}
+          </div>
+          <div className="font-semibold">{recipe.name}</div>
           <div className="flex items-center gap-2 mt-2">
             <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
               <ChefHat className="w-4 h-4" />
