@@ -14,7 +14,7 @@ export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
-  const { data: recipes = [], isLoading, isError, error } = useQuery({
+  const { data: recipes = [], isLoading, isError, error } = useQuery<Recipe[]>({
     queryKey: ["recipes"],
     queryFn: fetchRecipes,
   });
@@ -138,19 +138,27 @@ export default function Recipes() {
 
                 <div className="grid grid-cols-4 gap-4 text-center">
                   <div>
-                    <div className="font-bold">{selectedRecipe.nutrition?.calories ?? 0}</div>
+                    <div className="font-bold">
+                      {typeof selectedRecipe.nutrition === 'object' ? selectedRecipe.nutrition?.calories ?? 0 : 0}
+                    </div>
                     <div className="text-sm text-muted-foreground">Calories</div>
                   </div>
                   <div>
-                    <div className="font-bold">{selectedRecipe.nutrition?.protein ?? 0}g</div>
+                    <div className="font-bold">
+                      {typeof selectedRecipe.nutrition === 'object' ? selectedRecipe.nutrition?.protein ?? 0 : 0}g
+                    </div>
                     <div className="text-sm text-muted-foreground">Protein</div>
                   </div>
                   <div>
-                    <div className="font-bold">{selectedRecipe.nutrition?.carbs ?? 0}g</div>
+                    <div className="font-bold">
+                      {typeof selectedRecipe.nutrition === 'object' ? selectedRecipe.nutrition?.carbs ?? 0 : 0}g
+                    </div>
                     <div className="text-sm text-muted-foreground">Carbs</div>
                   </div>
                   <div>
-                    <div className="font-bold">{selectedRecipe.nutrition?.fat ?? 0}g</div>
+                    <div className="font-bold">
+                      {typeof selectedRecipe.nutrition === 'object' ? selectedRecipe.nutrition?.fat ?? 0 : 0}g
+                    </div>
                     <div className="text-sm text-muted-foreground">Fat</div>
                   </div>
                 </div>
