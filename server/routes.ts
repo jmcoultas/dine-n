@@ -83,15 +83,15 @@ export function registerRoutes(app: Express) {
                     amount: Number(ing.amount),
                     unit: String(ing.unit)
                   })),
-                  instructions: recipeData.instructions || [],
-                  tags: recipeData.tags || [],
-                  nutrition: recipeData.nutrition || {
+                  instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
+                  tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
+                  nutrition: typeof recipeData.nutrition === 'object' ? recipeData.nutrition : {
                     calories: 0,
                     protein: 0,
                     carbs: 0,
                     fat: 0
                   },
-                  complexity: recipeData.complexity || 1,
+                  complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1,
                 };
                 
                 const [newRecipe] = await db.insert(recipes).values(recipeToInsert).returning();

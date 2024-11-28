@@ -206,9 +206,16 @@ export default function MealPlan() {
                           meal={mealType}
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
+                            const removedRecipe = newRecipes[index];
                             newRecipes[index] = null;
                             setGeneratedRecipes(newRecipes);
                             localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes));
+                            
+                            // Show success message
+                            toast({
+                              title: "Recipe removed",
+                              description: `${removedRecipe.name} has been removed from your meal plan.`,
+                            });
                           }}
                         />
                       ) : (
