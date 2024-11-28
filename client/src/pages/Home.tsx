@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
+import RiveAnimation from "@/components/RiveAnimation";
 import { generateMealPlan } from "@/lib/api";
 
 const HERO_IMAGES = [
@@ -67,13 +68,24 @@ export default function Home() {
             Generate personalized meal plans, discover new recipes, and simplify
             your grocery shopping with our intelligent cooking companion.
           </p>
-          <Button 
-            size="lg" 
-            className="bg-primary hover:bg-primary/90"
-            onClick={() => setShowPreferences(true)}
-          >
-            Start Planning
-          </Button>
+          <div className="space-y-4">
+            <Button 
+              size="lg" 
+              className="bg-primary hover:bg-primary/90"
+              onClick={() => setShowPreferences(true)}
+            >
+              Start Planning
+            </Button>
+            {generateMutation.isPending && (
+              <div className="w-32 h-32 mx-auto">
+                <RiveAnimation 
+                  src="/switcher.riv"
+                  stateMachine="State Machine 1"
+                  className="w-full h-full"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
