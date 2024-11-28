@@ -199,6 +199,11 @@ export default function MealPlan() {
                         recipe={recipe}
                         day={new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000)}
                         meal={index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"}
+                        onRemove={() => {
+                          const newRecipes = generatedRecipes.filter((_, i) => i !== index);
+                          setGeneratedRecipes(newRecipes);
+                          localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes));
+                        }}
                       />
                     ))}
                   </div>

@@ -35,6 +35,7 @@ interface MealPlanCardProps {
   };
   day: Date;
   meal: "breakfast" | "lunch" | "dinner";
+  onRemove?: () => void;
 }
 
 const complexityNames: Record<ComplexityLevel, string> = {
@@ -49,7 +50,7 @@ const mealColors: Record<MealPlanCardProps["meal"], string> = {
   dinner: "bg-blue-100",
 };
 
-export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
+export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
 
   // Ensure type safety for complexity
@@ -106,7 +107,20 @@ export default function MealPlanCard({ recipe, day, meal }: MealPlanCardProps) {
           <div className="text-sm text-muted-foreground">
             {format(day, "EEEE, MMM do")}
           </div>
-          <div className="font-semibold">{recipe.name}</div>
+          <div className="flex items-center justify-between">
+            <div className="font-semibold">{recipe.name}</div>
+            {onRemove && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove();
+                }}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-2">
             <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
               <ChefHat className="w-4 h-4" />
