@@ -239,7 +239,9 @@ export default function MealPlan() {
             <GroceryList 
               items={
                 Array.isArray(generatedRecipes) 
-                  ? generatedRecipes.flatMap(r => r.ingredients || [])
+                  ? generatedRecipes
+                      .filter(recipe => recipe !== null)
+                      .flatMap(recipe => recipe?.ingredients || [])
                   : []
               }
             />
