@@ -14,7 +14,31 @@ import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 export default function MealPlan() {
   // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [generatedRecipes, setGeneratedRecipes] = useState(() => {
+  interface GeneratedRecipe {
+    id: number;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    prepTime?: number;
+    cookTime?: number;
+    servings?: number;
+    ingredients?: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+    }>;
+    instructions?: string[];
+    tags?: string[];
+    nutrition?: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    complexity: 1 | 2 | 3;
+  }
+
+  const [generatedRecipes, setGeneratedRecipes] = useState<(GeneratedRecipe | null)[]>(() => {
     const savedRecipes = localStorage.getItem('generatedRecipes');
     try {
       return savedRecipes ? JSON.parse(savedRecipes) : [];
@@ -96,11 +120,13 @@ export default function MealPlan() {
         name: "Weekly Plan",
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        recipes: generatedRecipes.map((recipe, index) => ({
-          recipeId: recipe.id,
-          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner",
-        })),
+        recipes: generatedRecipes
+          .filter((recipe): recipe is NonNullable<typeof recipe> => recipe !== null)
+          .map((recipe, index) => ({
+            recipeId: recipe.id,
+            day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
+            meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner",
+          })),
       });
 
       await createGroceryList({
