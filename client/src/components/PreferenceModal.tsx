@@ -18,18 +18,23 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Check, Wand2 } from "lucide-react";
 
+type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
+type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
+type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
+type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
+
 interface Preferences {
-  dietary: string[];
-  allergies: string[];
-  cuisine: string[];
-  meatTypes: string[];
+  dietary: PreferenceType[];
+  allergies: AllergyType[];
+  cuisine: CuisineType[];
+  meatTypes: MeatType[];
 }
 
 interface Step {
   title: string;
   description: string;
   field: keyof Preferences | null;
-  options: string[];
+  options: Array<PreferenceType | AllergyType | CuisineType | MeatType>;
 }
 
 const STEPS: Step[] = [
@@ -45,7 +50,7 @@ const STEPS: Step[] = [
       "Keto",
       "Paleo",
       "Mediterranean"
-    ]
+    ] as PreferenceType[]
   },
   {
     title: "Allergies",
@@ -59,7 +64,7 @@ const STEPS: Step[] = [
       "Shellfish",
       "Wheat",
       "Soy"
-    ]
+    ] as AllergyType[]
   },
   {
     title: "Cuisine Preferences",
@@ -75,7 +80,7 @@ const STEPS: Step[] = [
       "Mediterranean",
       "American",
       "French"
-    ]
+    ] as CuisineType[]
   },
   {
     title: "Meat Preferences",
@@ -89,7 +94,7 @@ const STEPS: Step[] = [
       "Lamb",
       "Turkey",
       "None"
-    ]
+    ] as MeatType[]
   },
   {
     title: "Review & Generate",
@@ -135,18 +140,18 @@ export default function PreferenceModal({
     setCurrentStep((prev) => prev - 1);
   };
 
-  const handleSelectPreference = (value: string) => {
+  const handleSelectPreference = (value: PreferenceType | AllergyType | CuisineType | MeatType) => {
     const field = currentStepConfig.field;
     if (field !== null) {
       if (value === "No Preference") {
         setTempPreferences((prev) => ({
           ...prev,
-          [field]: ["No Preference"]
+          [field]: ["No Preference" as PreferenceType]
         }));
       } else {
         setTempPreferences((prev) => ({
           ...prev,
-          [field]: prev[field].includes("No Preference") 
+          [field]: prev[field].includes("No Preference" as any) 
             ? [value]
             : [...prev[field].filter(item => item !== "No Preference"), value]
         }));
@@ -154,7 +159,7 @@ export default function PreferenceModal({
     }
   };
 
-  const handleRemovePreference = (value: string) => {
+  const handleRemovePreference = (value: PreferenceType | AllergyType | CuisineType | MeatType) => {
     const field = currentStepConfig.field;
     if (field !== null) {
       setTempPreferences((prev) => ({
