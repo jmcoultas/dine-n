@@ -154,26 +154,30 @@ export default function PreferenceModal({
     if (field !== null) {
       setTempPreferences((prev) => {
         if (value === "No Preference") {
-          return {
+          const updatedPreferences = {
             ...prev,
             [field]: ["No Preference" as PreferenceType]
           };
+          onUpdatePreferences(updatedPreferences);
+          return updatedPreferences;
         }
         
         const currentValues = prev[field];
-        const hasNoPreference = currentValues.includes("No Preference" as any);
+        const hasNoPreference = currentValues.includes("No Preference" as PreferenceValue<typeof field>);
         
-        let newValues: string[];
+        let newValues: Array<PreferenceValue<typeof field>>;
         if (hasNoPreference) {
-          newValues = [value];
+          newValues = [value as PreferenceValue<typeof field>];
         } else {
-          newValues = [...currentValues, value];
+          newValues = [...currentValues, value as PreferenceValue<typeof field>];
         }
         
-        return {
+        const updatedPreferences = {
           ...prev,
-          [field]: newValues as any[]
+          [field]: newValues
         };
+        onUpdatePreferences(updatedPreferences);
+        return updatedPreferences;
       });
     }
   };
@@ -181,10 +185,14 @@ export default function PreferenceModal({
   const handleRemovePreference = (value: string) => {
     const field = currentStepConfig.field;
     if (field !== null) {
-      setTempPreferences((prev) => ({
-        ...prev,
-        [field]: prev[field].filter((item) => item !== value)
-      }));
+      setTempPreferences((prev) => {
+        const updatedPreferences = {
+          ...prev,
+          [field]: prev[field].filter((item) => item !== value)
+        };
+        onUpdatePreferences(updatedPreferences);
+        return updatedPreferences;
+      });
     }
   };
 
