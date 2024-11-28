@@ -41,8 +41,10 @@ export default function Header() {
           onClick={() => setTheme(theme === "light" ? "dark" : "light")}
         >
           <RiveAnimation
-            src="/switcher.riv"
-            stateMachine="State Machine 1"
+            src="/theme-switcher.riv"
+            stateMachine="Theme"
+            input="isDark"
+            value={theme === 'dark'}
             className="w-full h-full"
           />
           <span className="sr-only">Toggle theme</span>
