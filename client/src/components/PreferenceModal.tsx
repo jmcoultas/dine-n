@@ -194,12 +194,12 @@ export default function PreferenceModal({
         <div className="mt-4 space-y-4">
           {isLastStep ? (
             <div className="space-y-6">
-              {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
+              {(Object.entries(tempPreferences) as [PreferenceField, PreferenceValue<PreferenceField>[]][]).map(([key, values]) => (
                 <div key={key} className="space-y-2">
                   <h4 className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
                   <div className="flex flex-wrap gap-2">
                     {values.length > 0 ? values.map((item) => (
-                      <Badge key={item} variant="secondary">{item}</Badge>
+                      <Badge key={item} variant="secondary">{String(item)}</Badge>
                     )) : (
                       <span className="text-sm text-muted-foreground">None selected</span>
                     )}
@@ -221,7 +221,7 @@ export default function PreferenceModal({
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue
+                    <SelectValue<string>
                       placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
                     />
                   </SelectTrigger>
