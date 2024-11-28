@@ -207,9 +207,8 @@ export default function MealPlan() {
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
                             newRecipes[index] = null;
-                            const filteredRecipes = newRecipes.filter(Boolean);
-                            setGeneratedRecipes(filteredRecipes);
-                            localStorage.setItem('generatedRecipes', JSON.stringify(filteredRecipes));
+                            setGeneratedRecipes(newRecipes);
+                            localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes));
                           }}
                         />
                       ) : (
