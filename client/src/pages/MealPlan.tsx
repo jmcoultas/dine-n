@@ -14,7 +14,9 @@ import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 export default function MealPlan() {
   // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  interface GeneratedRecipe {
+  type MealType = "breakfast" | "lunch" | "dinner";
+
+  interface Recipe {
     id: number;
     name: string;
     description?: string;
@@ -38,7 +40,22 @@ export default function MealPlan() {
     complexity: 1 | 2 | 3;
   }
 
-  const [generatedRecipes, setGeneratedRecipes] = useState<(GeneratedRecipe | null)[]>(() => {
+  interface MealPlanRecipe {
+    recipeId: number;
+    day: string;
+    meal: MealType;
+  }
+
+  interface MealPlan {
+    id: number;
+    userId: number;
+    name: string;
+    startDate: Date;
+    endDate: Date;
+    recipes: MealPlanRecipe[];
+  }
+
+  const [generatedRecipes, setGeneratedRecipes] = useState<(Recipe | null)[]>(() => {
     const savedRecipes = localStorage.getItem('generatedRecipes');
     try {
       return savedRecipes ? JSON.parse(savedRecipes) : [];
@@ -121,11 +138,11 @@ export default function MealPlan() {
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         recipes: generatedRecipes
-          .filter((recipe): recipe is NonNullable<typeof recipe> => recipe !== null)
+          .filter((recipe): recipe is Recipe => recipe !== null)
           .map((recipe, index) => ({
             recipeId: recipe.id,
             day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-            meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner",
+            meal: (index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner") as MealType,
           })),
       });
 

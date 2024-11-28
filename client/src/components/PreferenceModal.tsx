@@ -30,11 +30,13 @@ interface Preferences {
   meatTypes: MeatType[];
 }
 
+type PreferenceField = keyof Preferences;
+
 interface Step {
   title: string;
   description: string;
-  field: keyof Preferences | null;
-  options: Array<PreferenceType | AllergyType | CuisineType | MeatType>;
+  field: PreferenceField | null;
+  options: string[];
 }
 
 const STEPS: Step[] = [
@@ -113,6 +115,8 @@ interface PreferenceModalProps {
   onGenerate?: () => void;
 }
 
+type PreferenceValue<T extends PreferenceField> = Preferences[T][number];
+
 export default function PreferenceModal({
   open,
   onOpenChange,
@@ -140,26 +144,36 @@ export default function PreferenceModal({
     setCurrentStep((prev) => prev - 1);
   };
 
-  const handleSelectPreference = (value: PreferenceType | AllergyType | CuisineType | MeatType) => {
+  const handleSelectPreference = (value: string) => {
     const field = currentStepConfig.field;
     if (field !== null) {
-      if (value === "No Preference") {
-        setTempPreferences((prev) => ({
+      setTempPreferences((prev) => {
+        if (value === "No Preference") {
+          return {
+            ...prev,
+            [field]: ["No Preference" as PreferenceType]
+          };
+        }
+        
+        const currentValues = prev[field];
+        const hasNoPreference = currentValues.includes("No Preference" as any);
+        
+        let newValues: string[];
+        if (hasNoPreference) {
+          newValues = [value];
+        } else {
+          newValues = [...currentValues, value];
+        }
+        
+        return {
           ...prev,
-          [field]: ["No Preference" as PreferenceType]
-        }));
-      } else {
-        setTempPreferences((prev) => ({
-          ...prev,
-          [field]: prev[field].includes("No Preference" as any) 
-            ? [value]
-            : [...prev[field].filter(item => item !== "No Preference"), value]
-        }));
-      }
+          [field]: newValues as any[]
+        };
+      });
     }
   };
 
-  const handleRemovePreference = (value: PreferenceType | AllergyType | CuisineType | MeatType) => {
+  const handleRemovePreference = (value: string) => {
     const field = currentStepConfig.field;
     if (field !== null) {
       setTempPreferences((prev) => ({
