@@ -110,7 +110,12 @@ interface PreferenceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preferences: Preferences;
-  onUpdatePreferences: (preferences: Preferences) => void;
+  onUpdatePreferences: (preferences: {
+    dietary: PreferenceType[];
+    allergies: AllergyType[];
+    cuisine: CuisineType[];
+    meatTypes: MeatType[];
+  }) => void;
   isGenerating?: boolean;
   onGenerate?: () => void;
 }
@@ -194,11 +199,11 @@ export default function PreferenceModal({
         <div className="mt-4 space-y-4">
           {isLastStep ? (
             <div className="space-y-6">
-              {Object.entries(tempPreferences).map(([key, values]) => (
+              {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
                 <div key={key} className="space-y-2">
                   <h4 className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
                   <div className="flex flex-wrap gap-2">
-                    {values.length > 0 ? values.map((item: PreferenceType | AllergyType | CuisineType | MeatType) => (
+                    {values.length > 0 ? values.map((item) => (
                       <Badge key={item} variant="secondary">{item}</Badge>
                     )) : (
                       <span className="text-sm text-muted-foreground">None selected</span>
@@ -210,8 +215,8 @@ export default function PreferenceModal({
           ) : (
             <>
               <Select
-                value={tempPreferences[currentStepConfig.field!][0] || ""}
-                onValueChange={handleSelectPreference}
+                value={currentStepConfig.field ? (tempPreferences[currentStepConfig.field][0] || "") : ""}
+                onValueChange={(value: string) => handleSelectPreference(value)}
               >
                 <SelectTrigger>
                   <SelectValue
@@ -228,7 +233,7 @@ export default function PreferenceModal({
               </Select>
 
               <div className="flex flex-wrap gap-2">
-                {currentStepConfig.field && tempPreferences[currentStepConfig.field].map((item: PreferenceType | AllergyType | CuisineType | MeatType) => (
+                {currentStepConfig.field && tempPreferences[currentStepConfig.field].map((item) => (
                   <Badge
                     key={item}
                     variant="secondary"

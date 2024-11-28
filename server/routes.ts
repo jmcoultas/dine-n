@@ -86,10 +86,10 @@ export function registerRoutes(app: Express) {
                   instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
                   tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
                   nutrition: typeof recipeData.nutrition === 'object' && recipeData.nutrition !== null ? {
-                    calories: Number(recipeData.nutrition.calories) || 0,
-                    protein: Number(recipeData.nutrition.protein) || 0,
-                    carbs: Number(recipeData.nutrition.carbs) || 0,
-                    fat: Number(recipeData.nutrition.fat) || 0
+                    calories: Number((recipeData.nutrition as any)?.calories) || 0,
+                    protein: Number((recipeData.nutrition as any)?.protein) || 0,
+                    carbs: Number((recipeData.nutrition as any)?.carbs) || 0,
+                    fat: Number((recipeData.nutrition as any)?.fat) || 0
                   } : {
                     calories: 0,
                     protein: 0,
