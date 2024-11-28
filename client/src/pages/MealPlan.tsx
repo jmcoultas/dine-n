@@ -193,19 +193,36 @@ export default function MealPlan() {
               {generatedRecipes.length > 0 ? (
                 <>
                   <div className="grid md:grid-cols-3 gap-6">
-                    {generatedRecipes.slice(0, 6).map((recipe, index) => (
-                      <MealPlanCard
-                        key={recipe.id}
-                        recipe={recipe}
-                        day={new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000)}
-                        meal={index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"}
-                        onRemove={() => {
-                          const newRecipes = generatedRecipes.filter((_, i) => i !== index);
-                          setGeneratedRecipes(newRecipes);
-                          localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes));
-                        }}
-                      />
-                    ))}
+                    {Array.from({ length: 6 }).map((_, index) => {
+                      const recipe = generatedRecipes[index];
+                      const currentDay = new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000);
+                      const mealType = index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner";
+                      
+                      return recipe ? (
+                        <MealPlanCard
+                          key={recipe.id}
+                          recipe={recipe}
+                          day={currentDay}
+                          meal={mealType}
+                          onRemove={() => {
+                            const newRecipes = [...generatedRecipes];
+                            newRecipes[index] = null;
+                            const filteredRecipes = newRecipes.filter(Boolean);
+                            setGeneratedRecipes(filteredRecipes);
+                            localStorage.setItem('generatedRecipes', JSON.stringify(filteredRecipes));
+                          }}
+                        />
+                      ) : (
+                        <div 
+                          key={`empty-${index}`} 
+                          className="border-2 border-dashed rounded-lg p-4 flex items-center justify-center"
+                        >
+                          <span className="text-muted-foreground">
+                            {mealType.charAt(0).toUpperCase() + mealType.slice(1)} slot
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                     Save Meal Plan
