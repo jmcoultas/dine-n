@@ -187,8 +187,15 @@ export function registerRoutes(app: Express) {
         .insert(users)
         .values({
           email,
-          password_hash: hashedPassword,
           name,
+          password_hash: hashedPassword,
+          username: email, // Using email as username for now
+          preferences: {
+            dietary: [],
+            allergies: [],
+            cuisine: [],
+            meatTypes: []
+          }
         })
         .returning();
 
