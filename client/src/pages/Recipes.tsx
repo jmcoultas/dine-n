@@ -66,7 +66,7 @@ export default function Recipes() {
     );
   }
 
-  const filteredRecipes = recipes.filter((recipe) =>
+  const filteredRecipes = recipes.filter((recipe: Recipe) =>
     recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
