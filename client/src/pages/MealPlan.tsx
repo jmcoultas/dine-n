@@ -102,7 +102,18 @@ export default function MealPlan() {
     mutationFn: () => generateMealPlan(preferences, 2),
     onSuccess: (data) => {
       if (Array.isArray(data.recipes)) {
-        setGeneratedRecipes(data.recipes);
+        setGeneratedRecipes(data.recipes.map(recipe => ({
+          ...recipe,
+          description: recipe.description ?? undefined,
+          imageUrl: recipe.imageUrl ?? undefined,
+          prepTime: recipe.prepTime ?? undefined,
+          cookTime: recipe.cookTime ?? undefined,
+          servings: recipe.servings ?? undefined,
+          instructions: recipe.instructions ? JSON.parse(recipe.instructions) : undefined,
+          tags: recipe.tags ? JSON.parse(recipe.tags) : undefined,
+          ingredients: recipe.ingredients ? JSON.parse(JSON.stringify(recipe.ingredients)) : undefined,
+          nutrition: recipe.nutrition ? JSON.parse(JSON.stringify(recipe.nutrition)) : undefined,
+        })));
         if (data.status === 'partial') {
           toast({
             title: "Using fallback recipes",
