@@ -152,15 +152,16 @@ export default function PreferenceModal({
   const handleSelectPreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
     setTempPreferences((prev) => {
       const updatedPreferences = { ...prev };
-      const currentValues = prev[field] as PreferenceValue<T>[];
+      const currentValues = prev[field] as Array<PreferenceValue<T>>;
       
-      if (value === "No Preference" as PreferenceValue<T>) {
+      if (field === "dietary" && value === "No Preference" as PreferenceValue<T>) {
         updatedPreferences[field] = ["No Preference" as PreferenceValue<T>];
       } else {
-        const hasNoPreference = currentValues.includes("No Preference" as PreferenceValue<T>);
+        const noPreference = "No Preference" as PreferenceValue<T>;
+        const hasNoPreference = currentValues.includes(noPreference);
         updatedPreferences[field] = hasNoPreference 
           ? [value] 
-          : [...currentValues.filter(v => v !== "No Preference"), value];
+          : [...currentValues.filter(v => v !== noPreference), value];
       }
       
       onUpdatePreferences(updatedPreferences);
