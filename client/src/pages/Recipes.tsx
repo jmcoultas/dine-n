@@ -39,10 +39,10 @@ export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
-  const { data: recipes = [], isLoading, isError, error } = useQuery<Recipe[]>({
+  const { data: recipes = [], isLoading, isError, error } = useQuery({
     queryKey: ["recipes"],
     queryFn: fetchRecipes,
-  });
+  }) as { data: Recipe[]; isLoading: boolean; isError: boolean; error: Error | null };
 
   if (isLoading) {
     return (
