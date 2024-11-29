@@ -225,7 +225,7 @@ export default function PreferenceModal({
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue<string>
+                    <SelectValue
                       placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
                     />
                   </SelectTrigger>
