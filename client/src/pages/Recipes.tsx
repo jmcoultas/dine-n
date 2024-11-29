@@ -8,7 +8,32 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
-import type { Recipe } from "@db/schema";
+
+interface RecipeNutrition {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface Recipe {
+  id: number;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  prepTime?: number;
+  cookTime?: number;
+  servings?: number;
+  ingredients?: Array<{
+    name: string;
+    amount: number;
+    unit: string;
+  }>;
+  instructions?: string[];
+  tags?: string[];
+  nutrition?: RecipeNutrition;
+  complexity: 1 | 2 | 3;
+}
 
 export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -139,25 +164,25 @@ export default function Recipes() {
                 <div className="grid grid-cols-4 gap-4 text-center">
                   <div>
                     <div className="font-bold">
-                      {selectedRecipe.nutrition && 'calories' in selectedRecipe.nutrition ? selectedRecipe.nutrition.calories : 0}
+                      {selectedRecipe.nutrition?.calories ?? 0}
                     </div>
                     <div className="text-sm text-muted-foreground">Calories</div>
                   </div>
                   <div>
                     <div className="font-bold">
-                      {selectedRecipe.nutrition && 'protein' in selectedRecipe.nutrition ? selectedRecipe.nutrition.protein : 0}g
+                      {selectedRecipe.nutrition?.protein ?? 0}g
                     </div>
                     <div className="text-sm text-muted-foreground">Protein</div>
                   </div>
                   <div>
                     <div className="font-bold">
-                      {selectedRecipe.nutrition && 'carbs' in selectedRecipe.nutrition ? selectedRecipe.nutrition.carbs : 0}g
+                      {selectedRecipe.nutrition?.carbs ?? 0}g
                     </div>
                     <div className="text-sm text-muted-foreground">Carbs</div>
                   </div>
                   <div>
                     <div className="font-bold">
-                      {selectedRecipe.nutrition && 'fat' in selectedRecipe.nutrition ? selectedRecipe.nutrition.fat : 0}g
+                      {selectedRecipe.nutrition?.fat ?? 0}g
                     </div>
                     <div className="text-sm text-muted-foreground">Fat</div>
                   </div>
