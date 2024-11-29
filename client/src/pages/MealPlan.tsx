@@ -43,9 +43,9 @@ export default function MealPlan() {
     prepTime?: number;
     cookTime?: number;
     servings?: number;
-    ingredients?: RecipeIngredient[];
-    instructions?: string[];
-    tags?: string[];
+    ingredients?: Array<RecipeIngredient>;
+    instructions?: Array<string>;
+    tags?: Array<string>;
     nutrition?: RecipeNutrition;
     complexity: 1 | 2 | 3;
   }

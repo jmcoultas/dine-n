@@ -20,10 +20,10 @@ export default function Home() {
   type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
 
   interface Preferences {
-    dietary: PreferenceType[];
-    allergies: AllergyType[];
-    cuisine: CuisineType[];
-    meatTypes: MeatType[];
+    dietary: Array<PreferenceType>;
+    allergies: Array<AllergyType>;
+    cuisine: Array<CuisineType>;
+    meatTypes: Array<MeatType>;
   }
 
   const [preferences, setPreferences] = useState<Preferences>({
