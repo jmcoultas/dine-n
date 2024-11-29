@@ -89,7 +89,7 @@ export default function Home() {
       toast({
         title: "Error",
         description: errorMessage,
-        variant: "destructive",
+        variant: "destructive" as const,
       });
     },
   });

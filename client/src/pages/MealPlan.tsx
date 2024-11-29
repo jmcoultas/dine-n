@@ -175,6 +175,7 @@ export default function MealPlan() {
               checked: false,
             })) ?? []
           ),
+        created: new Date(),
       });
 
       return mealPlan;
