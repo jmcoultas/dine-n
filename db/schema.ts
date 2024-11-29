@@ -4,21 +4,14 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  email: text("email").unique().notNull(),
-  name: text("name").notNull(),
-  password_hash: text("password_hash").notNull(),
   username: text("username").unique().notNull(),
+  password: text("password").notNull(),
   preferences: jsonb("preferences").$type<{
     dietary: string[];
     allergies: string[];
     cuisine: string[];
     meatTypes: string[];
-  }>().notNull().default({
-    dietary: [],
-    allergies: [],
-    cuisine: [],
-    meatTypes: []
-  }),
+  }>(),
 });
 
 export const recipes = pgTable("recipes", {

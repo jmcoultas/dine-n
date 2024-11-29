@@ -1,18 +1,8 @@
-import type { Express, Request } from "express";
+import type { Express } from "express";
 import { db } from "../db";
-import { recipes, mealPlans, groceryLists, users } from "@db/schema";
+import { recipes, mealPlans, groceryLists } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { generateRecipeRecommendation } from "./utils/ai";
-import { hashPassword, comparePasswords, generateToken, authenticateToken } from "./utils/auth";
-
-// Extend Express Request type to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: { id: number };
-    }
-  }
-}
 
 export function registerRoutes(app: Express) {
   // Recipes
@@ -167,67 +157,6 @@ export function registerRoutes(app: Express) {
         errorMessage = 'Service temporarily unavailable. Please try again later.';
       } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
         errorType = 'connection_error';
-  // Authentication routes - Login only, registration removed as per requirements
-
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { email, password } = req.body;
-
-      const user = await db.query.users.findFirst({
-        where: eq(users.email, email),
-      });
-
-      if (!user) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-
-      const isValidPassword = await comparePasswords(password, user.password_hash);
-      if (!isValidPassword) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-
-      const token = generateToken(user.id);
-
-      res.json({
-        token,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ message: "Failed to login" });
-    }
-  });
-
-  app.get("/api/auth/me", authenticateToken, async (req, res) => {
-    try {
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, req.user!.id),
-      });
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      res.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
-      });
-    } catch (error) {
-      console.error("Auth check error:", error);
-      res.status(500).json({ message: "Failed to authenticate user" });
-    }
-  });
-
-  // Add authentication middleware to protected routes
-  app.use("/api/meal-plans", authenticateToken);
-  app.use("/api/grocery-lists", authenticateToken);
         errorMessage = 'Unable to connect to recipe service. Please check your connection.';
       }
       
