@@ -4,6 +4,13 @@ interface User {
   id: number;
   email: string;
   name: string;
+  username?: string;
+  preferences?: {
+    dietary: string[];
+    allergies: string[];
+    cuisine: string[];
+    meatTypes: string[];
+  };
 }
 
 interface AuthContextType {

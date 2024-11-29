@@ -28,15 +28,23 @@ export default function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     try {
       if (isLogin) {
         await login(email, password);
+        toast({
+          title: "Login successful!",
+          description: "Welcome back to Dine-N!",
+        });
       } else {
+        if (!name.trim()) {
+          throw new Error("Name is required");
+        }
         await register(email, password, name);
+        toast({
+          title: "Registration successful!",
+          description: "Welcome to Dine-N!",
+        });
       }
       onOpenChange(false);
-      toast({
-        title: `${isLogin ? "Login" : "Registration"} successful!`,
-        description: `Welcome ${isLogin ? "back" : "to Dine-N"}!`,
-      });
     } catch (error) {
+      console.error("Auth error:", error);
       toast({
         title: `${isLogin ? "Login" : "Registration"} failed`,
         description: error instanceof Error ? error.message : "Please try again",
