@@ -14,21 +14,61 @@ const HERO_IMAGES = [
 
 export default function Home() {
   const [showPreferences, setShowPreferences] = useState(false);
-  const [preferences, setPreferences] = useState({
-    dietary: [] as string[],
-    allergies: [] as string[],
-    cuisine: [] as string[],
-    meatTypes: [] as string[],
+  type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
+  type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
+  type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
+  type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
+
+  interface Preferences {
+    dietary: PreferenceType[];
+    allergies: AllergyType[];
+    cuisine: CuisineType[];
+    meatTypes: MeatType[];
+  }
+
+  const [preferences, setPreferences] = useState<Preferences>({
+    dietary: [],
+    allergies: [],
+    cuisine: [],
+    meatTypes: [],
   });
   const [, setLocation] = useLocation();
 
   const { toast } = useToast();
+  interface Recipe {
+    id: number;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    prepTime?: number;
+    cookTime?: number;
+    servings?: number;
+    ingredients?: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+    }>;
+    instructions?: string[];
+    tags?: string[];
+    nutrition?: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    complexity: 1 | 2 | 3;
+  }
+
+  interface GenerateMealPlanResponse {
+    recipes: Recipe[];
+    status: 'success' | 'partial';
+  }
+
   const generateMutation = useMutation({
-    mutationFn: (preferences: typeof preferences) => generateMealPlan(preferences, 2),
-    onSuccess: (data) => {
+    mutationFn: (prefs: Preferences) => generateMealPlan(prefs, 2),
+    onSuccess: (data: GenerateMealPlanResponse) => {
       setShowPreferences(false);
-      // Store generated recipes in localStorage before navigation
-      if (data.recipes) {
+      if (Array.isArray(data.recipes)) {
         localStorage.setItem('generatedRecipes', JSON.stringify(data.recipes));
       }
       setLocation("/meal-plan");
@@ -37,10 +77,18 @@ export default function Home() {
         description: "Your meal plan has been generated.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error & { 
+      response?: { 
+        data?: { 
+          type?: string;
+          message?: string; 
+        } 
+      } 
+    }) => {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to generate meal plan. Please try again.";
       toast({
         title: "Error",
-        description: error.message || "Failed to generate meal plan. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     },
