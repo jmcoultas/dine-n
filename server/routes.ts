@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { recipes, mealPlans, groceryLists } from "@db/schema";
 import { eq } from "drizzle-orm";
-import { generateRecipeRecommendation } from "./utils/ai";
+import { generateRecipeRecommendation, DEFAULT_RECIPES } from "./utils/ai";
 
 export function registerRoutes(app: Express) {
   // Recipes

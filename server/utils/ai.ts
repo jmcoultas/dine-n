@@ -42,7 +42,7 @@ interface FallbackRecipe {
 }
 
 // Default fallback recipes for different meal types
-const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
+export const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
   breakfast: {
     name: "Classic Oatmeal with Fruits",
     description: "A healthy and filling breakfast of oatmeal topped with fresh fruits and nuts",
