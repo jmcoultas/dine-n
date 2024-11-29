@@ -56,8 +56,9 @@ export function registerRoutes(app: Express) {
       for (let day = 0; day < days; day++) {
         for (let meal = 0; meal < mealsPerDay; meal++) {
           let attempts = 0;
-          const maxAttempts = 3;
+          const maxAttempts = 5; // Increased max attempts
           let recipeGenerated = false;
+          const usedNames = Array.from(usedRecipeNames);
 
           while (attempts < maxAttempts && !recipeGenerated) {
             try {
@@ -67,7 +68,7 @@ export function registerRoutes(app: Express) {
                 cuisine: preferences?.cuisine || [],
                 meatTypes: preferences?.meatTypes || [],
                 mealType: mealTypes[meal],
-                excludeNames: Array.from(usedRecipeNames),
+                excludeNames: usedNames,
               });
 
               if (recipeData.name && !usedRecipeNames.has(recipeData.name)) {
@@ -131,7 +132,20 @@ export function registerRoutes(app: Express) {
           }
 
           if (!recipeGenerated) {
-            throw new Error('Failed to generate unique recipe after maximum attempts');
+            // Use a modified fallback recipe if generation fails
+            const mealTypeStr = mealTypes[meal];
+            const fallbackRecipe = DEFAULT_RECIPES[mealTypeStr];
+            const fallbackName = `${fallbackRecipe.name} (${day + 1}-${mealTypeStr})`;
+            
+            if (!usedRecipeNames.has(fallbackName)) {
+              const [newRecipe] = await db.insert(recipes).values({
+                ...fallbackRecipe,
+                name: fallbackName,
+              }).returning();
+              usedRecipeNames.add(fallbackName);
+              suggestedRecipes.push(newRecipe);
+              recipeGenerated = true;
+            }
           }
         }
       }

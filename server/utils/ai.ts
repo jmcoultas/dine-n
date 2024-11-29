@@ -176,11 +176,16 @@ function meetsRestrictions(recipe: FallbackRecipe | Partial<Recipe>, params: Rec
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
   try {
-    const prompt = `Generate a detailed recipe that is suitable for ${params.mealType}.
+    const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
+      ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`
+      : "";
+      
+    const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}.
 ${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : ""}
 ${params.allergies.length > 0 ? `Must avoid allergens: ${params.allergies.join(", ")}` : ""}
 ${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : ""}
 ${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : ""}
+${excludeNamesStr}
 
 Response should be in JSON format with the following structure:
 {
