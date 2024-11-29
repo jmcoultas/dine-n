@@ -101,7 +101,10 @@ export default function MealPlan() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       const response = await generateMealPlan(preferences, 2);
-      return response as { recipes: Recipe[]; status: 'success' | 'partial' };
+      if ('recipes' in response && 'status' in response) {
+        return response;
+      }
+      return { recipes: response, status: 'success' };
     },
     onSuccess: (data: { recipes: Recipe[]; status: 'success' | 'partial' }) => {
       if (Array.isArray(data.recipes)) {
@@ -110,7 +113,7 @@ export default function MealPlan() {
           toast({
             title: "Using fallback recipes",
             description: "Generated meal plan with pre-defined recipes that match your preferences.",
-            variant: "warning",
+            variant: "destructive",
           });
         } else {
           toast({
