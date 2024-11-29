@@ -155,13 +155,14 @@ export default function PreferenceModal({
       const currentValues = prev[field] as Array<PreferenceValue<T>>;
       
       if (field === "dietary" && value === "No Preference" as PreferenceValue<T>) {
-        updatedPreferences[field] = ["No Preference" as PreferenceValue<T>];
+        updatedPreferences[field] = [value];
       } else {
         const noPreference = "No Preference" as PreferenceValue<T>;
         const hasNoPreference = currentValues.includes(noPreference);
-        updatedPreferences[field] = hasNoPreference 
+        const newValues = hasNoPreference 
           ? [value] 
           : [...currentValues.filter(v => v !== noPreference), value];
+        updatedPreferences[field] = newValues as Array<PreferenceValue<T>>;
       }
       
       onUpdatePreferences(updatedPreferences);
