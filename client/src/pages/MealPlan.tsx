@@ -16,6 +16,19 @@ export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   type MealType = "breakfast" | "lunch" | "dinner";
 
+  interface RecipeIngredient {
+    name: string;
+    amount: number;
+    unit: string;
+  }
+
+  interface RecipeNutrition {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }
+
   interface Recipe {
     id: number;
     name: string;
@@ -24,19 +37,10 @@ export default function MealPlan() {
     prepTime?: number;
     cookTime?: number;
     servings?: number;
-    ingredients?: Array<{
-      name: string;
-      amount: number;
-      unit: string;
-    }>;
+    ingredients?: RecipeIngredient[];
     instructions?: string[];
     tags?: string[];
-    nutrition?: {
-      calories: number;
-      protein: number;
-      carbs: number;
-      fat: number;
-    };
+    nutrition?: RecipeNutrition;
     complexity: 1 | 2 | 3;
   }
 
@@ -85,8 +89,8 @@ export default function MealPlan() {
   // Mutations
   const generateMutation = useMutation({
     mutationFn: () => generateMealPlan(preferences, 2),
-    onSuccess: (data) => {
-      if (data.recipes) {
+    onSuccess: (data: { recipes: Recipe[]; status: 'success' | 'partial' }) => {
+      if (Array.isArray(data.recipes)) {
         setGeneratedRecipes(data.recipes);
         if (data.status === 'partial') {
           toast({
@@ -290,8 +294,8 @@ export default function MealPlan() {
               items={
                 Array.isArray(generatedRecipes) 
                   ? generatedRecipes
-                      .filter(recipe => recipe !== null)
-                      .flatMap(recipe => recipe?.ingredients || [])
+                      .filter((recipe): recipe is Recipe => recipe !== null)
+                      .flatMap(recipe => recipe.ingredients ?? [])
                   : []
               }
             />
