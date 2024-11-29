@@ -25,7 +25,12 @@ interface MealPlanPreferences {
   meatTypes: string[];
 }
 
-export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<Recipe[]> {
+interface GenerateMealPlanResponse {
+  recipes: Recipe[];
+  status: 'success' | 'partial';
+}
+
+export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<GenerateMealPlanResponse> {
   const response = await fetch(`${API_BASE}/generate-meal-plan`, {
     method: "POST",
     headers: {

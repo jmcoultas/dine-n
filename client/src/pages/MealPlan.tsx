@@ -99,14 +99,8 @@ export default function MealPlan() {
 
   // Mutations
   const generateMutation = useMutation({
-    mutationFn: async () => {
-      const response = await generateMealPlan(preferences, 2);
-      if ('recipes' in response && 'status' in response) {
-        return response;
-      }
-      return { recipes: response, status: 'success' };
-    },
-    onSuccess: (data: { recipes: Recipe[]; status: 'success' | 'partial' }) => {
+    mutationFn: () => generateMealPlan(preferences, 2),
+    onSuccess: (data) => {
       if (Array.isArray(data.recipes)) {
         setGeneratedRecipes(data.recipes);
         if (data.status === 'partial') {
