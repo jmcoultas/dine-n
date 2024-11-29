@@ -12,9 +12,15 @@ import GroceryList from "@/components/GroceryList";
 import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 
 export default function MealPlan() {
+  // Type definitions
+  type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
+  type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
+  type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
+  type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
+  type MealType = "breakfast" | "lunch" | "dinner";
+
   // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  type MealType = "breakfast" | "lunch" | "dinner";
 
   interface RecipeIngredient {
     name: string;
@@ -68,11 +74,16 @@ export default function MealPlan() {
     }
   });
   const [showPreferences, setShowPreferences] = useState(false);
-  const [preferences, setPreferences] = useState({
-    dietary: [] as string[],
-    allergies: [] as string[],
-    cuisine: [] as string[],
-    meatTypes: [] as string[],
+  const [preferences, setPreferences] = useState<{
+    dietary: PreferenceType[];
+    allergies: AllergyType[];
+    cuisine: CuisineType[];
+    meatTypes: MeatType[];
+  }>({
+    dietary: [],
+    allergies: [],
+    cuisine: [],
+    meatTypes: [],
   });
 
   // Hooks
@@ -88,7 +99,10 @@ export default function MealPlan() {
 
   // Mutations
   const generateMutation = useMutation({
-    mutationFn: () => generateMealPlan(preferences, 2),
+    mutationFn: async () => {
+      const response = await generateMealPlan(preferences, 2);
+      return response as { recipes: Recipe[]; status: 'success' | 'partial' };
+    },
     onSuccess: (data: { recipes: Recipe[]; status: 'success' | 'partial' }) => {
       if (Array.isArray(data.recipes)) {
         setGeneratedRecipes(data.recipes);
@@ -153,12 +167,14 @@ export default function MealPlan() {
       await createGroceryList({
         userId: 1,
         mealPlanId: mealPlan.id,
-        items: generatedRecipes.flatMap((recipe) =>
-          recipe.ingredients?.map((ingredient) => ({
-            ...ingredient,
-            checked: false,
-          })) ?? []
-        ),
+        items: generatedRecipes
+          .filter((recipe): recipe is Recipe => recipe !== null)
+          .flatMap((recipe) =>
+            recipe.ingredients?.map((ingredient) => ({
+              ...ingredient,
+              checked: false,
+            })) ?? []
+          ),
       });
 
       return mealPlan;
@@ -261,7 +277,7 @@ export default function MealPlan() {
                             // Update localStorage and show success message
                             toast({
                               title: "Recipe removed",
-                              description: `${removedRecipe.name} has been removed from your meal plan and grocery list updated.`,
+                              description: `${removedRecipe?.name || 'Recipe'} has been removed from your meal plan and grocery list updated.`,
                             });
                           }}
                         />
