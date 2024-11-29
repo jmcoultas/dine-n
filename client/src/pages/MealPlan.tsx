@@ -11,7 +11,25 @@ import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
 
+import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "wouter";
+
 export default function MealPlan() {
+  const { user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    setLocation("/");
+    return null;
+  }
   // Type definitions
   type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
   type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
