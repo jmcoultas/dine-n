@@ -59,14 +59,38 @@ export default function Home() {
     complexity: 1 | 2 | 3;
   }
 
-  interface GenerateMealPlanResponse {
-    recipes: Recipe[];
-    status: 'success' | 'partial';
-  }
-
-  const generateMutation = useMutation({
-    mutationFn: (prefs: Preferences) => generateMealPlan(prefs, 2),
-    onSuccess: (data: GenerateMealPlanResponse) => {
+  const generateMutation = useMutation<
+    { recipes: Recipe[]; status: 'success' | 'partial' },
+    Error & { 
+      response?: { 
+        data?: { 
+          type?: string;
+          message?: string; 
+        } 
+      } 
+    },
+    Preferences
+  >({
+    mutationFn: async (prefs: Preferences) => {
+      const response = await generateMealPlan(prefs, 2);
+      return {
+        recipes: response.recipes.map(recipe => ({
+          ...recipe,
+          description: recipe.description ?? undefined,
+          imageUrl: recipe.imageUrl ?? undefined,
+          prepTime: recipe.prepTime ?? undefined,
+          cookTime: recipe.cookTime ?? undefined,
+          servings: recipe.servings ?? undefined,
+          ingredients: recipe.ingredients ? JSON.parse(JSON.stringify(recipe.ingredients)) : undefined,
+          instructions: recipe.instructions ? JSON.parse(recipe.instructions) : undefined,
+          tags: recipe.tags ? JSON.parse(recipe.tags) : undefined,
+          nutrition: recipe.nutrition ? JSON.parse(JSON.stringify(recipe.nutrition)) : undefined,
+          complexity: recipe.complexity as 1 | 2 | 3,
+        })),
+        status: response.status
+      };
+    },
+    onSuccess: (data) => {
       setShowPreferences(false);
       if (Array.isArray(data.recipes)) {
         localStorage.setItem('generatedRecipes', JSON.stringify(data.recipes));
@@ -89,7 +113,7 @@ export default function Home() {
       toast({
         title: "Error",
         description: errorMessage,
-        variant: "destructive" as const,
+        variant: "destructive",
       });
     },
   });
