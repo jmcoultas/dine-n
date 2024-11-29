@@ -167,53 +167,7 @@ export function registerRoutes(app: Express) {
         errorMessage = 'Service temporarily unavailable. Please try again later.';
       } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
         errorType = 'connection_error';
-  // Authentication routes
-  app.post("/api/auth/register", async (req, res) => {
-    try {
-      const { email, password, name } = req.body;
-
-      // Check if user already exists
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.email, email),
-      });
-
-      if (existingUser) {
-        return res.status(400).json({ message: "Email already registered" });
-      }
-
-      // Hash password and create user
-      const hashedPassword = await hashPassword(password);
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          email,
-          name,
-          password_hash: hashedPassword,
-          username: email, // Using email as username for now
-          preferences: {
-            dietary: [],
-            allergies: [],
-            cuisine: [],
-            meatTypes: []
-          }
-        })
-        .returning();
-
-      const token = generateToken(newUser.id);
-
-      res.json({
-        token,
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.name,
-        },
-      });
-    } catch (error) {
-      console.error("Registration error:", error);
-      res.status(500).json({ message: "Failed to register user" });
-    }
-  });
+  // Authentication routes - Login only, registration removed as per requirements
 
   app.post("/api/auth/login", async (req, res) => {
     try {

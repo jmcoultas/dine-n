@@ -12,13 +12,11 @@ interface AuthDialogProps {
 }
 
 export default function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,27 +24,16 @@ export default function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     setIsLoading(true);
 
     try {
-      if (isLogin) {
-        await login(email, password);
-        toast({
-          title: "Login successful!",
-          description: "Welcome back to Dine-N!",
-        });
-      } else {
-        if (!name.trim()) {
-          throw new Error("Name is required");
-        }
-        await register(email, password, name);
-        toast({
-          title: "Registration successful!",
-          description: "Welcome to Dine-N!",
-        });
-      }
+      await login(email, password);
+      toast({
+        title: "Login successful!",
+        description: "Welcome back to Dine-N!",
+      });
       onOpenChange(false);
     } catch (error) {
       console.error("Auth error:", error);
       toast({
-        title: `${isLogin ? "Login" : "Registration"} failed`,
+        title: "Login failed",
         description: error instanceof Error ? error.message : "Please try again",
         variant: "destructive",
       });
@@ -59,20 +46,9 @@ export default function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isLogin ? "Login" : "Create Account"}</DialogTitle>
+          <DialogTitle>Login</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-          )}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -93,26 +69,13 @@ export default function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
               required
             />
           </div>
-          <div className="flex flex-col gap-4">
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current" />
-              ) : isLogin ? (
-                "Login"
-              ) : (
-                "Create Account"
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="link"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Login"}
-            </Button>
-          </div>
+          <Button type="submit" disabled={isLoading} className="w-full">
+            {isLoading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current" />
+            ) : (
+              "Login"
+            )}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

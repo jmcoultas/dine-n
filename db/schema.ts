@@ -7,13 +7,13 @@ export const users = pgTable("users", {
   email: text("email").unique().notNull(),
   name: text("name").notNull(),
   password_hash: text("password_hash").notNull(),
-  username: text("username").unique(),
+  username: text("username").unique().notNull(),
   preferences: jsonb("preferences").$type<{
     dietary: string[];
     allergies: string[];
     cuisine: string[];
     meatTypes: string[];
-  }>().default({
+  }>().notNull().default({
     dietary: [],
     allergies: [],
     cuisine: [],

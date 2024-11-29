@@ -16,7 +16,6 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -70,24 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(data.user);
   };
 
-  const register = async (email: string, password: string, name: string) => {
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password, name }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || "Failed to register");
-    }
-
-    const data = await res.json();
-    localStorage.setItem("token", data.token);
-    setUser(data.user);
-  };
+  // Registration removed as per requirements - only admin can create new accounts
 
   const logout = () => {
     localStorage.removeItem("token");
@@ -95,7 +77,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
