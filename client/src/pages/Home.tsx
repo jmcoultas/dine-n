@@ -87,12 +87,12 @@ export default function Home() {
           tags: Array.isArray(recipe.tags)
             ? recipe.tags.map(String)
             : undefined,
-          nutrition: recipe.nutrition 
+          nutrition: typeof recipe.nutrition === 'object' && recipe.nutrition
             ? {
-                calories: Number(recipe.nutrition.calories || 0),
-                protein: Number(recipe.nutrition.protein || 0),
-                carbs: Number(recipe.nutrition.carbs || 0),
-                fat: Number(recipe.nutrition.fat || 0)
+                calories: Number((recipe.nutrition as any)?.calories || 0),
+                protein: Number((recipe.nutrition as any)?.protein || 0),
+                carbs: Number((recipe.nutrition as any)?.carbs || 0),
+                fat: Number((recipe.nutrition as any)?.fat || 0)
               }
             : undefined,
           complexity: (typeof recipe.complexity === 'number' && [1, 2, 3].includes(recipe.complexity))
