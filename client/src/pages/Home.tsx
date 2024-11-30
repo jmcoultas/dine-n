@@ -101,15 +101,22 @@ export default function Home() {
         description: "Your meal plan has been generated.",
       });
     },
-    onError: (error: Error & { 
-      response?: { 
-        data?: { 
-          type?: string;
-          message?: string; 
+    onError: (error: unknown) => {
+      const err = error as Error & { 
+        response?: { 
+          data?: { 
+            type?: string;
+            error?: string;
+            message?: string; 
+          } 
         } 
-      } 
-    }) => {
-      const errorMessage = error.response?.data?.message || error.message || "Failed to generate meal plan. Please try again.";
+      };
+      
+      const errorMessage = err.response?.data?.error || 
+                          err.response?.data?.message || 
+                          err.message || 
+                          "Failed to generate meal plan. Please try again.";
+      
       toast({
         title: "Error",
         description: errorMessage,
