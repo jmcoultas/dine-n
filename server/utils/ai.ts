@@ -229,7 +229,24 @@ Please assign complexity based on:
     
     return recipeData;
   } catch (error: any) {
-    console.error("OpenAI API Error:", error.message);
+    console.error("OpenAI API Error:", error);
+    
+    // Check for specific API errors
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OpenAI API key is not configured");
+    }
+
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      throw new Error("connection_error");
+    }
+
+    if (error.status === 401) {
+      throw new Error("Invalid OpenAI API key");
+    }
+
+    if (error.status === 429) {
+      throw new Error("OpenAI API rate limit exceeded");
+    }
     
     let fallbackRecipe = { ...DEFAULT_RECIPES[params.mealType] };
     if (!fallbackRecipe) {

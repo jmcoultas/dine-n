@@ -166,12 +166,21 @@ export function registerRoutes(app: Express) {
       let errorType = 'unknown';
       let errorMessage = 'Failed to generate meal plan';
       
-      if (error.error?.type === 'insufficient_quota' || error.type === 'insufficient_quota') {
-        errorType = 'service_unavailable';
-        errorMessage = 'Service temporarily unavailable. Please try again later.';
-      } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      if (error.message === "OpenAI API key is not configured") {
+        errorType = 'configuration_error';
+        errorMessage = 'API configuration is missing. Please contact support.';
+      } else if (error.message === "Invalid OpenAI API key") {
+        errorType = 'authentication_error';
+        errorMessage = 'Unable to authenticate with the recipe service.';
+      } else if (error.message === "OpenAI API rate limit exceeded") {
+        errorType = 'rate_limit';
+        errorMessage = 'Service is temporarily unavailable. Please try again in a few minutes.';
+      } else if (error.message === "connection_error" || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
         errorType = 'connection_error';
         errorMessage = 'Unable to connect to recipe service. Please check your connection.';
+      } else if (error.error?.type === 'insufficient_quota' || error.type === 'insufficient_quota') {
+        errorType = 'service_unavailable';
+        errorMessage = 'Service temporarily unavailable. Please try again later.';
       }
       
       res.status(500).json({ 
