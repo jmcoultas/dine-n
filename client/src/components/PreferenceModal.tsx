@@ -236,7 +236,7 @@ export default function PreferenceModal({
                         <SelectItem key={option} value={option} className="flex items-center">
                           <div className="flex items-center gap-2 px-2 py-1 flex-1">
                             <div className="w-4 h-4 border rounded flex items-center justify-center">
-                              {tempPreferences[currentStepConfig.field]?.includes(option) && (
+                              {currentStepConfig.field && tempPreferences[currentStepConfig.field].includes(option) && (
                                 <div className="h-2 w-2 bg-primary rounded-sm" />
                               )}
                             </div>
