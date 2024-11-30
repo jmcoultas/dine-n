@@ -216,7 +216,7 @@ export default function PreferenceModal({
               {currentStepConfig.field && (
                 <div className="space-y-2">
                   <Select
-                    value={tempPreferences[currentStepConfig.field][0] ?? ""}
+                    value=""
                     onValueChange={(value) => {
                       if (currentStepConfig.field) {
                         const field = currentStepConfig.field;
@@ -224,13 +224,14 @@ export default function PreferenceModal({
                         handleSelectPreference(field, typedValue);
                       }
                     }}
+                    open={true}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue
-                        placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
+                        placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()}`}
                       />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent onCloseAutoFocus={(e) => e.preventDefault()}>
                       {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
                         <SelectItem key={option} value={option} className="flex items-center">
                           <div className="flex items-center gap-2 px-2 py-1 flex-1">
