@@ -75,11 +75,14 @@ export default function Home() {
           cookTime: recipe.cookTime || undefined,
           servings: recipe.servings || undefined,
           ingredients: Array.isArray(recipe.ingredients) 
-            ? recipe.ingredients.map(ing => ({
-                name: String(ing.name || ''),
-                amount: Number(ing.amount || 0),
-                unit: String(ing.unit || '')
-              }))
+            ? recipe.ingredients.map(ing => {
+                const ingredient = ing as { name?: string; amount?: number; unit?: string };
+                return {
+                  name: String(ingredient?.name || ''),
+                  amount: Number(ingredient?.amount || 0),
+                  unit: String(ingredient?.unit || '')
+                };
+              })
             : undefined,
           instructions: Array.isArray(recipe.instructions) 
             ? recipe.instructions.map(String)
