@@ -59,37 +59,52 @@ export default function Home() {
     complexity: 1 | 2 | 3;
   }
 
-  const generateMutation = useMutation<
-    { recipes: Recipe[]; status: 'success' | 'partial' },
-    Error & { 
-      response?: { 
-        data?: { 
-          type?: string;
-          message?: string; 
-        } 
-      } 
-    },
-    Preferences
-  >({
+  const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
       console.log('Generating meal plan with preferences:', prefs);
       const response = await generateMealPlan(prefs, 2);
       console.log('Received response:', response);
+      
+      const recipes = response.recipes.map(recipe => {
+        const typedRecipe: Recipe = {
+          id: recipe.id,
+          name: recipe.name,
+          description: recipe.description || undefined,
+          imageUrl: recipe.imageUrl || undefined,
+          prepTime: recipe.prepTime || undefined,
+          cookTime: recipe.cookTime || undefined,
+          servings: recipe.servings || undefined,
+          ingredients: Array.isArray(recipe.ingredients) 
+            ? recipe.ingredients.map(ing => ({
+                name: String(ing.name || ''),
+                amount: Number(ing.amount || 0),
+                unit: String(ing.unit || '')
+              }))
+            : undefined,
+          instructions: Array.isArray(recipe.instructions) 
+            ? recipe.instructions.map(String)
+            : undefined,
+          tags: Array.isArray(recipe.tags)
+            ? recipe.tags.map(String)
+            : undefined,
+          nutrition: recipe.nutrition 
+            ? {
+                calories: Number(recipe.nutrition.calories || 0),
+                protein: Number(recipe.nutrition.protein || 0),
+                carbs: Number(recipe.nutrition.carbs || 0),
+                fat: Number(recipe.nutrition.fat || 0)
+              }
+            : undefined,
+          complexity: (typeof recipe.complexity === 'number' && [1, 2, 3].includes(recipe.complexity))
+            ? recipe.complexity as 1 | 2 | 3
+            : 1
+        };
+        return typedRecipe;
+      });
+      
       return {
-        recipes: response.recipes.map(recipe => ({
-          ...recipe,
-          description: recipe.description ?? undefined,
-          imageUrl: recipe.imageUrl ?? undefined,
-          prepTime: recipe.prepTime ?? undefined,
-          cookTime: recipe.cookTime ?? undefined,
-          servings: recipe.servings ?? undefined,
-          ingredients: recipe.ingredients || undefined,
-          instructions: recipe.instructions || undefined,
-          tags: recipe.tags || undefined,
-          nutrition: recipe.nutrition || undefined,
-          complexity: recipe.complexity as 1 | 2 | 3,
-        })),
-        status: response.status
+        recipes,
+        status: response.status as 'success' | 'partial'
       };
     },
     onSuccess: (data) => {
