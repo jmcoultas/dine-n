@@ -214,29 +214,37 @@ export default function PreferenceModal({
           ) : (
             <>
               {currentStepConfig.field && (
-                <Select
-                  value={tempPreferences[currentStepConfig.field][0] ?? ""}
-                  onValueChange={(value) => {
-                    if (currentStepConfig.field) {
-                      const field = currentStepConfig.field;
-                      const typedValue = value as PreferenceValue<typeof field>;
-                      handleSelectPreference(field, typedValue);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <Select
+                    value={tempPreferences[currentStepConfig.field][0] ?? ""}
+                    onValueChange={(value) => {
+                      if (currentStepConfig.field) {
+                        const field = currentStepConfig.field;
+                        const typedValue = value as PreferenceValue<typeof field>;
+                        handleSelectPreference(field, typedValue);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <div className="flex items-center justify-between w-full">
+                        <SelectValue
+                          placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()}`}
+                        />
+                        <span className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded">Multi-select</span>
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    You can select multiple options. Click an option to add it, and use the badges below to remove selections.
+                  </p>
+                </div>
               )}
 
               <div className="flex flex-wrap gap-2">
