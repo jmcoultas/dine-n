@@ -160,11 +160,19 @@ export function registerRoutes(app: Express) {
         throw new Error('Failed to generate any recipes');
       }
     } catch (error: any) {
-      console.error("Error generating meal plan:", error);
+      console.error("Error generating meal plan:", {
+        message: error.message,
+        type: error.type,
+        status: error.status,
+        code: error.code,
+        response: error.response,
+        stack: error.stack
+      });
       
       // Determine error type and message
       let errorType = 'unknown';
       let errorMessage = 'Failed to generate meal plan';
+      let details = error.message;
       
       if (error.message === "OpenAI API key is not configured") {
         errorType = 'configuration_error';
@@ -185,7 +193,13 @@ export function registerRoutes(app: Express) {
       
       res.status(500).json({ 
         error: errorMessage,
-        type: errorType
+        type: errorType,
+        details: details,
+        debug: process.env.NODE_ENV !== 'production' ? {
+          code: error.code,
+          status: error.status,
+          message: error.message
+        } : undefined
       });
     }
   });

@@ -112,14 +112,16 @@ export default function Home() {
         } 
       };
       
-      const errorMessage = err.response?.data?.error || 
-                          err.response?.data?.message || 
+      const errorData = err.response?.data;
+      const errorMessage = errorData?.error || 
+                          errorData?.message || 
                           err.message || 
                           "Failed to generate meal plan. Please try again.";
+      const errorDetails = errorData?.details || '';
       
       toast({
         title: "Error",
-        description: errorMessage,
+        description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}`,
         variant: "destructive",
       });
     },
