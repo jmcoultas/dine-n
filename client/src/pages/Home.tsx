@@ -107,7 +107,13 @@ export default function Home() {
           data?: { 
             type?: string;
             error?: string;
-            message?: string; 
+            message?: string;
+            details?: string;
+            debug?: {
+              code?: string;
+              status?: number;
+              message?: string;
+            }
           } 
         } 
       };
@@ -118,10 +124,11 @@ export default function Home() {
                           err.message || 
                           "Failed to generate meal plan. Please try again.";
       const errorDetails = errorData?.details || '';
+      const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
       
       toast({
         title: "Error",
-        description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}`,
+        description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}${import.meta.env.DEV ? debugInfo : ''}`,
         variant: "destructive",
       });
     },
