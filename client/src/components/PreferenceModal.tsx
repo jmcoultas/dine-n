@@ -232,13 +232,13 @@ export default function PreferenceModal({
                     </SelectTrigger>
                     <SelectContent>
                       {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
-                        <SelectItem key={option} value={option} className="flex items-center space-x-2">
-                          <div className="h-4 w-4 border rounded flex items-center justify-center">
-                            {tempPreferences[currentStepConfig.field].includes(option) && (
+                        <SelectItem key={option} value={option} className="flex items-center gap-2 px-2">
+                          <div className="min-w-[16px] h-4 border rounded flex items-center justify-center">
+                            {tempPreferences[currentStepConfig.field]?.includes(option) && (
                               <div className="h-2 w-2 bg-primary rounded-sm" />
                             )}
                           </div>
-                          <span>{option}</span>
+                          {option}
                         </SelectItem>
                       ))}
                     </SelectContent>
