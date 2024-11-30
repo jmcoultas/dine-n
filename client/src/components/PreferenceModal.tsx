@@ -226,17 +226,19 @@ export default function PreferenceModal({
                     }}
                   >
                     <SelectTrigger className="w-full">
-                      <div className="flex items-center justify-between w-full">
-                        <SelectValue
-                          placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()}`}
-                        />
-                        <span className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded">Multi-select</span>
-                      </div>
+                      <SelectValue
+                        placeholder={`Select ${currentStepConfig.title.toLowerCase()}`}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
+                        <SelectItem key={option} value={option} className="flex items-center space-x-2">
+                          <div className="h-4 w-4 border rounded flex items-center justify-center">
+                            {tempPreferences[currentStepConfig.field].includes(option) && (
+                              <div className="h-2 w-2 bg-primary rounded-sm" />
+                            )}
+                          </div>
+                          <span>{option}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
