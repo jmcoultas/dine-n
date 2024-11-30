@@ -72,7 +72,9 @@ export default function Home() {
     Preferences
   >({
     mutationFn: async (prefs: Preferences) => {
+      console.log('Generating meal plan with preferences:', prefs);
       const response = await generateMealPlan(prefs, 2);
+      console.log('Received response:', response);
       return {
         recipes: response.recipes.map(recipe => ({
           ...recipe,
@@ -81,10 +83,10 @@ export default function Home() {
           prepTime: recipe.prepTime ?? undefined,
           cookTime: recipe.cookTime ?? undefined,
           servings: recipe.servings ?? undefined,
-          ingredients: recipe.ingredients ? JSON.parse(JSON.stringify(recipe.ingredients)) : undefined,
-          instructions: recipe.instructions ? JSON.parse(recipe.instructions) : undefined,
-          tags: recipe.tags ? JSON.parse(recipe.tags) : undefined,
-          nutrition: recipe.nutrition ? JSON.parse(JSON.stringify(recipe.nutrition)) : undefined,
+          ingredients: recipe.ingredients || undefined,
+          instructions: recipe.instructions || undefined,
+          tags: recipe.tags || undefined,
+          nutrition: recipe.nutrition || undefined,
           complexity: recipe.complexity as 1 | 2 | 3,
         })),
         status: response.status
