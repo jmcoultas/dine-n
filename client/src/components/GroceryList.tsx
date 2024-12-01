@@ -27,7 +27,22 @@ export default function GroceryList({ items }: GroceryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
 
-  const filteredItems = items.filter((item) =>
+  // Aggregate ingredients with the same name and unit
+  const aggregatedItems = items.reduce((acc, item) => {
+    const key = `${item.name.toLowerCase()}-${item.unit.toLowerCase()}`;
+    if (!acc[key]) {
+      acc[key] = {
+        name: item.name,
+        amount: item.amount,
+        unit: item.unit
+      };
+    } else {
+      acc[key].amount += item.amount;
+    }
+    return acc;
+  }, {} as Record<string, GroceryItem>);
+
+  const filteredItems = Object.values(aggregatedItems).filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
