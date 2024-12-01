@@ -254,8 +254,16 @@ export default function PreferenceModal({
                             variant="outline"
                             className="w-full"
                             onClick={() => {
-                              const select = document.querySelector('[role="combobox"]') as HTMLElement;
-                              if (select) select.click();
+                              // Find and click the trigger element to close the dropdown
+                              const trigger = document.querySelector('[role="combobox"]') as HTMLElement;
+                              if (trigger) {
+                                trigger.click();
+                                // Ensure the dropdown is closed
+                                const dropdown = document.querySelector('[role="listbox"]');
+                                if (dropdown) {
+                                  (dropdown as HTMLElement).style.display = 'none';
+                                }
+                              }
                             }}
                           >
                             Done
