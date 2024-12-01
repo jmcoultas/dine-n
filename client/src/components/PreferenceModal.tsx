@@ -149,19 +149,27 @@ export default function PreferenceModal({
       const updatedPreferences = { ...prev };
       const currentValues = prev[field];
 
-      if (field === "dietary" && value === "No Preference") {
-        updatedPreferences[field] = [value as PreferenceType];
-      } else {
-        const noPreference = "No Preference";
-        const hasNoPreference = currentValues.includes(noPreference as any);
-        const newValues = hasNoPreference
-          ? [value]
-          : [...currentValues.filter(v => v !== noPreference), value];
-        updatedPreferences[field] = newValues;
+      if (field === "dietary") {
+        if (value === "No Preference") {
+          return {
+            ...prev,
+            [field]: ["No Preference" as PreferenceType]
+          };
+        }
+        const noPreference = "No Preference" as PreferenceType;
+        const hasNoPreference = currentValues.some(v => v === noPreference);
+        if (hasNoPreference) {
+          return {
+            ...prev,
+            [field]: [value as PreferenceType]
+          };
+        }
       }
 
-      onUpdatePreferences(updatedPreferences);
-      return updatedPreferences;
+      return {
+        ...prev,
+        [field]: [...currentValues.filter(v => v !== "No Preference"), value as any]
+      };
     });
   };
 
@@ -215,7 +223,7 @@ export default function PreferenceModal({
                         {currentStepConfig.field && currentStepConfig.options.map((option) => {
                           const field = currentStepConfig.field as PreferenceField;
                           const typedOption = option as PreferenceValueType;
-                          const isSelected = tempPreferences[field].includes(typedOption);
+                          const isSelected = tempPreferences[field].some(v => v === typedOption);
                           
                           return (
                             <div
