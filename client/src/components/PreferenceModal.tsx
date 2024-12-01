@@ -216,29 +216,30 @@ export default function PreferenceModal({
             <>
               {currentStepConfig.field && (
                 <div className="space-y-2">
-                  <Select
-                    value=""
-                    onValueChange={(value) => {
-                      if (currentStepConfig.field) {
-                        const field = currentStepConfig.field;
-                        const typedValue = value as PreferenceValue<typeof field>;
-                        handleSelectPreference(field, typedValue);
-                      }
-                    }}
-                    open={true}
-                  >
+                  <Select defaultOpen={false}>
                     <SelectTrigger className="w-full">
                       <SelectValue
                         placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()}`}
                       />
                     </SelectTrigger>
-                    <SelectContent onCloseAutoFocus={(e) => e.preventDefault()}>
-                      {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => {
-                        const field = currentStepConfig.field!;
-                        const isSelected = tempPreferences[field].includes(option as PreferenceValue<typeof field>);
-                        return (
-                          <SelectItem key={option} value={option} className="flex items-center">
-                            <div className="flex items-center gap-2 px-2 py-1 flex-1">
+                    <SelectContent>
+                      <div className="p-2">
+                        {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => {
+                          const field = currentStepConfig.field!;
+                          const typedOption = option as PreferenceValue<typeof field>;
+                          const isSelected = tempPreferences[field].includes(typedOption);
+                          return (
+                            <div
+                              key={option}
+                              className="flex items-center gap-2 px-2 py-1 hover:bg-accent rounded-sm cursor-pointer"
+                              onClick={() => {
+                                if (isSelected) {
+                                  handleRemovePreference(field, typedOption);
+                                } else {
+                                  handleSelectPreference(field, typedOption);
+                                }
+                              }}
+                            >
                               <div className="w-4 h-4 border rounded flex items-center justify-center">
                                 {isSelected && (
                                   <div className="h-2 w-2 bg-primary rounded-sm" />
@@ -246,9 +247,21 @@ export default function PreferenceModal({
                               </div>
                               <span>{option}</span>
                             </div>
-                          </SelectItem>
-                        );
-                      })}
+                          );
+                        })}
+                        <div className="mt-2 pt-2 border-t">
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => {
+                              const select = document.querySelector('[role="combobox"]') as HTMLElement;
+                              if (select) select.click();
+                            }}
+                          >
+                            Done
+                          </Button>
+                        </div>
+                      </div>
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
