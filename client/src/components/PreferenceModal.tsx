@@ -23,13 +23,6 @@ type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "W
 type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
 type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
 
-type PreferenceValue<T extends PreferenceField> = 
-  T extends "dietary" ? PreferenceType :
-  T extends "allergies" ? AllergyType :
-  T extends "cuisine" ? CuisineType :
-  T extends "meatTypes" ? MeatType :
-  never;
-
 interface Preferences {
   dietary: PreferenceType[];
   allergies: AllergyType[];
@@ -38,6 +31,8 @@ interface Preferences {
 }
 
 type PreferenceField = keyof Preferences;
+
+type PreferenceValueType = PreferenceType | AllergyType | CuisineType | MeatType;
 
 interface Step {
   title: string;
@@ -149,43 +144,36 @@ export default function PreferenceModal({
     setCurrentStep((prev) => prev - 1);
   };
 
-  const handleSelectPreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
+  const handleSelectPreference = (field: PreferenceField, value: PreferenceValueType) => {
     setTempPreferences((prev) => {
       const updatedPreferences = { ...prev };
-      const currentValues = prev[field] as Array<PreferenceValue<T>>;
-      
-      if (field === "dietary" && value === "No Preference" as PreferenceValue<T>) {
-        updatedPreferences[field] = [value as PreferenceValue<T>] as Preferences[T];
+      const currentValues = prev[field];
+
+      if (field === "dietary" && value === "No Preference") {
+        updatedPreferences[field] = [value as PreferenceType];
       } else {
-        const noPreference = "No Preference" as PreferenceValue<T>;
-        const hasNoPreference = currentValues.includes(noPreference);
-        const newValues = hasNoPreference 
-          ? [value] 
+        const noPreference = "No Preference";
+        const hasNoPreference = currentValues.includes(noPreference as any);
+        const newValues = hasNoPreference
+          ? [value]
           : [...currentValues.filter(v => v !== noPreference), value];
-        updatedPreferences[field] = newValues as Preferences[T];
+        updatedPreferences[field] = newValues;
       }
-      
+
       onUpdatePreferences(updatedPreferences);
       return updatedPreferences;
     });
   };
 
-  const handleRemovePreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
+  const handleRemovePreference = (field: PreferenceField, value: PreferenceValueType) => {
     setTempPreferences((prev) => {
-      const currentValues = prev[field] as PreferenceValue<T>[];
       const updatedPreferences = {
         ...prev,
-        [field]: currentValues.filter((item) => item !== value)
+        [field]: prev[field].filter((item) => item !== value)
       };
       onUpdatePreferences(updatedPreferences);
       return updatedPreferences;
     });
-  };
-
-  const getOptionsForField = <T extends PreferenceField>(field: T): PreferenceValue<T>[] => {
-    const step = STEPS.find(s => s.field === field);
-    if (!step) return [];
-    return step.options as PreferenceValue<T>[];
   };
 
   return (
@@ -199,7 +187,7 @@ export default function PreferenceModal({
         <div className="mt-4 space-y-4">
           {isLastStep ? (
             <div className="space-y-6">
-              {(Object.entries(tempPreferences) as [PreferenceField, PreferenceValue<PreferenceField>[]][]).map(([key, values]) => (
+              {(Object.entries(tempPreferences) as [PreferenceField, PreferenceValueType[]][]).map(([key, values]) => (
                 <div key={key} className="space-y-2">
                   <h4 className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
                   <div className="flex flex-wrap gap-2">
@@ -224,10 +212,11 @@ export default function PreferenceModal({
                     </SelectTrigger>
                     <SelectContent>
                       <div className="p-2">
-                        {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => {
-                          const field = currentStepConfig.field!;
-                          const typedOption = option as PreferenceValue<typeof field>;
+                        {currentStepConfig.field && currentStepConfig.options.map((option) => {
+                          const field = currentStepConfig.field as PreferenceField;
+                          const typedOption = option as PreferenceValueType;
                           const isSelected = tempPreferences[field].includes(typedOption);
+                          
                           return (
                             <div
                               key={option}
@@ -254,11 +243,9 @@ export default function PreferenceModal({
                             variant="outline"
                             className="w-full"
                             onClick={() => {
-                              // Find and click the trigger element to close the dropdown
                               const trigger = document.querySelector('[role="combobox"]') as HTMLElement;
                               if (trigger) {
                                 trigger.click();
-                                // Ensure the dropdown is closed
                                 const dropdown = document.querySelector('[role="listbox"]');
                                 if (dropdown) {
                                   (dropdown as HTMLElement).style.display = 'none';
@@ -288,10 +275,7 @@ export default function PreferenceModal({
                     {item}
                     <button
                       className="ml-1 hover:bg-muted rounded-full"
-                      onClick={() => handleRemovePreference(
-                        currentStepConfig.field as PreferenceField,
-                        item as PreferenceValue<typeof currentStepConfig.field>
-                      )}
+                      onClick={() => handleRemovePreference(currentStepConfig.field!, item)}
                     >
                       ×
                     </button>
