@@ -184,7 +184,8 @@ export default function PreferenceModal({
 
   const getOptionsForField = <T extends PreferenceField>(field: T): PreferenceValue<T>[] => {
     const step = STEPS.find(s => s.field === field);
-    return (step?.options ?? []) as PreferenceValue<T>[];
+    if (!step) return [];
+    return step.options as PreferenceValue<T>[];
   };
 
   return (
@@ -232,18 +233,22 @@ export default function PreferenceModal({
                       />
                     </SelectTrigger>
                     <SelectContent onCloseAutoFocus={(e) => e.preventDefault()}>
-                      {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => (
-                        <SelectItem key={option} value={option} className="flex items-center">
-                          <div className="flex items-center gap-2 px-2 py-1 flex-1">
-                            <div className="w-4 h-4 border rounded flex items-center justify-center">
-                              {currentStepConfig.field && tempPreferences[currentStepConfig.field].includes(option as PreferenceValue<typeof currentStepConfig.field>) && (
-                                <div className="h-2 w-2 bg-primary rounded-sm" />
-                              )}
+                      {currentStepConfig.field && getOptionsForField(currentStepConfig.field).map((option) => {
+                        const field = currentStepConfig.field!;
+                        const isSelected = tempPreferences[field].includes(option as PreferenceValue<typeof field>);
+                        return (
+                          <SelectItem key={option} value={option} className="flex items-center">
+                            <div className="flex items-center gap-2 px-2 py-1 flex-1">
+                              <div className="w-4 h-4 border rounded flex items-center justify-center">
+                                {isSelected && (
+                                  <div className="h-2 w-2 bg-primary rounded-sm" />
+                                )}
+                              </div>
+                              <span>{option}</span>
                             </div>
-                            <span>{option}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
