@@ -215,7 +215,7 @@ export default function PreferenceModal({
                   <Select defaultOpen={false}>
                     <SelectTrigger className="w-full">
                       <SelectValue
-                        placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()}`}
+                        placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()} (optional)`}
                       />
                     </SelectTrigger>
                     <SelectContent>
@@ -267,9 +267,14 @@ export default function PreferenceModal({
                       </div>
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-muted-foreground">
-                    You can select multiple options. Click an option to add it, and use the badges below to remove selections.
-                  </p>
+                  <div className="text-sm space-y-1">
+                    <p className="font-medium text-primary">✨ Multi-Select Enabled</p>
+                    <p className="text-muted-foreground">
+                      • Click multiple options to add them
+                      • Click the badges below to remove selections
+                      • All selections are optional
+                    </p>
+                  </div>
                 </div>
               )}
 
