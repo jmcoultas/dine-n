@@ -99,17 +99,26 @@ export default function GroceryList({ items }: GroceryListProps) {
                 product: item.name
               }));
 
-              // @ts-ignore - Instacart widget types
-              if (window.instacart && window.instacart.shoppingList) {
+              // Check if Instacart is loaded
+              const checkInstacartLoading = () => {
                 // @ts-ignore - Instacart widget types
-                window.instacart.shoppingList.open({
-                  affiliate_id: 'tastemakers',
-                  affiliate_platform: 'recipe',
-                  items: items
-                });
-              } else {
-                console.error('Instacart widget not loaded');
-              }
+                if (window.instacart && window.instacart.shoppingList) {
+                  // @ts-ignore - Instacart widget types
+                  window.instacart.shoppingList.open({
+                    affiliate_id: 'tastemakers',
+                    affiliate_platform: 'recipe',
+                    items: items
+                  });
+                } else if ((window as any).instacartLoaded) {
+                  // Widget script is loaded but not initialized yet
+                  setTimeout(checkInstacartLoading, 100);
+                } else {
+                  console.error('Instacart widget not loaded');
+                  alert('Unable to open Instacart at the moment. Please try again in a few seconds.');
+                }
+              };
+              
+              checkInstacartLoading();
             }}
           >
             <img 

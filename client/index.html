@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
     <script>
+      window.instacartLoaded = false;
       (function (d, s, id, a) {
         var js, fjs = d.getElementsByTagName(s)[0];
         if (d.getElementById(id)) { return; }
@@ -16,8 +13,16 @@
         js.src = "https://widgets.instacart.com/widget-bundle-v2.js";
         js.async = true;
         js.dataset.source_origin = "affiliate_hub";
+        js.onload = function() {
+          window.instacartLoaded = true;
+        };
         fjs.parentNode.insertBefore(js, fjs);
       })(document, "script", "standard-instacart-widget-v1");
     </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
+</html>
 </html>
