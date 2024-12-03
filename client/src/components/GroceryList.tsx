@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,28 @@ interface GroceryListProps {
 export default function GroceryList({ items }: GroceryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Add Instacart script
+    const script = document.createElement('script');
+    script.innerHTML = `
+      (function (d, s, id, a) { 
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) { return; } 
+        js = d.createElement(s); 
+        js.id = id;
+        js.src = "https://widgets.instacart.com/widget-bundle-v2.js"; 
+        js.async = true;
+        js.dataset.source_origin = "affiliate_hub"; 
+        fjs.parentNode.insertBefore(js, fjs); 
+      })(document, "script", "standard-instacart-widget-v1");
+    `;
+    document.body.appendChild(script);
+    
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   // Aggregate ingredients with the same name and unit
   const aggregatedItems = items.reduce((acc, item) => {
@@ -118,6 +140,16 @@ export default function GroceryList({ items }: GroceryListProps) {
           </TableBody>
         </Table>
       </ScrollArea>
+      
+      <div className="mt-8 p-4 border rounded-lg bg-muted">
+        <h3 className="text-lg font-semibold mb-4">Shop Ingredients with Instacart</h3>
+        <div 
+          id="shop-with-instacart-v1" 
+          data-affiliate_id="5333" 
+          data-source_origin="affiliate_hub" 
+          data-affiliate_platform="recipe_widget"
+        />
+      </div>
     </div>
   );
 }
