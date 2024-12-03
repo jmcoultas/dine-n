@@ -109,6 +109,13 @@ export default function GroceryList({ items }: GroceryListProps) {
           <Download className="h-4 w-4 mr-2" />
           Export List
         </Button>
+        <div 
+          id="shop-with-instacart-v1" 
+          data-affiliate_id="5333" 
+          data-source_origin="affiliate_hub" 
+          data-affiliate_platform="recipe_widget"
+          className="inline-flex"
+        />
       </div>
 
       <ScrollArea className="h-[500px] rounded-md border">
@@ -140,16 +147,6 @@ export default function GroceryList({ items }: GroceryListProps) {
           </TableBody>
         </Table>
       </ScrollArea>
-      
-      <div className="mt-8 p-4 border rounded-lg bg-muted">
-        <h3 className="text-lg font-semibold mb-4">Shop Ingredients with Instacart</h3>
-        <div 
-          id="shop-with-instacart-v1" 
-          data-affiliate_id="5333" 
-          data-source_origin="affiliate_hub" 
-          data-affiliate_platform="recipe_widget"
-        />
-      </div>
     </div>
   );
 }
