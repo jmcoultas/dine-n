@@ -14,9 +14,12 @@ import {
 import { Download, Search } from "lucide-react";
 
 interface GroceryItem {
+  "@type": "HowToIngredient";
   name: string;
   amount: number;
   unit: string;
+  unitText: string;
+  itemListElement: string;
 }
 
 interface GroceryListProps {

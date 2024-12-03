@@ -19,9 +19,12 @@ interface MealPlanCardProps {
     cookTime?: number;
     servings?: number;
     ingredients?: Array<{
+      "@type": "HowToIngredient";
       name: string;
       amount: number;
       unit: string;
+      unitText: string;
+      itemListElement: string;
     }>;
     instructions?: string[];
     tags?: string[];
