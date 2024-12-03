@@ -17,6 +17,7 @@ interface GroceryItem {
   name: string;
   amount: number;
   unit: string;
+  recipeIngredient?: string;
 }
 
 interface GroceryListProps {
@@ -56,10 +57,12 @@ export default function GroceryList({ items }: GroceryListProps) {
       acc[key] = {
         name: item.name,
         amount: item.amount,
-        unit: item.unit
+        unit: item.unit,
+        recipeIngredient: `${item.amount} ${item.unit} ${item.name}`
       };
     } else {
       acc[key].amount += item.amount;
+      acc[key].recipeIngredient = `${acc[key].amount} ${acc[key].unit} ${acc[key].name}`;
     }
     return acc;
   }, {} as Record<string, GroceryItem>);
@@ -79,8 +82,8 @@ export default function GroceryList({ items }: GroceryListProps) {
   };
 
   const exportList = () => {
-    const content = items
-      .map((item) => `${item.amount} ${item.unit} ${item.name}`)
+    const content = Object.values(aggregatedItems)
+      .map((item) => item.recipeIngredient)
       .join("\n");
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -114,6 +117,7 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_id="5333" 
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
+          data-recipe-ingredients={JSON.stringify(Object.values(aggregatedItems).map(item => item.recipeIngredient))}
           className="inline-flex h-10 items-center"
         />
       </div>
