@@ -83,22 +83,12 @@ export function registerRoutes(app: Express) {
                     ? recipeData.ingredients.map((ing) => {
                         if (typeof ing === 'object' && ing !== null) {
                           return {
-                            "@type": "HowToIngredient",
                             name: String((ing as any).name || ''),
                             amount: Number((ing as any).amount || 0),
-                            unit: String((ing as any).unit || ''),
-                            unitText: String((ing as any).unit || ''),
-                            itemListElement: String((ing as any).name || '')
+                            unit: String((ing as any).unit || '')
                           };
                         }
-                        return { 
-                          "@type": "HowToIngredient",
-                          name: '',
-                          amount: 0,
-                          unit: '',
-                          unitText: '',
-                          itemListElement: ''
-                        };
+                        return { name: '', amount: 0, unit: '' };
                       })
                     : [],
                   instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
