@@ -83,10 +83,31 @@ export default function GroceryList({ items }: GroceryListProps) {
             className="pl-9"
           />
         </div>
-        <Button variant="outline" onClick={exportList}>
-          <Download className="h-4 w-4 mr-2" />
-          Export List
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={exportList}>
+            <Download className="h-4 w-4 mr-2" />
+            Export List
+          </Button>
+          <Button 
+            variant="default" 
+            className="bg-[#F36D00] hover:bg-[#F36D00]/90 text-white"
+            onClick={() => {
+              const items = Object.values(aggregatedItems)
+                .map(item => `${item.amount} ${item.unit} ${item.name}`)
+                .join(',');
+              // Using Instacart deeplink with affiliate tracking
+              const instacartUrl = `https://www.instacart.com/store/partner/items?affiliate=tastemakers&items=${encodeURIComponent(items)}`;
+              window.open(instacartUrl, '_blank');
+            }}
+          >
+            <img 
+              src="https://www.instacart.com/assets/beetstrap/brand/2022/carrot-white-small-a574cd88cbafaa4d46d058565ef84ce4a7bec19345493aa2582c83151e0c06c3.png" 
+              alt="Instacart"
+              className="h-4 w-4 mr-2"
+            />
+            Shop on Instacart
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="h-[500px] rounded-md border">
