@@ -90,24 +90,26 @@ export default function GroceryList({ items }: GroceryListProps) {
           </Button>
           <Button 
             variant="default" 
-            className="bg-[#F36D00] hover:bg-[#F36D00]/90 text-white"
+            className="bg-[#F36D00] hover:bg-[#F36D00]/90 text-white instacart-button"
             onClick={() => {
-              // Format items according to Instacart's requirements
-              const formattedItems = Object.values(aggregatedItems)
-                .map(item => {
-                  // Normalize units to Instacart's expected format
-                  const unit = item.unit.toLowerCase();
-                  const amount = item.amount;
-                  const name = item.name;
-                  
-                  // Format: quantity|unit|item_name
-                  return `${amount}|${unit}|${name}`;
-                })
-                .join(';');
+              // Format items for Instacart widget
+              const items = Object.values(aggregatedItems).map(item => ({
+                quantity: item.amount,
+                unit: item.unit,
+                product: item.name
+              }));
 
-              // Construct Instacart URL with Tastemakers affiliate tracking
-              const instacartUrl = `https://www.instacart.com/store/items?affiliate_id=tastemakers&affiliate_platform=recipe&items=${encodeURIComponent(formattedItems)}`;
-              window.open(instacartUrl, '_blank');
+              // @ts-ignore - Instacart widget types
+              if (window.instacart && window.instacart.shoppingList) {
+                // @ts-ignore - Instacart widget types
+                window.instacart.shoppingList.open({
+                  affiliate_id: 'tastemakers',
+                  affiliate_platform: 'recipe',
+                  items: items
+                });
+              } else {
+                console.error('Instacart widget not loaded');
+              }
             }}
           >
             <img 
