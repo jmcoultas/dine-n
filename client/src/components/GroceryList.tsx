@@ -83,6 +83,7 @@ export default function GroceryList({ items }: GroceryListProps) {
 
   const exportList = () => {
     const content = Object.values(aggregatedItems)
+      .filter(item => !checkedItems.has(item.name))
       .map((item) => item.recipeIngredient)
       .join("\n");
     const blob = new Blob([content], { type: "text/plain" });
@@ -117,7 +118,9 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_id="5333" 
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
-          data-recipe-ingredients={JSON.stringify(Object.values(aggregatedItems).map(item => item.recipeIngredient))}
+          data-recipe-ingredients={JSON.stringify(Object.values(aggregatedItems)
+            .filter(item => !checkedItems.has(item.name))
+            .map(item => item.recipeIngredient))}
           className="inline-flex h-10 items-center"
         />
       </div>
