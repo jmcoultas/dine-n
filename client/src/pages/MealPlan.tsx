@@ -4,6 +4,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
@@ -213,6 +214,17 @@ export default function MealPlan() {
             <p className="text-muted-foreground">
               Generate a personalized meal plan and organize your grocery shopping
             </p>
+            {Object.entries(preferences).map(([key, values]) => 
+              values.length > 0 ? (
+                <div key={key} className="mt-2">
+                  <div className="flex flex-wrap gap-2">
+                    {values.map((item) => (
+                      <Badge key={item} variant="secondary">{String(item)}</Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null
+            )}
           </div>
           <Button
             variant="outline"
