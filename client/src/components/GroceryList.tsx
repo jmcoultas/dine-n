@@ -50,19 +50,62 @@ export default function GroceryList({ items }: GroceryListProps) {
     };
   }, []);
 
-  // Aggregate ingredients with the same name and unit
+  // Normalize ingredient names by removing common prefixes and preparation instructions
+  const normalizeIngredientName = (name: string) => {
+    return name.toLowerCase()
+      .replace(/^(fresh|dried|frozen|canned|diced|sliced|chopped|minced|ground)\s+/, '')
+      .replace(/,.*$/, '')
+      .trim();
+  };
+
+  // Convert common unit variations to standard form
+  const standardizeUnit = (unit: string) => {
+    const unitMap: Record<string, string> = {
+      'g': 'grams',
+      'gram': 'grams',
+      'grams': 'grams',
+      'kg': 'kilograms',
+      'oz': 'ounces',
+      'ounce': 'ounces',
+      'ounces': 'ounces',
+      'lb': 'pounds',
+      'lbs': 'pounds',
+      'pound': 'pounds',
+      'pounds': 'pounds',
+      'ml': 'milliliters',
+      'milliliter': 'milliliters',
+      'milliliters': 'milliliters',
+      'l': 'liters',
+      'liter': 'liters',
+      'liters': 'liters',
+      'tsp': 'teaspoons',
+      'teaspoon': 'teaspoons',
+      'teaspoons': 'teaspoons',
+      'tbsp': 'tablespoons',
+      'tablespoon': 'tablespoons',
+      'tablespoons': 'tablespoons',
+      'cup': 'cups',
+      'cups': 'cups',
+    };
+    return unitMap[unit.toLowerCase()] || unit.toLowerCase();
+  };
+
+  // Aggregate ingredients with normalized names and standardized units
   const aggregatedItems = items.reduce((acc, item) => {
-    const key = `${item.name.toLowerCase()}-${item.unit.toLowerCase()}`;
+    const normalizedName = normalizeIngredientName(item.name);
+    const standardUnit = standardizeUnit(item.unit);
+    const key = `${normalizedName}-${standardUnit}`;
+
     if (!acc[key]) {
       acc[key] = {
         name: item.name,
         amount: item.amount,
-        unit: item.unit,
-        recipeIngredient: `${item.amount} ${item.unit} ${item.name}`
+        unit: standardUnit,
+        recipeIngredient: `${item.amount} ${standardUnit} ${item.name}`
       };
     } else {
       acc[key].amount += item.amount;
-      acc[key].recipeIngredient = `${acc[key].amount} ${acc[key].unit} ${acc[key].name}`;
+      acc[key].recipeIngredient = `${acc[key].amount} ${standardUnit} ${acc[key].name}`;
     }
     return acc;
   }, {} as Record<string, GroceryItem>);
