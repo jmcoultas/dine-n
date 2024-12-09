@@ -63,10 +63,10 @@ export function registerRoutes(app: Express) {
           while (attempts < maxAttempts && !recipeGenerated) {
             try {
               const recipeData = await generateRecipeRecommendation({
-                dietary: preferences?.dietary || [],
-                allergies: preferences?.allergies || [],
-                cuisine: preferences?.cuisine || [],
-                meatTypes: preferences?.meatTypes || [],
+                dietary: Array.isArray(preferences?.dietary) ? preferences.dietary : [],
+                allergies: Array.isArray(preferences?.allergies) ? preferences.allergies : [],
+                cuisine: Array.isArray(preferences?.cuisine) ? preferences.cuisine : [],
+                meatTypes: Array.isArray(preferences?.meatTypes) ? preferences.meatTypes : [],
                 mealType: mealTypes[meal],
                 excludeNames: usedNames,
               });

@@ -80,12 +80,20 @@ export default function MealPlan() {
     allergies: AllergyType[];
     cuisine: CuisineType[];
     meatTypes: MeatType[];
-  }>({
-    dietary: [],
-    allergies: [],
-    cuisine: [],
-    meatTypes: [],
+  }>(() => {
+    const savedPreferences = localStorage.getItem('mealPlanPreferences');
+    return savedPreferences ? JSON.parse(savedPreferences) : {
+      dietary: [],
+      allergies: [],
+      cuisine: [],
+      meatTypes: [],
+    };
   });
+
+  // Save preferences to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
+  }, [preferences]);
 
   // Hooks
   const { toast } = useToast();
@@ -100,7 +108,10 @@ export default function MealPlan() {
 
   // Mutations
   const generateMutation = useMutation({
-    mutationFn: () => generateMealPlan(preferences, 2),
+    mutationFn: () => {
+      console.log('Sending preferences to API:', preferences);
+      return generateMealPlan(preferences, 2);
+    },
     onSuccess: (data) => {
       if (Array.isArray(data.recipes)) {
         setGeneratedRecipes(data.recipes.map(recipe => {
