@@ -123,10 +123,27 @@ function meetsRestrictions(recipe: FallbackRecipe | Partial<Recipe>, params: Rec
     ? recipe.ingredients
     : [];
   
+  // Enhanced allergy checking with common variations and related ingredients
+  const allergyMap: Record<string, string[]> = {
+    'eggs': ['egg', 'eggs', 'mayonnaise', 'mayo', 'meringue', 'custard', 'hollandaise'],
+    'dairy': ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose'],
+    'tree nuts': ['almond', 'cashew', 'pecan', 'walnut', 'pistachio', 'macadamia', 'hazelnut'],
+    'peanuts': ['peanut', 'groundnut', 'arachis'],
+    'shellfish': ['shrimp', 'crab', 'lobster', 'prawn', 'crayfish', 'langoustine'],
+    'wheat': ['wheat', 'flour', 'bread', 'pasta', 'semolina', 'couscous', 'bulgur'],
+    'soy': ['soy', 'tofu', 'edamame', 'tempeh', 'miso', 'tamari']
+  };
+
   const hasAllergens = recipeIngredients.some(ing => {
     if (typeof ing === 'object' && ing !== null && 'name' in ing) {
       const ingredientName = String(ing.name).toLowerCase();
-      return allergies.some(allergy => ingredientName.includes(allergy));
+      return allergies.some(allergy => {
+        const allergyKey = allergy.toLowerCase();
+        const relatedIngredients = allergyMap[allergyKey] || [allergyKey];
+        return relatedIngredients.some(allergen => 
+          ingredientName.includes(allergen.toLowerCase())
+        );
+      });
     }
     return false;
   });
@@ -182,7 +199,7 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
       
     const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}.
 ${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : ""}
-${params.allergies.length > 0 ? `Must avoid allergens: ${params.allergies.join(", ")}` : ""}
+${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}. Do not include any ingredients that could contain these allergens.` : ""}
 ${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : ""}
 ${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : ""}
 ${excludeNamesStr}
