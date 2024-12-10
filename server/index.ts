@@ -1,9 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
-import { sql } from "drizzle-orm";
 import { createServer } from "http";
 import { setupAuth } from "./auth";
+import { sql } from "drizzle-orm";
 
 function log(message: string) {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

@@ -17,23 +17,29 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 
 export function registerRoutes(app: Express) {
   // User Profile Routes
-  // User Profile Routes
   app.put("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { name, email } = req.body;
       
-      // Validate input
+      // Enhanced input validation
       if (!name?.trim() || !email?.trim()) {
         return res.status(400).json({ 
-          error: "Bad Request",
-          message: "Name and email are required" 
+          error: "Validation Error",
+          message: "Name and email are required",
+          field: !name?.trim() ? "name" : "email",
+          type: "REQUIRED_FIELD"
         });
       }
 
-      if (!email.includes('@') || !email.includes('.')) {
+      const normalizedEmail = email.toLowerCase().trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      
+      if (!emailRegex.test(normalizedEmail)) {
         return res.status(400).json({
-          error: "Bad Request",
-          message: "Invalid email format"
+          error: "Validation Error",
+          message: "Please enter a valid email address",
+          field: "email",
+          type: "INVALID_FORMAT"
         });
       }
 
@@ -41,33 +47,54 @@ export function registerRoutes(app: Express) {
       const [existingUser] = await db
         .select()
         .from(users)
-        .where(eq(users.email, email.toLowerCase()))
+        .where(eq(users.email, normalizedEmail))
         .limit(1);
 
       if (existingUser && existingUser.id !== req.user!.id) {
         return res.status(400).json({
-          error: "Bad Request",
-          message: "Email is already taken"
+          error: "Validation Error",
+          message: "This email address is already registered to another account",
+          field: "email",
+          type: "DUPLICATE_EMAIL"
         });
       }
 
-      // Update user profile
+      // Update user profile with normalized data
       const [updatedUser] = await db
         .update(users)
         .set({ 
           name: name.trim(), 
-          email: email.toLowerCase().trim() 
+          email: normalizedEmail,
+          updated_at: new Date()
         })
         .where(eq(users.id, req.user!.id))
         .returning();
 
-      res.json(updatedUser);
+      res.json({
+        message: "Profile updated successfully",
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          preferences: updatedUser.preferences
+        }
+      });
     } catch (error: any) {
       console.error("Error updating user profile:", error);
+      
+      if ((error as any)?.code === '23505') {
+        return res.status(400).json({
+          error: "Validation Error",
+          message: "This email address is already registered to another account",
+          field: "email",
+          type: "DUPLICATE_EMAIL"
+        });
+      }
+      
       res.status(500).json({
-        error: "Internal Server Error",
+        error: "Server Error",
         message: "Failed to update profile",
-        details: error.message
+        details: error instanceof Error ? error.message : undefined
       });
     }
   });
