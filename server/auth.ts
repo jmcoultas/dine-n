@@ -67,7 +67,7 @@ export function setupAuth(app: Express) {
         const [user] = await db
           .select()
           .from(users)
-          .where(eq(users.email, email))
+          .where(eq(users.email, email.toLowerCase()))
           .limit(1);
 
         if (!user) {
@@ -103,24 +103,44 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const result = insertUserSchema.safeParse(req.body);
-      if (!result.success) {
-        return res
-          .status(400)
-          .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
+      const { email, password } = req.body;
+
+      // Basic validation
+      if (!email?.trim()) {
+        return res.status(400).json({
+          error: "Invalid input",
+          message: "Email is required"
+        });
       }
 
-      const { email, password } = result.data;
+      if (!password?.trim() || password.length < 6) {
+        return res.status(400).json({
+          error: "Invalid input",
+          message: "Password must be at least 6 characters long"
+        });
+      }
+
+      if (!email.includes('@') || !email.includes('.')) {
+        return res.status(400).json({
+          error: "Invalid input",
+          message: "Please enter a valid email address"
+        });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
 
       // Check if user already exists
       const [existingUser] = await db
         .select()
         .from(users)
-        .where(eq(users.email, email))
+        .where(eq(users.email, normalizedEmail))
         .limit(1);
 
       if (existingUser) {
-        return res.status(400).send("Email address already exists");
+        return res.status(400).json({
+          error: "Registration failed",
+          message: "This email address is already registered"
+        });
       }
 
       // Hash the password
@@ -130,9 +150,9 @@ export function setupAuth(app: Express) {
       const [newUser] = await db
         .insert(users)
         .values({
-          email,
+          email: normalizedEmail,
           password_hash: hashedPassword,
-          name: email.split('@')[0], // Use part before @ as default name
+          name: normalizedEmail.split('@')[0], // Use part before @ as default name
         })
         .returning();
 
@@ -147,7 +167,11 @@ export function setupAuth(app: Express) {
         });
       });
     } catch (error) {
-      next(error);
+      console.error("Registration error:", error);
+      res.status(500).json({
+        error: "Registration failed",
+        message: "An error occurred during registration"
+      });
     }
   });
 

@@ -6,7 +6,7 @@ export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   email: text("email").unique().notNull(),
   password_hash: text("password_hash").notNull(),
-  name: text("name").notNull(),
+  name: text("name").notNull().default(''),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
   preferences: jsonb("preferences").$type<{

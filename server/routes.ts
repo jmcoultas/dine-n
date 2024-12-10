@@ -230,11 +230,11 @@ export function registerRoutes(app: Express) {
               if (recipeData.name && !usedRecipeNames.has(recipeData.name)) {
                 const recipeToInsert = {
                   name: recipeData.name,
-                  description: recipeData.description || null,
-                  imageUrl: recipeData.imageUrl || null,
-                  prepTime: recipeData.prepTime || null,
-                  cookTime: recipeData.cookTime || null,
-                  servings: recipeData.servings || null,
+                  description: recipeData.description || undefined,
+                  imageUrl: recipeData.imageUrl || undefined,
+                  prepTime: recipeData.prepTime || undefined,
+                  cookTime: recipeData.cookTime || undefined,
+                  servings: recipeData.servings || undefined,
                   ingredients: Array.isArray(recipeData.ingredients) 
                     ? recipeData.ingredients.map(ing => {
                         const ingredient = ing as { name?: string; amount?: number; unit?: string };
@@ -244,16 +244,18 @@ export function registerRoutes(app: Express) {
                           unit: String(ingredient?.unit || '')
                         };
                       })
-                    : null,
-                  instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : null,
-                  tags: Array.isArray(recipeData.tags) ? recipeData.tags : null,
-                  nutrition: typeof recipeData.nutrition === 'object' ? {
+                    : undefined,
+                  instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : undefined,
+                  tags: Array.isArray(recipeData.tags) ? recipeData.tags : undefined,
+                  nutrition: {
                     calories: Number((recipeData.nutrition as any)?.calories || 0),
                     protein: Number((recipeData.nutrition as any)?.protein || 0),
                     carbs: Number((recipeData.nutrition as any)?.carbs || 0),
                     fat: Number((recipeData.nutrition as any)?.fat || 0)
-                  } : null,
-                  complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1
+                  },
+                  complexity: typeof recipeData.complexity === 'number' && [1, 2, 3].includes(recipeData.complexity)
+                    ? recipeData.complexity as 1 | 2 | 3
+                    : 1
                 };
 
                 const [newRecipe] = await db.insert(recipes)
@@ -279,16 +281,23 @@ export function registerRoutes(app: Express) {
             if (!usedRecipeNames.has(fallbackName)) {
               const fallbackToInsert = {
                 name: fallbackName,
-                description: fallbackRecipe.description || null,
-                imageUrl: fallbackRecipe.imageUrl || null,
-                prepTime: fallbackRecipe.prepTime || null,
-                cookTime: fallbackRecipe.cookTime || null,
-                servings: fallbackRecipe.servings || null,
-                ingredients: Array.isArray(fallbackRecipe.ingredients) ? fallbackRecipe.ingredients : null,
-                instructions: Array.isArray(fallbackRecipe.instructions) ? fallbackRecipe.instructions : null,
-                tags: Array.isArray(fallbackRecipe.tags) ? fallbackRecipe.tags : null,
-                nutrition: fallbackRecipe.nutrition || null,
-                complexity: typeof fallbackRecipe.complexity === 'number' ? fallbackRecipe.complexity : 1
+                description: fallbackRecipe.description || undefined,
+                imageUrl: fallbackRecipe.imageUrl || undefined,
+                prepTime: fallbackRecipe.prepTime || undefined,
+                cookTime: fallbackRecipe.cookTime || undefined,
+                servings: fallbackRecipe.servings || undefined,
+                ingredients: Array.isArray(fallbackRecipe.ingredients) ? fallbackRecipe.ingredients : undefined,
+                instructions: Array.isArray(fallbackRecipe.instructions) ? fallbackRecipe.instructions : undefined,
+                tags: Array.isArray(fallbackRecipe.tags) ? fallbackRecipe.tags : undefined,
+                nutrition: {
+                  calories: Number((fallbackRecipe.nutrition as any)?.calories || 0),
+                  protein: Number((fallbackRecipe.nutrition as any)?.protein || 0),
+                  carbs: Number((fallbackRecipe.nutrition as any)?.carbs || 0),
+                  fat: Number((fallbackRecipe.nutrition as any)?.fat || 0)
+                },
+                complexity: typeof fallbackRecipe.complexity === 'number' && [1, 2, 3].includes(fallbackRecipe.complexity)
+                  ? fallbackRecipe.complexity as 1 | 2 | 3
+                  : 1
               };
               
               const [newRecipe] = await db.insert(recipes)
