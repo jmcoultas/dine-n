@@ -190,15 +190,15 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || null,
                   cookTime: recipeData.cookTime || null,
                   servings: recipeData.servings || null,
-                  ingredients: recipeData.ingredients ? JSON.stringify(recipeData.ingredients) : null,
-                  instructions: Array.isArray(recipeData.instructions) ? JSON.stringify(recipeData.instructions) : null,
-                  tags: Array.isArray(recipeData.tags) ? JSON.stringify(recipeData.tags) : null,
-                  nutrition: recipeData.nutrition ? JSON.stringify(recipeData.nutrition) : null,
+                  ingredients: recipeData.ingredients || null,
+                  instructions: recipeData.instructions || null,
+                  tags: recipeData.tags || null,
+                  nutrition: recipeData.nutrition || null,
                   complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1
                 };
 
                 const [newRecipe] = await db.insert(recipes)
-                  .values(recipeToInsert)
+                  .values([recipeToInsert])
                   .returning();
 
                 usedRecipeNames.add(recipeData.name);
@@ -225,15 +225,15 @@ export function registerRoutes(app: Express) {
                 prepTime: fallbackRecipe.prepTime || null,
                 cookTime: fallbackRecipe.cookTime || null,
                 servings: fallbackRecipe.servings || null,
-                ingredients: fallbackRecipe.ingredients ? JSON.stringify(fallbackRecipe.ingredients) : null,
-                instructions: Array.isArray(fallbackRecipe.instructions) ? JSON.stringify(fallbackRecipe.instructions) : null,
-                tags: Array.isArray(fallbackRecipe.tags) ? JSON.stringify(fallbackRecipe.tags) : null,
-                nutrition: fallbackRecipe.nutrition ? JSON.stringify(fallbackRecipe.nutrition) : null,
+                ingredients: fallbackRecipe.ingredients || null,
+                instructions: fallbackRecipe.instructions || null,
+                tags: fallbackRecipe.tags || null,
+                nutrition: fallbackRecipe.nutrition || null,
                 complexity: typeof fallbackRecipe.complexity === 'number' ? fallbackRecipe.complexity : 1
               };
               
               const [newRecipe] = await db.insert(recipes)
-                .values(fallbackToInsert)
+                .values([fallbackToInsert])
                 .returning();
               usedRecipeNames.add(fallbackName);
               suggestedRecipes.push(newRecipe);
