@@ -5,13 +5,20 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   username: text("username").unique().notNull(),
-  password: text("password").notNull(),
+  password_hash: text("password_hash").notNull(),
   preferences: jsonb("preferences").$type<{
     dietary: string[];
     allergies: string[];
     cuisine: string[];
     meatTypes: string[];
-  }>(),
+  }>().notNull().default({
+    dietary: [],
+    allergies: [],
+    cuisine: [],
+    meatTypes: [],
+  }),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
 });
 
 export const recipes = pgTable("recipes", {

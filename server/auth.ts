@@ -70,7 +70,7 @@ export function setupAuth(app: Express) {
         if (!user) {
           return done(null, false, { message: "Incorrect username." });
         }
-        const isMatch = await crypto.compare(password, user.password);
+        const isMatch = await crypto.compare(password, user.password_hash);
         if (!isMatch) {
           return done(null, false, { message: "Incorrect password." });
         }
@@ -123,12 +123,14 @@ export function setupAuth(app: Express) {
       // Hash the password
       const hashedPassword = await crypto.hash(password);
 
-      // Create the new user
+      // Create the new user with default values for required fields
       const [newUser] = await db
         .insert(users)
         .values({
           username,
-          password: hashedPassword,
+          password_hash: hashedPassword,
+          email: `${username}@example.com`, // Default email
+          name: username, // Use username as default name
         })
         .returning();
 
