@@ -110,32 +110,8 @@ export default function UserProfile() {
     );
   }
 
-  const { theme, setTheme } = useTheme();
-  
   return (
     <div className="container max-w-2xl mx-auto py-8">
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>Theme Preferences</CardTitle>
-          <CardDescription>
-            Choose your preferred theme
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            >
-              {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              {theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Profile Settings</CardTitle>
