@@ -137,22 +137,28 @@ export function registerRoutes(app: Express) {
           message: "Missing required parameters: preferences and days"
         });
       }
+
       const mealsPerDay = 3;
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
       const suggestedRecipes: Array<{
-    id: number;
-    name: string;
-    description: string | null;
-    imageUrl: string | null;
-    prepTime: number | null;
-    cookTime: number | null;
-    servings: number | null;
-    ingredients: string | null;
-    instructions: string | null;
-    tags: string | null;
-    nutrition: string | null;
-    complexity: number;
-  }> = [];
+        id: number;
+        name: string;
+        description: string | null;
+        imageUrl: string | null;
+        prepTime: number | null;
+        cookTime: number | null;
+        servings: number | null;
+        ingredients: { name: string; amount: number; unit: string; }[] | null;
+        instructions: string[] | null;
+        tags: string[] | null;
+        nutrition: {
+          calories: number;
+          protein: number;
+          carbs: number;
+          fat: number;
+        } | null;
+        complexity: number;
+      }> = [];
       const usedRecipeNames = new Set<string>();
 
       // Store user preferences if provided
@@ -190,19 +196,25 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || null,
                   cookTime: recipeData.cookTime || null,
                   servings: recipeData.servings || null,
-                  ingredients: recipeData.ingredients || null,
-                  instructions: recipeData.instructions || null,
-                  tags: recipeData.tags || null,
-                  nutrition: recipeData.nutrition || null,
+                  ingredients: recipeData.ingredients ? JSON.stringify(recipeData.ingredients) : null,
+                  instructions: recipeData.instructions ? JSON.stringify(recipeData.instructions) : null,
+                  tags: recipeData.tags ? JSON.stringify(recipeData.tags) : null,
+                  nutrition: recipeData.nutrition ? JSON.stringify(recipeData.nutrition) : null,
                   complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1
                 };
 
                 const [newRecipe] = await db.insert(recipes)
-                  .values([recipeToInsert])
+                  .values(recipeToInsert)
                   .returning();
 
                 usedRecipeNames.add(recipeData.name);
-                suggestedRecipes.push(newRecipe);
+                suggestedRecipes.push({
+                  ...newRecipe,
+                  ingredients: newRecipe.ingredients ? JSON.parse(newRecipe.ingredients) : null,
+                  instructions: newRecipe.instructions ? JSON.parse(newRecipe.instructions) : null,
+                  tags: newRecipe.tags ? JSON.parse(newRecipe.tags) : null,
+                  nutrition: newRecipe.nutrition ? JSON.parse(newRecipe.nutrition) : null,
+                });
                 recipeGenerated = true;
               }
             } catch (error) {
@@ -225,18 +237,25 @@ export function registerRoutes(app: Express) {
                 prepTime: fallbackRecipe.prepTime || null,
                 cookTime: fallbackRecipe.cookTime || null,
                 servings: fallbackRecipe.servings || null,
-                ingredients: fallbackRecipe.ingredients || null,
-                instructions: fallbackRecipe.instructions || null,
-                tags: fallbackRecipe.tags || null,
-                nutrition: fallbackRecipe.nutrition || null,
+                ingredients: fallbackRecipe.ingredients ? JSON.stringify(fallbackRecipe.ingredients) : null,
+                instructions: fallbackRecipe.instructions ? JSON.stringify(fallbackRecipe.instructions) : null,
+                tags: fallbackRecipe.tags ? JSON.stringify(fallbackRecipe.tags) : null,
+                nutrition: fallbackRecipe.nutrition ? JSON.stringify(fallbackRecipe.nutrition) : null,
                 complexity: typeof fallbackRecipe.complexity === 'number' ? fallbackRecipe.complexity : 1
               };
               
               const [newRecipe] = await db.insert(recipes)
-                .values([fallbackToInsert])
+                .values(fallbackToInsert)
                 .returning();
+
               usedRecipeNames.add(fallbackName);
-              suggestedRecipes.push(newRecipe);
+              suggestedRecipes.push({
+                ...newRecipe,
+                ingredients: newRecipe.ingredients ? JSON.parse(newRecipe.ingredients) : null,
+                instructions: newRecipe.instructions ? JSON.parse(newRecipe.instructions) : null,
+                tags: newRecipe.tags ? JSON.parse(newRecipe.tags) : null,
+                nutrition: newRecipe.nutrition ? JSON.parse(newRecipe.nutrition) : null,
+              });
             }
           }
         }
