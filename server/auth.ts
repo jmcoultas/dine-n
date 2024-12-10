@@ -103,27 +103,39 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, name } = req.body;
 
-      // Basic validation
+      // Enhanced validation
       if (!email?.trim()) {
         return res.status(400).json({
           error: "Invalid input",
-          message: "Email is required"
+          message: "Email is required",
+          field: "email"
         });
       }
 
-      if (!password?.trim() || password.length < 6) {
+      if (!password?.trim()) {
         return res.status(400).json({
           error: "Invalid input",
-          message: "Password must be at least 6 characters long"
+          message: "Password is required",
+          field: "password"
         });
       }
 
-      if (!email.includes('@') || !email.includes('.')) {
+      if (password.length < 6) {
         return res.status(400).json({
           error: "Invalid input",
-          message: "Please enter a valid email address"
+          message: "Password must be at least 6 characters long",
+          field: "password"
+        });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          error: "Invalid input",
+          message: "Please enter a valid email address",
+          field: "email"
         });
       }
 
@@ -139,20 +151,27 @@ export function setupAuth(app: Express) {
       if (existingUser) {
         return res.status(400).json({
           error: "Registration failed",
-          message: "This email address is already registered"
+          message: "This email address is already registered",
+          field: "email"
         });
       }
 
       // Hash the password
       const hashedPassword = await crypto.hash(password);
 
-      // Create the new user with default values for required fields
+      // Create the new user
       const [newUser] = await db
         .insert(users)
         .values({
           email: normalizedEmail,
           password_hash: hashedPassword,
-          name: normalizedEmail.split('@')[0], // Use part before @ as default name
+          name: name?.trim() || normalizedEmail.split('@')[0],
+          preferences: {
+            dietary: [],
+            allergies: [],
+            cuisine: [],
+            meatTypes: []
+          }
         })
         .returning();
 
@@ -163,14 +182,28 @@ export function setupAuth(app: Express) {
         }
         return res.json({
           message: "Registration successful",
-          user: { id: newUser.id, email: newUser.email },
+          user: {
+            id: newUser.id,
+            email: newUser.email,
+            name: newUser.name
+          }
         });
       });
     } catch (error) {
       console.error("Registration error:", error);
+      
+      // Check if it's a database constraint error
+      if ((error as any)?.code === '23505') {
+        return res.status(400).json({
+          error: "Registration failed",
+          message: "This email address is already registered",
+          field: "email"
+        });
+      }
+      
       res.status(500).json({
         error: "Registration failed",
-        message: "An error occurred during registration"
+        message: "An error occurred during registration. Please try again."
       });
     }
   });
