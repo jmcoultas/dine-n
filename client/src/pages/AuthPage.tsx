@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,11 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
+import { useLocation } from "wouter";
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { login, register } = useUser();
+  const { login, register, user } = useUser();
+  const [, setLocation] = useLocation();
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (user) {
+      setLocation('/');
+    }
+  }, [user, setLocation]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>, isLogin: boolean) => {
     event.preventDefault();
@@ -34,8 +43,9 @@ export default function AuthPage() {
 
       toast({
         title: "Success",
-        description: isLogin ? "Welcome back!" : "Account created successfully!",
+        description: isLogin ? "Welcome back!" : "Account created successfully! Redirecting...",
       });
+      // Redirect will happen automatically through the useEffect when user is updated
     } catch (error: any) {
       toast({
         title: "Error",
