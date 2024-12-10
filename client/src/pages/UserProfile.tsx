@@ -37,28 +37,21 @@ export default function UserProfile() {
     e.preventDefault();
     setIsSaving(true);
     
-    // Basic validation
-    if (!formData.name.trim()) {
-      toast({
-        title: "Error",
-        description: "Name is required",
-        variant: "destructive",
-      });
-      setIsSaving(false);
-      return;
-    }
-
-    if (!formData.email.trim() || !formData.email.includes('@') || !formData.email.includes('.')) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid email address",
-        variant: "destructive",
-      });
-      setIsSaving(false);
-      return;
-    }
-    
     try {
+      // Enhanced validation
+      const normalizedEmail = formData.email.trim().toLowerCase();
+      const normalizedName = formData.name.trim();
+      
+      // Email validation using regex
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!normalizedName) {
+        throw new Error("Name is required");
+      }
+
+      if (!normalizedEmail || !emailRegex.test(normalizedEmail)) {
+        throw new Error("Please enter a valid email address");
+      }
+      
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: {
@@ -66,14 +59,19 @@ export default function UserProfile() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          name: formData.name.trim(),
-          email: formData.email.trim().toLowerCase(),
+          name: normalizedName,
+          email: normalizedEmail,
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update profile');
+        // Handle specific error types
+        if (data.error === "Validation Error") {
+          throw new Error(data.message);
+        }
+        throw new Error(data.message || 'Failed to update profile');
       }
 
       // Invalidate the user query to refresh the data
@@ -82,6 +80,12 @@ export default function UserProfile() {
       toast({
         title: "Success",
         description: "Profile updated successfully",
+      });
+
+      // Update the form data with the normalized values
+      setFormData({
+        name: normalizedName,
+        email: normalizedEmail,
       });
     } catch (error) {
       toast({
