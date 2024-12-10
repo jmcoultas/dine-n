@@ -16,12 +16,9 @@ function log(message: string) {
 }
 
 const app = express();
-
-// Basic middleware setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -52,39 +49,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// Create HTTP server
-const server = createServer(app);
-
 (async () => {
-  try {
-    // Set up authentication
-    setupAuth(app);
-    
-    // Register API routes
-    registerRoutes(app);
+  // Set up authentication before routes
+  setupAuth(app);
+  
+  // Register API routes after auth setup
+  registerRoutes(app);
+  const server = createServer(app);
 
-    // Error handling middleware - must be after routes but before static/vite
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      console.error('Error:', err);
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
-      res.status(status).json({ message });
-    });
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
 
-    // Setup Vite or static file serving
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
-    }
+    res.status(status).json({ message });
+    throw err;
+  });
 
-    // Start the server
-    const PORT = 5000;
-    server.listen(PORT, "0.0.0.0", () => {
-      log(`serving on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
   }
+
+  // ALWAYS serve the app on port 5000
+  // this serves both the API and the client
+  const PORT = 5000;
+  server.listen(PORT, "0.0.0.0", () => {
+    log(`serving on port ${PORT}`);
+  });
 })();
