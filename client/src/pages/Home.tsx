@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/hooks/use-user";
 import PreferenceModal from "@/components/PreferenceModal";
 import { generateMealPlan } from "@/lib/api";
 
@@ -13,6 +14,7 @@ const HERO_IMAGES = [
 ];
 
 export default function Home() {
+  const { user } = useUser();
   const [showPreferences, setShowPreferences] = useState(false);
   type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
   type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
@@ -175,13 +177,23 @@ export default function Home() {
             Generate personalized meal plans, discover new recipes, and simplify
             your grocery shopping with our intelligent cooking companion.
           </p>
-          <Button 
-            size="lg" 
-            className="bg-primary hover:bg-primary/90"
-            onClick={() => setShowPreferences(true)}
-          >
-            Start Planning
-          </Button>
+          {user ? (
+            <Button 
+              size="lg" 
+              className="bg-primary hover:bg-primary/90"
+              onClick={() => setShowPreferences(true)}
+            >
+              Start Planning
+            </Button>
+          ) : (
+            <Button 
+              size="lg" 
+              className="bg-primary hover:bg-primary/90"
+              onClick={() => setLocation("/auth")}
+            >
+              Sign in to Start Planning
+            </Button>
+          )}
         </div>
       </section>
 
