@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+
+import { Link } from "react-router-dom";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -13,59 +14,38 @@ export default function Header() {
   const { user } = useUser();
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center px-4">
-        <Link href="/" className="flex items-center space-x-2">
-          <Utensils className="h-6 w-6 text-primary" />
-          <span className="font-bold">Dine-N</span>
-        </Link>
-        <NavigationMenu className="ml-auto">
-          <NavigationMenuList className="space-x-2">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center">
+        <NavigationMenu>
+          <NavigationMenuList>
             <NavigationMenuItem>
-              <Link href="/recipes" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
-                Recipes
+              <Link to="/">
+                <NavigationMenuLink className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                  <Utensils className="mr-2 h-4 w-4" /> Meal Planner
+                </NavigationMenuLink>
               </Link>
             </NavigationMenuItem>
-            <NavigationMenuItem>
-              <Link href="/meal-plan" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
-                Meal Plan
-              </Link>
-            </NavigationMenuItem>
-            {user && (
-              <NavigationMenuItem>
-                <Link href="/profile" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
-                  Profile
-                </Link>
-              </NavigationMenuItem>
-            )}
           </NavigationMenuList>
         </NavigationMenu>
-        {user && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-4"
-            asChild
-          >
-            <Link href="/profile">
-              <User className="h-5 w-5" />
-              <span className="sr-only">User Profile</span>
-            </Link>
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-4"
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-        >
-          {theme === "light" ? (
-            <Moon className="h-5 w-5" />
-          ) : (
-            <Sun className="h-5 w-5" />
-          )}
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+
+        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+          <div className="w-full flex-1 md:w-auto md:flex-none">
+          </div>
+          <nav className="flex items-center space-x-2">
+            {user ? (
+              <Link to="/profile">
+                <Button variant="ghost" size="icon">
+                  <User className="h-4 w-4" />
+                  <span className="sr-only">Profile</span>
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/auth">
+                <Button variant="ghost">Login</Button>
+              </Link>
+            )}
+          </nav>
+        </div>
       </div>
     </header>
   );
