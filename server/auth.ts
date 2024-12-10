@@ -104,44 +104,51 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const { email, password, name } = req.body;
-
-      // Enhanced validation
-      if (!email?.trim()) {
-        return res.status(400).json({
-          error: "Invalid input",
-          message: "Email is required",
-          field: "email"
-        });
-      }
-
-      if (!password?.trim()) {
-        return res.status(400).json({
-          error: "Invalid input",
-          message: "Password is required",
-          field: "password"
-        });
-      }
-
-      if (password.length < 6) {
-        return res.status(400).json({
-          error: "Invalid input",
-          message: "Password must be at least 6 characters long",
-          field: "password"
-        });
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({
-          error: "Invalid input",
-          message: "Please enter a valid email address",
-          field: "email"
+      
+      // Basic input validation
+      if (!email?.trim() || !password?.trim()) {
+        return res.status(400).json({ 
+          error: "Validation Error",
+          message: "Email and password are required",
+          field: !email?.trim() ? "email" : "password",
+          type: "REQUIRED_FIELD"
         });
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      
+      if (!emailRegex.test(normalizedEmail)) {
+        return res.status(400).json({
+          error: "Validation Error",
+          message: "Please enter a valid email address",
+          field: "email",
+          type: "INVALID_FORMAT"
+        });
+      }
 
-      // Check if user already exists
+      // Password validation
+      if (password.length < 6) {
+        return res.status(400).json({
+          error: "Validation Error",
+          message: "Password must be at least 6 characters long",
+          field: "password",
+          type: "INVALID_LENGTH"
+        });
+      }
+
+      const hasUpperCase = /[A-Z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      if (!hasUpperCase || !hasNumber) {
+        return res.status(400).json({
+          error: "Validation Error",
+          message: "Password must contain at least one uppercase letter and one number",
+          field: "password",
+          type: "INVALID_COMPLEXITY"
+        });
+      }
+
+      // Check if email is already taken
       const [existingUser] = await db
         .select()
         .from(users)
@@ -150,16 +157,15 @@ export function setupAuth(app: Express) {
 
       if (existingUser) {
         return res.status(400).json({
-          error: "Registration failed",
+          error: "Registration Error",
           message: "This email address is already registered",
-          field: "email"
+          field: "email",
+          type: "DUPLICATE_EMAIL"
         });
       }
 
-      // Hash the password
+      // Create new user with hashed password
       const hashedPassword = await crypto.hash(password);
-
-      // Create the new user
       const [newUser] = await db
         .insert(users)
         .values({
@@ -175,7 +181,7 @@ export function setupAuth(app: Express) {
         })
         .returning();
 
-      // Log the user in after registration
+      // Log the user in after successful registration
       req.login(newUser, (err) => {
         if (err) {
           return next(err);
@@ -192,18 +198,19 @@ export function setupAuth(app: Express) {
     } catch (error) {
       console.error("Registration error:", error);
       
-      // Check if it's a database constraint error
       if ((error as any)?.code === '23505') {
         return res.status(400).json({
-          error: "Registration failed",
+          error: "Registration Error",
           message: "This email address is already registered",
-          field: "email"
+          field: "email",
+          type: "DUPLICATE_EMAIL"
         });
       }
       
       res.status(500).json({
-        error: "Registration failed",
-        message: "An error occurred during registration. Please try again."
+        error: "Server Error",
+        message: "An error occurred during registration. Please try again.",
+        details: error instanceof Error ? error.message : undefined
       });
     }
   });

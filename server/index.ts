@@ -22,7 +22,10 @@ async function startServer() {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is required");
     }
-    log("Starting server with database URL: " + process.env.DATABASE_URL.split("@")[1]);
+    
+    // Hide sensitive information from logs
+    const dbUrlForLogs = process.env.DATABASE_URL.split("@")[1] || "database";
+    log("Starting server with database URL: " + dbUrlForLogs);
 
     try {
       // Import and verify database connection
