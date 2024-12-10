@@ -36,8 +36,18 @@ export async function generateMealPlan(preferences: MealPlanPreferences, days: n
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify({ preferences, days }),
   });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("You must be logged in to generate meal plans");
+    }
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to generate meal plan");
+  }
+
   return response.json();
 }
 

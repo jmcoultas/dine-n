@@ -123,7 +123,20 @@ export function registerRoutes(app: Express) {
   // AI Meal Plan Generation - Protected Route
   app.post("/api/generate-meal-plan", isAuthenticated, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ 
+          error: "Unauthorized",
+          message: "You must be logged in to generate meal plans"
+        });
+      }
+
       const { preferences, days } = req.body;
+      if (!preferences || !days) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: preferences and days"
+        });
+      }
       const mealsPerDay = 3;
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
       const suggestedRecipes: Array<{
