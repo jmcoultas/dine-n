@@ -34,13 +34,6 @@ export default function Header() {
                 Meal Plan
               </Link>
             </NavigationMenuItem>
-            {user && (
-              <NavigationMenuItem>
-                <Link href="/profile" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
-                  Profile
-                </Link>
-              </NavigationMenuItem>
-            )}
           </NavigationMenuList>
         </NavigationMenu>
         {user && (
