@@ -225,17 +225,30 @@ export default function MealPlan() {
             <p className="text-muted-foreground">
               Generate a personalized meal plan and organize your grocery shopping
             </p>
-            {Object.entries(preferences).map(([key, values]) => 
-              values.length > 0 ? (
-                <div key={key} className="mt-2">
-                  <div className="flex flex-wrap gap-2">
-                    {values.map((item) => (
-                      <Badge key={item} variant="secondary">{String(item)}</Badge>
-                    ))}
+            {/* Preference Summary */}
+            <div className="mt-4 space-y-2">
+              {Object.entries(preferences).map(([key, values]) => 
+                values.length > 0 ? (
+                  <div key={key}>
+                    <p className="text-sm text-muted-foreground capitalize mb-1">{key}:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {values.map((item) => (
+                        <Badge 
+                          key={item} 
+                          variant={
+                            key === 'allergies' ? 'destructive' : 
+                            key === 'dietary' ? 'default' :
+                            'secondary'
+                          }
+                        >
+                          {String(item)}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : null
-            )}
+                ) : null
+              )}
+            </div>
           </div>
           <Button
             variant="outline"
