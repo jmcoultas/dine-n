@@ -5,13 +5,11 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils, Moon, Sun, User } from "lucide-react";
+import { Utensils, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "@/hooks/use-theme";
 import { useUser } from "@/hooks/use-user";
 
 export default function Header() {
-  const { theme, setTheme } = useTheme();
   const { user } = useUser();
 
   return (
