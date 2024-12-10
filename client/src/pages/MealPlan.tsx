@@ -222,31 +222,38 @@ export default function MealPlan() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-bold">Meal Planning</h1>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-4">
               Generate a personalized meal plan and organize your grocery shopping
             </p>
-            {/* Preference Summary */}
-            <div className="mt-4 space-y-2">
-              {Object.entries(preferences).map(([key, values]) => 
-                values.length > 0 ? (
-                  <div key={key}>
-                    <p className="text-sm text-muted-foreground capitalize mb-1">{key}:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {values.map((item) => (
-                        <Badge 
-                          key={item} 
-                          variant={
-                            key === 'allergies' ? 'destructive' : 
-                            key === 'dietary' ? 'default' :
-                            'secondary'
-                          }
-                        >
-                          {String(item)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ) : null
+            <div className="bg-secondary/20 rounded-lg p-4">
+              <h3 className="text-sm font-semibold mb-2">Current Preferences</h3>
+              {Object.entries(preferences).some(([_, values]) => values.length > 0) ? (
+                <div className="space-y-3">
+                  {Object.entries(preferences).map(([key, values]) => 
+                    values.length > 0 ? (
+                      <div key={key} className="space-y-1.5">
+                        <p className="text-sm font-medium capitalize">{key}:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {values.map((item) => (
+                            <Badge 
+                              key={item} 
+                              variant={
+                                key === 'allergies' ? 'destructive' : 
+                                key === 'dietary' ? 'default' :
+                                'secondary'
+                              }
+                              className="capitalize"
+                            >
+                              {String(item)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No preferences set</p>
               )}
             </div>
           </div>
