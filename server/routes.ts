@@ -1,9 +1,8 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { db } from "../db";
-import { recipes, mealPlans, groceryLists } from "@db/schema";
+import { recipes, mealPlans, groceryLists, type Recipe } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { generateRecipeRecommendation, DEFAULT_RECIPES } from "./utils/ai";
-import { setupAuth } from "./auth";
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
@@ -14,28 +13,27 @@ const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export function registerRoutes(app: Express) {
-  // Set up authentication routes
-  setupAuth(app);
-
-  // Recipes
+  // Public Routes
+  // Recipes - Read only for public access
   app.get("/api/recipes", async (req, res) => {
     const allRecipes = await db.query.recipes.findMany();
     res.json(allRecipes);
   });
 
-  app.post("/api/recipes", async (req, res) => {
-    const newRecipe = await db.insert(recipes).values(req.body).returning();
-    res.json(newRecipe[0]);
-  });
-
+  // Protected Routes
   // Meal Plans - Protected Routes
   app.get("/api/meal-plans", isAuthenticated, async (req, res) => {
-    const allMealPlans = await db.query.mealPlans.findMany();
-    res.json(allMealPlans);
+    const userMealPlans = await db.query.mealPlans.findMany({
+      where: eq(mealPlans.userId, req.user!.id),
+    });
+    res.json(userMealPlans);
   });
 
   app.post("/api/meal-plans", isAuthenticated, async (req, res) => {
-    const newMealPlan = await db.insert(mealPlans).values(req.body).returning();
+    const newMealPlan = await db.insert(mealPlans).values({
+      ...req.body,
+      userId: req.user!.id,
+    }).returning();
     res.json(newMealPlan[0]);
   });
 
@@ -45,12 +43,21 @@ export function registerRoutes(app: Express) {
     const groceryList = await db.query.groceryLists.findFirst({
       where: eq(groceryLists.mealPlanId, parseInt(mealPlanId)),
     });
+
+    // Verify ownership
+    if (groceryList && groceryList.userId !== req.user!.id) {
+      return res.status(403).json({ error: "Not authorized to access this grocery list" });
+    }
+
     res.json(groceryList);
   });
 
   app.post("/api/grocery-lists", isAuthenticated, async (req, res) => {
     const newGroceryList = await db.insert(groceryLists)
-      .values(req.body)
+      .values({
+        ...req.body,
+        userId: req.user!.id,
+      })
       .returning();
     res.json(newGroceryList[0]);
   });
@@ -61,7 +68,7 @@ export function registerRoutes(app: Express) {
       const { preferences, days } = req.body;
       const mealsPerDay = 3;
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
-      const suggestedRecipes = [];
+      const suggestedRecipes: Recipe[] = [];
       const usedRecipeNames = new Set<string>();
 
       // Generate recipes for each day and meal
@@ -84,12 +91,24 @@ export function registerRoutes(app: Express) {
               });
 
               if (recipeData.name && !usedRecipeNames.has(recipeData.name)) {
-                const [newRecipe] = await db.insert(recipes).values(recipeData).returning();
+                const [newRecipe] = await db.insert(recipes).values({
+                  name: recipeData.name,
+                  description: recipeData.description || null,
+                  imageUrl: recipeData.imageUrl || null,
+                  prepTime: recipeData.prepTime || null,
+                  cookTime: recipeData.cookTime || null,
+                  servings: recipeData.servings || null,
+                  ingredients: recipeData.ingredients || null,
+                  instructions: recipeData.instructions || null,
+                  tags: recipeData.tags || null,
+                  nutrition: recipeData.nutrition || null,
+                  complexity: recipeData.complexity || 1
+                }).returning();
+
                 usedRecipeNames.add(recipeData.name);
                 suggestedRecipes.push(newRecipe);
                 recipeGenerated = true;
               }
-              attempts++;
             } catch (error) {
               attempts++;
               continue;
