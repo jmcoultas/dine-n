@@ -12,6 +12,7 @@ import Home from "./pages/Home";
 import Recipes from "./pages/Recipes";
 import MealPlan from "./pages/MealPlan";
 import AuthPage from "./pages/AuthPage";
+import UserProfile from "./pages/UserProfile";
 import Header from "./components/Header";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -61,6 +62,10 @@ function Router() {
           <Route 
             path="/meal-plan" 
             component={() => <ProtectedRoute component={MealPlan} />} 
+          />
+          <Route 
+            path="/profile" 
+            component={() => <ProtectedRoute component={UserProfile} />} 
           />
           <Route>404 Page Not Found</Route>
         </Switch>

@@ -1,40 +1,104 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import { type Express, Request, Response, NextFunction } from "express";
 import { db } from "../db";
-import { recipes, mealPlans, groceryLists, users, type Recipe } from "@db/schema";
+import { users, mealPlans, groceryLists, recipes } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { generateRecipeRecommendation, DEFAULT_RECIPES } from "./utils/ai";
 
 // Middleware to check if user is authenticated
-const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+function isAuthenticated(req: Request, res: Response, next: NextFunction) {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.status(401).json({ error: "Not authenticated" });
-};
+  res.status(401).json({ 
+    error: "Unauthorized", 
+    message: "You must be logged in to access this resource" 
+  });
+}
 
 export function registerRoutes(app: Express) {
+  // User Profile Routes
+  // User Profile Routes
+  app.put("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { name, email } = req.body;
+      
+      // Validate input
+      if (!name?.trim() || !email?.trim()) {
+        return res.status(400).json({ 
+          error: "Bad Request",
+          message: "Name and email are required" 
+        });
+      }
+
+      if (!email.includes('@') || !email.includes('.')) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Invalid email format"
+        });
+      }
+
+      // Check if email is already taken by another user
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1);
+
+      if (existingUser && existingUser.id !== req.user!.id) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Email is already taken"
+        });
+      }
+
+      // Update user profile
+      const [updatedUser] = await db
+        .update(users)
+        .set({ 
+          name: name.trim(), 
+          email: email.toLowerCase().trim() 
+        })
+        .where(eq(users.id, req.user!.id))
+        .returning();
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to update profile",
+        details: error.message
+      });
+    }
+  });
+
   // Public Routes
   // Recipes - Read only for public access
-  app.get("/api/recipes", async (req, res) => {
-    const allRecipes = await db.query.recipes.findMany();
-    res.json(allRecipes);
+  app.get("/api/recipes", async (_req: Request, res: Response) => {
+    try {
+      const allRecipes = await db.query.recipes.findMany();
+      res.json(allRecipes);
+    } catch (error: any) {
+      console.error("Error fetching recipes:", error);
+      res.status(500).json({ error: "Failed to fetch recipes" });
+    }
   });
 
   // Protected Routes
   // Meal Plans - Protected Routes
-  app.get("/api/meal-plans", isAuthenticated, async (req, res) => {
+  app.get("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userMealPlans = await db.query.mealPlans.findMany({
         where: eq(mealPlans.userId, req.user!.id),
       });
       res.json(userMealPlans);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching meal plans:", error);
       res.status(500).json({ error: "Failed to fetch meal plans" });
     }
   });
 
-  app.post("/api/meal-plans", isAuthenticated, async (req, res) => {
+  app.post("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { name, startDate, endDate, recipes: mealPlanRecipes } = req.body;
       
@@ -47,14 +111,14 @@ export function registerRoutes(app: Express) {
       }).returning();
 
       res.json(newMealPlan[0]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating meal plan:", error);
       res.status(500).json({ error: "Failed to create meal plan" });
     }
   });
 
   // Grocery Lists - Protected Routes
-  app.get("/api/grocery-lists/:mealPlanId", isAuthenticated, async (req, res) => {
+  app.get("/api/grocery-lists/:mealPlanId", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { mealPlanId } = req.params;
       const parsedMealPlanId = parseInt(mealPlanId);
@@ -81,13 +145,13 @@ export function registerRoutes(app: Express) {
       });
 
       res.json(groceryList);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching grocery list:", error);
       res.status(500).json({ error: "Failed to fetch grocery list" });
     }
   });
 
-  app.post("/api/grocery-lists", isAuthenticated, async (req, res) => {
+  app.post("/api/grocery-lists", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { mealPlanId, items } = req.body;
 
@@ -114,22 +178,15 @@ export function registerRoutes(app: Express) {
         .returning();
 
       res.json(newGroceryList[0]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating grocery list:", error);
       res.status(500).json({ error: "Failed to create grocery list" });
     }
   });
 
   // AI Meal Plan Generation - Protected Route
-  app.post("/api/generate-meal-plan", isAuthenticated, async (req, res) => {
+  app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ 
-          error: "Unauthorized",
-          message: "You must be logged in to generate meal plans"
-        });
-      }
-
       const { preferences, days } = req.body;
       if (!preferences || !days) {
         return res.status(400).json({
@@ -138,29 +195,6 @@ export function registerRoutes(app: Express) {
         });
       }
 
-      const mealsPerDay = 3;
-      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
-      const suggestedRecipes: Array<{
-        id: number;
-        name: string;
-        description: string | null;
-        imageUrl: string | null;
-        prepTime: number | null;
-        cookTime: number | null;
-        servings: number | null;
-        ingredients: { name: string; amount: number; unit: string; }[] | null;
-        instructions: string[] | null;
-        tags: string[] | null;
-        nutrition: {
-          calories: number;
-          protein: number;
-          carbs: number;
-          fat: number;
-        } | null;
-        complexity: number;
-      }> = [];
-      const usedRecipeNames = new Set<string>();
-
       // Store user preferences if provided
       if (req.user && preferences) {
         await db
@@ -168,6 +202,11 @@ export function registerRoutes(app: Express) {
           .set({ preferences })
           .where(eq(users.id, req.user.id));
       }
+
+      const mealsPerDay = 3;
+      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
+      const suggestedRecipes = [];
+      const usedRecipeNames = new Set<string>();
 
       // Generate recipes for each day and meal
       for (let day = 0; day < days; day++) {
@@ -196,15 +235,15 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || null,
                   cookTime: recipeData.cookTime || null,
                   servings: recipeData.servings || null,
-                  ingredients: recipeData.ingredients || null,
-                  instructions: recipeData.instructions || null,
-                  tags: recipeData.tags || null,
+                  ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : null,
+                  instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : null,
+                  tags: Array.isArray(recipeData.tags) ? recipeData.tags : null,
                   nutrition: recipeData.nutrition || null,
                   complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1
                 };
 
                 const [newRecipe] = await db.insert(recipes)
-                  .values([recipeToInsert])
+                  .values(recipeToInsert)
                   .returning();
 
                 usedRecipeNames.add(recipeData.name);
@@ -231,10 +270,10 @@ export function registerRoutes(app: Express) {
                 prepTime: fallbackRecipe.prepTime || null,
                 cookTime: fallbackRecipe.cookTime || null,
                 servings: fallbackRecipe.servings || null,
-                ingredients: fallbackRecipe.ingredients ? JSON.stringify(fallbackRecipe.ingredients) : null,
-                instructions: fallbackRecipe.instructions ? JSON.stringify(fallbackRecipe.instructions) : null,
-                tags: fallbackRecipe.tags ? JSON.stringify(fallbackRecipe.tags) : null,
-                nutrition: fallbackRecipe.nutrition ? JSON.stringify(fallbackRecipe.nutrition) : null,
+                ingredients: Array.isArray(fallbackRecipe.ingredients) ? fallbackRecipe.ingredients : null,
+                instructions: Array.isArray(fallbackRecipe.instructions) ? fallbackRecipe.instructions : null,
+                tags: Array.isArray(fallbackRecipe.tags) ? fallbackRecipe.tags : null,
+                nutrition: fallbackRecipe.nutrition || null,
                 complexity: typeof fallbackRecipe.complexity === 'number' ? fallbackRecipe.complexity : 1
               };
               
@@ -243,13 +282,7 @@ export function registerRoutes(app: Express) {
                 .returning();
 
               usedRecipeNames.add(fallbackName);
-              suggestedRecipes.push({
-                ...newRecipe,
-                ingredients: newRecipe.ingredients ? JSON.parse(newRecipe.ingredients) : null,
-                instructions: newRecipe.instructions ? JSON.parse(newRecipe.instructions) : null,
-                tags: newRecipe.tags ? JSON.parse(newRecipe.tags) : null,
-                nutrition: newRecipe.nutrition ? JSON.parse(newRecipe.nutrition) : null,
-              });
+              suggestedRecipes.push(newRecipe);
             }
           }
         }
