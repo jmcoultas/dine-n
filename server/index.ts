@@ -19,6 +19,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -47,6 +48,14 @@ app.use((req, res, next) => {
   });
 
   next();
+});
+
+// Add error handling middleware
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('Error:', err);
+  const status = (err as any).status || (err as any).statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ error: "Server Error", message });
 });
 
 (async () => {

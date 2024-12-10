@@ -235,7 +235,13 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || null,
                   cookTime: recipeData.cookTime || null,
                   servings: recipeData.servings || null,
-                  ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : null,
+                  ingredients: Array.isArray(recipeData.ingredients) 
+                    ? recipeData.ingredients.map(ing => ({
+                        name: String(ing.name || ''),
+                        amount: Number(ing.amount || 0),
+                        unit: String(ing.unit || '')
+                      }))
+                    : null,
                   instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : null,
                   tags: Array.isArray(recipeData.tags) ? recipeData.tags : null,
                   nutrition: recipeData.nutrition || null,

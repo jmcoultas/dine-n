@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ interface ProfileFormData {
 
 export default function UserProfile() {
   const { user, isLoading } = useUser();
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState<ProfileFormData>({
     name: '',
     email: '',
@@ -34,6 +36,27 @@ export default function UserProfile() {
     e.preventDefault();
     setIsSaving(true);
     
+    // Basic validation
+    if (!formData.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Name is required",
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
+
+    if (!formData.email.trim() || !formData.email.includes('@') || !formData.email.includes('.')) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
+    
     try {
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
@@ -41,12 +64,19 @@ export default function UserProfile() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim().toLowerCase(),
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update profile');
       }
+
+      // Invalidate the user query to refresh the data
+      await queryClient.invalidateQueries({ queryKey: ['user'] });
 
       toast({
         title: "Success",
