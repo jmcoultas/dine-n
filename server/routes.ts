@@ -236,20 +236,28 @@ export function registerRoutes(app: Express) {
                   cookTime: recipeData.cookTime || null,
                   servings: recipeData.servings || null,
                   ingredients: Array.isArray(recipeData.ingredients) 
-                    ? recipeData.ingredients.map(ing => ({
-                        name: String(ing.name || ''),
-                        amount: Number(ing.amount || 0),
-                        unit: String(ing.unit || '')
-                      }))
+                    ? recipeData.ingredients.map(ing => {
+                        const ingredient = ing as { name?: string; amount?: number; unit?: string };
+                        return {
+                          name: String(ingredient?.name || ''),
+                          amount: Number(ingredient?.amount || 0),
+                          unit: String(ingredient?.unit || '')
+                        };
+                      })
                     : null,
                   instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : null,
                   tags: Array.isArray(recipeData.tags) ? recipeData.tags : null,
-                  nutrition: recipeData.nutrition || null,
+                  nutrition: typeof recipeData.nutrition === 'object' ? {
+                    calories: Number((recipeData.nutrition as any)?.calories || 0),
+                    protein: Number((recipeData.nutrition as any)?.protein || 0),
+                    carbs: Number((recipeData.nutrition as any)?.carbs || 0),
+                    fat: Number((recipeData.nutrition as any)?.fat || 0)
+                  } : null,
                   complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1
                 };
 
                 const [newRecipe] = await db.insert(recipes)
-                  .values(recipeToInsert)
+                  .values([recipeToInsert])
                   .returning();
 
                 usedRecipeNames.add(recipeData.name);
