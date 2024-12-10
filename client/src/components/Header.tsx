@@ -5,12 +5,14 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils, Moon, Sun } from "lucide-react";
+import { Utensils, Moon, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
+import { useUser } from "@/hooks/use-user";
 
 export default function Header() {
   const { theme, setTheme } = useTheme();
+  const { user } = useUser();
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -31,8 +33,28 @@ export default function Header() {
                 Meal Plan
               </Link>
             </NavigationMenuItem>
+            {user && (
+              <NavigationMenuItem>
+                <Link href="/profile" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
+                  Profile
+                </Link>
+              </NavigationMenuItem>
+            )}
           </NavigationMenuList>
         </NavigationMenu>
+        {user && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-4"
+            asChild
+          >
+            <Link href="/profile">
+              <User className="h-5 w-5" />
+              <span className="sr-only">User Profile</span>
+            </Link>
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
