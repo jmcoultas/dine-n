@@ -26,11 +26,11 @@ export default function AuthPage() {
     setIsLoading(true);
 
     const formData = new FormData(event.currentTarget);
-    const username = formData.get("username") as string;
+    const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
     try {
-      const result = await (isLogin ? login : register)({ username, password });
+      const result = await (isLogin ? login : register)({ email, password });
       
       if (!result.ok) {
         toast({
@@ -102,12 +102,12 @@ export default function AuthPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="username">Username</Label>
+                      <Label htmlFor="email">Email</Label>
                       <Input
-                        id="username"
-                        name="username"
-                        type="text"
-                        placeholder="johndoe"
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="john@example.com"
                         required
                       />
                     </div>
@@ -144,12 +144,12 @@ export default function AuthPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="username">Username</Label>
+                      <Label htmlFor="email">Email</Label>
                       <Input
-                        id="username"
-                        name="username"
-                        type="text"
-                        placeholder="johndoe"
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="john@example.com"
                         required
                       />
                     </div>

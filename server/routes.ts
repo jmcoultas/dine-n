@@ -196,25 +196,19 @@ export function registerRoutes(app: Express) {
                   prepTime: recipeData.prepTime || null,
                   cookTime: recipeData.cookTime || null,
                   servings: recipeData.servings || null,
-                  ingredients: recipeData.ingredients ? JSON.stringify(recipeData.ingredients) : null,
-                  instructions: recipeData.instructions ? JSON.stringify(recipeData.instructions) : null,
-                  tags: recipeData.tags ? JSON.stringify(recipeData.tags) : null,
-                  nutrition: recipeData.nutrition ? JSON.stringify(recipeData.nutrition) : null,
+                  ingredients: recipeData.ingredients || null,
+                  instructions: recipeData.instructions || null,
+                  tags: recipeData.tags || null,
+                  nutrition: recipeData.nutrition || null,
                   complexity: typeof recipeData.complexity === 'number' ? recipeData.complexity : 1
                 };
 
                 const [newRecipe] = await db.insert(recipes)
-                  .values(recipeToInsert)
+                  .values([recipeToInsert])
                   .returning();
 
                 usedRecipeNames.add(recipeData.name);
-                suggestedRecipes.push({
-                  ...newRecipe,
-                  ingredients: newRecipe.ingredients ? JSON.parse(newRecipe.ingredients) : null,
-                  instructions: newRecipe.instructions ? JSON.parse(newRecipe.instructions) : null,
-                  tags: newRecipe.tags ? JSON.parse(newRecipe.tags) : null,
-                  nutrition: newRecipe.nutrition ? JSON.parse(newRecipe.nutrition) : null,
-                });
+                suggestedRecipes.push(newRecipe);
                 recipeGenerated = true;
               }
             } catch (error) {

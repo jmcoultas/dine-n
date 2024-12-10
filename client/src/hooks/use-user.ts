@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from "@db/schema";
 
 interface InsertUser {
-  username: string;
+  email: string;
   password: string;
 }
 

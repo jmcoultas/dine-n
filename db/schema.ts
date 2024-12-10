@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  username: text("username").unique().notNull(),
+  email: text("email").unique().notNull(),
   password_hash: text("password_hash").notNull(),
   preferences: jsonb("preferences").$type<{
     dietary: string[];
@@ -17,7 +17,6 @@ export const users = pgTable("users", {
     cuisine: [],
     meatTypes: [],
   }),
-  email: text("email").notNull(),
   name: text("name").notNull(),
 });
 
@@ -78,7 +77,7 @@ export const groceryLists = pgTable("grocery_lists", {
 
 // Zod Schemas
 export const insertUserSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 export const selectUserSchema = createSelectSchema(users);
