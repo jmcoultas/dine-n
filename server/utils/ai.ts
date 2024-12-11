@@ -263,13 +263,13 @@ Please assign complexity based on:
   } catch (error: any) {
     console.error("OpenAI API Error:", error);
     
-    // Check for specific API errors
+    // Handle API errors with specific messages
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OpenAI API key is not configured");
     }
 
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      throw new Error("connection_error");
+      throw new Error("Failed to connect to OpenAI API");
     }
 
     if (error.status === 401) {
@@ -279,52 +279,8 @@ Please assign complexity based on:
     if (error.status === 429) {
       throw new Error("OpenAI API rate limit exceeded");
     }
-    
-    let fallbackRecipe = { ...DEFAULT_RECIPES[params.mealType] };
-    if (!fallbackRecipe) {
-      fallbackRecipe = { ...DEFAULT_RECIPES.lunch };
-    }
-    
-    if (!meetsRestrictions(fallbackRecipe, params)) {
-      const simpleFallback: FallbackRecipe = {
-        name: "Simple Vegetable Stir-Fry",
-        description: "A quick and healthy vegetable stir-fry",
-        complexity: 1,
-        ingredients: [
-          { name: "mixed vegetables", amount: 4, unit: "cups" },
-          { name: "rice", amount: 2, unit: "cups" },
-          { name: "olive oil", amount: 2, unit: "tablespoons" },
-          { name: "soy sauce", amount: 2, unit: "tablespoons" }
-        ],
-        instructions: [
-          "Cook rice according to package instructions",
-          "Heat oil in a large pan or wok",
-          "Stir-fry mixed vegetables until tender-crisp",
-          "Season with soy sauce and serve over rice"
-        ],
-        tags: ["vegetarian", "vegan", "healthy"],
-        nutrition: {
-          calories: 300,
-          protein: 6,
-          carbs: 45,
-          fat: 12
-        },
-        prepTime: 10,
-        cookTime: 15,
-        servings: 2
-      };
-      fallbackRecipe = simpleFallback;
-    }
-    
-    if (fallbackRecipe.name) {
-      fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(fallbackRecipe.name.split(" ").join(","))}`;
-    } else {
-      fallbackRecipe.imageUrl = `https://source.unsplash.com/featured/?healthy,food`;
-    }
-    
-    const customError = new Error("API_FALLBACK");
-    (customError as any).fallbackRecipe = fallbackRecipe;
-    (customError as any).originalError = error;
-    throw customError;
+
+    // For any other errors, throw with a generic message
+    throw new Error("Failed to generate recipe recommendation");
   }
 }

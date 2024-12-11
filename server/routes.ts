@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and } from "drizzle-orm";
-import { generateRecipeRecommendation, DEFAULT_RECIPES } from "./utils/ai";
+import { generateRecipeRecommendation } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes } from "@db/schema";
 import { db } from "../db";
 
@@ -294,55 +294,17 @@ export function registerRoutes(app: express.Express) {
             }
           }
 
+          // If recipe generation failed after max attempts, skip this meal
           if (!recipeGenerated) {
-            // Use a fallback recipe
-            const mealTypeStr = mealTypes[meal];
-            const fallbackRecipe = DEFAULT_RECIPES[mealTypeStr];
-            const fallbackName = `${fallbackRecipe.name} (${day + 1}-${mealTypeStr})`;
-            
-            if (!usedRecipeNames.has(fallbackName)) {
-              const fallbackToInsert = {
-                name: fallbackName,
-                description: fallbackRecipe.description || undefined,
-                image_url: fallbackRecipe.imageUrl || undefined,
-                prep_time: fallbackRecipe.prepTime || undefined,
-                cook_time: fallbackRecipe.cookTime || undefined,
-                servings: fallbackRecipe.servings || undefined,
-                ingredients: Array.isArray(fallbackRecipe.ingredients) 
-                  ? fallbackRecipe.ingredients 
-                  : [],
-                instructions: Array.isArray(fallbackRecipe.instructions) 
-                  ? fallbackRecipe.instructions 
-                  : [],
-                tags: Array.isArray(fallbackRecipe.tags) 
-                  ? fallbackRecipe.tags 
-                  : [],
-                nutrition: fallbackRecipe.nutrition || {
-                  calories: 0,
-                  protein: 0,
-                  carbs: 0,
-                  fat: 0
-                },
-                complexity: typeof fallbackRecipe.complexity === 'number' && [1, 2, 3].includes(fallbackRecipe.complexity)
-                  ? fallbackRecipe.complexity
-                  : 1
-              };
-              
-              const [newRecipe] = await db
-                .insert(recipes)
-                .values(fallbackToInsert)
-                .returning();
-
-              usedRecipeNames.add(fallbackName);
-              suggestedRecipes.push(newRecipe);
-            }
+            console.error(`Failed to generate recipe after ${maxAttempts} attempts for day ${day + 1}, meal ${mealTypes[meal]}`);
+            continue;
           }
         }
       }
 
       res.json({
         recipes: suggestedRecipes,
-        status: suggestedRecipes.some(r => r.name.includes('(Fallback)')) ? 'partial' : 'success'
+        status: suggestedRecipes.length === days * mealsPerDay ? 'success' : 'partial'
       });
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
