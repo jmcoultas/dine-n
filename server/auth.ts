@@ -65,7 +65,13 @@ export function setupAuth(app: Express) {
     }, async (email, password, done) => {
       try {
         const [user] = await db
-          .select()
+          .select({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+            password_hash: users.password_hash,
+            createdAt: users.createdAt,
+          })
           .from(users)
           .where(eq(users.email, email.toLowerCase()))
           .limit(1);
@@ -171,13 +177,7 @@ export function setupAuth(app: Express) {
         .values({
           email: normalizedEmail,
           password_hash: hashedPassword,
-          name: name?.trim() || normalizedEmail.split('@')[0],
-          preferences: {
-            dietary: [],
-            allergies: [],
-            cuisine: [],
-            meatTypes: []
-          }
+          name: name?.trim() || normalizedEmail.split('@')[0]
         })
         .returning();
 
