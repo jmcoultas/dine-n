@@ -255,16 +255,22 @@ export function registerRoutes(app: express.Express) {
                 const recipeToInsert = {
                   name: recipeData.name,
                   description: recipeData.description || undefined,
-                  imageUrl: recipeData.imageUrl || undefined,
-                  prepTime: recipeData.prepTime || undefined,
-                  cookTime: recipeData.cookTime || undefined,
+                  image_url: recipeData.imageUrl || undefined,
+                  prep_time: recipeData.prepTime || undefined,
+                  cook_time: recipeData.cookTime || undefined,
                   servings: recipeData.servings || undefined,
                   ingredients: Array.isArray(recipeData.ingredients) 
-                    ? recipeData.ingredients
-                    : undefined,
-                  instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : undefined,
-                  tags: Array.isArray(recipeData.tags) ? recipeData.tags : undefined,
-                  nutrition: recipeData.nutrition || undefined,
+                    ? JSON.stringify(recipeData.ingredients)
+                    : null,
+                  instructions: Array.isArray(recipeData.instructions) 
+                    ? JSON.stringify(recipeData.instructions)
+                    : null,
+                  tags: Array.isArray(recipeData.tags) 
+                    ? JSON.stringify(recipeData.tags)
+                    : null,
+                  nutrition: recipeData.nutrition 
+                    ? JSON.stringify(recipeData.nutrition)
+                    : null,
                   complexity: typeof recipeData.complexity === 'number' && [1, 2, 3].includes(recipeData.complexity)
                     ? recipeData.complexity
                     : 1
