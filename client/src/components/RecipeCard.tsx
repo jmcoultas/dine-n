@@ -47,16 +47,20 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
         credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
       
       if (!response.ok) {
-        throw new Error("Failed to update favorite status");
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to update favorite status");
       }
       
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
       toast({
         title: isFavorited ? "Recipe removed from favorites" : "Recipe added to favorites",
         description: isFavorited ? 
