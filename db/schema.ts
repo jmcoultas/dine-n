@@ -23,14 +23,14 @@ export const recipes = pgTable("recipes", {
   tags: jsonb("tags"),
   nutrition: jsonb("nutrition"),
   complexity: integer("complexity").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
 export const userRecipes = pgTable("user_recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   userId: integer("user_id").notNull().references(() => users.id),
   recipeId: integer("recipe_id").notNull().references(() => recipes.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
 export const mealPlans = pgTable("meal_plans", {
