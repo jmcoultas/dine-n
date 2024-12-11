@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchRecipes } from "@/lib/api";
+import { useUser } from "@/hooks/use-user";
 import RecipeCard from "@/components/RecipeCard";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -39,9 +40,19 @@ export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
+  const { user } = useUser();
   const { data: recipes = [], isLoading, isError, error } = useQuery({
-    queryKey: ["recipes"],
-    queryFn: fetchRecipes,
+    queryKey: ["recipes", user?.id],
+    queryFn: async () => {
+      const response = await fetch('/api/recipes/favorites', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch recipes');
+      }
+      return response.json();
+    },
+    enabled: !!user,
   }) as { data: Recipe[]; isLoading: boolean; isError: boolean; error: Error | null };
 
   if (isLoading) {
@@ -91,6 +102,7 @@ export default function Recipes() {
             <RecipeCard
               key={recipe.id}
               recipe={recipe}
+              isFavorited={true}
               onClick={() => setSelectedRecipe(recipe)}
             />
           ))}

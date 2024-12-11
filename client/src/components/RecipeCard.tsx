@@ -5,7 +5,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Clock, Users } from "lucide-react";
+import { Clock, Users, Heart } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/hooks/use-user";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Recipe } from "@db/schema";
 
 interface RecipeCardProps {
@@ -18,16 +22,56 @@ interface RecipeCardProps {
     cookTime?: number;
     servings?: number;
   };
+  isFavorited?: boolean;
   onClick?: () => void;
 }
 
-export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
+export default function RecipeCard({ recipe, isFavorited = false, onClick }: RecipeCardProps) {
+  const { toast } = useToast();
+  const { user } = useUser();
+  const queryClient = useQueryClient();
+  
   // Add null checks for optional properties
   const imageUrl = recipe.imageUrl ?? '';
   const description = recipe.description ?? '';
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
   const servings = recipe.servings ?? 2;
+
+  const toggleFavorite = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        throw new Error("Must be logged in to favorite recipes");
+      }
+      
+      const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
+        method: isFavorited ? 'DELETE' : 'POST',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to update favorite status");
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      toast({
+        title: isFavorited ? "Recipe removed from favorites" : "Recipe added to favorites",
+        description: isFavorited ? 
+          "The recipe has been removed from your collection" : 
+          "The recipe has been added to your collection",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <Card
@@ -41,6 +85,24 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
             alt={recipe.name}
             className="object-cover w-full h-full"
           />
+          {user && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 bg-white/80 hover:bg-white/90"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavorite.mutate();
+              }}
+            >
+              <Heart 
+                className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-500'}`}
+              />
+              <span className="sr-only">
+                {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+              </span>
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-4">

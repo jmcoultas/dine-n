@@ -1,39 +1,14 @@
-import { pgTable, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, integer, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  email: text("email").unique().notNull(),
-  password_hash: text("password_hash").notNull(),
-  name: text("name").notNull().default(''),
-  created_at: timestamp("created_at").defaultNow().notNull(),
-  updated_at: timestamp("updated_at").defaultNow().notNull(),
-  preferences: jsonb("preferences").$type<{
-    dietary: string[];
-    allergies: string[];
-    cuisine: string[];
-    meatTypes: string[];
-  }>().notNull().default({
-    dietary: [],
-    allergies: [],
-    cuisine: [],
-    meatTypes: [],
-  }),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  password: text("password").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-
-// Schema for user input validation
-export const insertUserSchema = createInsertSchema(users)
-  .extend({
-    password: z.string().min(6, "Password must be at least 6 characters"),
-  })
-  .omit({
-    id: true,
-    password_hash: true,
-    created_at: true,
-    updated_at: true,
-    preferences: true,
-  });
 
 export const recipes = pgTable("recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -43,57 +18,54 @@ export const recipes = pgTable("recipes", {
   prepTime: integer("prep_time"),
   cookTime: integer("cook_time"),
   servings: integer("servings"),
-  ingredients: jsonb("ingredients").$type<{
-    name: string;
-    amount: number;
-    unit: string;
-  }[]>(),
-  instructions: text("instructions").array(),
-  tags: text("tags").array(),
-  nutrition: jsonb("nutrition").$type<{
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  }>().notNull().default({
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fat: 0
-  }),
-  complexity: integer("complexity").notNull().default(1),
+  ingredients: jsonb("ingredients"),
+  instructions: jsonb("instructions"),
+  tags: jsonb("tags"),
+  nutrition: jsonb("nutrition"),
+  complexity: integer("complexity").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const userRecipes = pgTable("user_recipes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  recipeId: integer("recipe_id").notNull().references(() => recipes.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const mealPlans = pgTable("meal_plans", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id").references(() => users.id),
+  userId: integer("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
-  recipes: jsonb("recipes").$type<{
-    recipeId: number;
-    day: string;
-    meal: "breakfast" | "lunch" | "dinner";
-  }[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const mealPlanRecipes = pgTable("meal_plan_recipes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  mealPlanId: integer("meal_plan_id").notNull().references(() => mealPlans.id),
+  recipeId: integer("recipe_id").notNull().references(() => recipes.id),
+  day: timestamp("day").notNull(),
+  meal: text("meal").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const groceryLists = pgTable("grocery_lists", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id").references(() => users.id),
+  userId: integer("user_id").notNull().references(() => users.id),
   mealPlanId: integer("meal_plan_id").references(() => mealPlans.id),
-  items: jsonb("items").$type<{
-    name: string;
-    amount: number;
-    unit: string;
-    checked: boolean;
-  }[]>(),
-  created: timestamp("created").defaultNow(),
+  items: jsonb("items").notNull(),
+  created: timestamp("created").notNull(),
 });
 
-// Zod Schemas for type inference
+// Schemas for validation
+export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertRecipeSchema = createInsertSchema(recipes);
 export const selectRecipeSchema = createSelectSchema(recipes);
+export const selectUserRecipeSchema = createSelectSchema(userRecipes);
+export const insertUserRecipeSchema = createInsertSchema(userRecipes);
 export const insertMealPlanSchema = createInsertSchema(mealPlans);
 export const selectMealPlanSchema = createSelectSchema(mealPlans);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
@@ -102,5 +74,6 @@ export const selectGroceryListSchema = createSelectSchema(groceryLists);
 // Types
 export type User = z.infer<typeof selectUserSchema>;
 export type Recipe = z.infer<typeof selectRecipeSchema>;
+export type UserRecipe = z.infer<typeof selectUserRecipeSchema>;
 export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
