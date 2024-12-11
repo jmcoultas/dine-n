@@ -232,9 +232,19 @@ export function registerRoutes(app: express.Express) {
       const suggestedRecipes = [];
       const usedRecipeNames = new Set<string>();
 
+      console.log('Starting meal plan generation with preferences:', JSON.stringify({
+        dietary: preferences.dietary,
+        allergies: preferences.allergies,
+        cuisine: preferences.cuisine,
+        meatTypes: preferences.meatTypes,
+        days,
+        mealsPerDay
+      }, null, 2));
+
       // Generate recipes for each day and meal
       for (let day = 0; day < days; day++) {
         for (let meal = 0; meal < mealsPerDay; meal++) {
+          console.log(`Generating recipe for day ${day + 1}, meal ${mealTypes[meal]}`);
           let attempts = 0;
           const maxAttempts = 5;
           let recipeGenerated = false;
@@ -242,42 +252,44 @@ export function registerRoutes(app: express.Express) {
 
           while (attempts < maxAttempts && !recipeGenerated) {
             try {
+              console.log(`Attempt ${attempts + 1} for ${mealTypes[meal]}`);
+              
               const recipeData = await generateRecipeRecommendation({
-                dietary: Array.isArray(preferences?.dietary) ? preferences.dietary : [],
-                allergies: Array.isArray(preferences?.allergies) ? preferences.allergies : [],
-                cuisine: Array.isArray(preferences?.cuisine) ? preferences.cuisine : [],
-                meatTypes: Array.isArray(preferences?.meatTypes) ? preferences.meatTypes : [],
+                dietary: preferences?.dietary?.filter(Boolean) || [],
+                allergies: preferences?.allergies?.filter(Boolean) || [],
+                cuisine: preferences?.cuisine?.filter(Boolean) || [],
+                meatTypes: preferences?.meatTypes?.filter(Boolean) || [],
                 mealType: mealTypes[meal],
                 excludeNames: usedNames,
               });
 
-              if (recipeData.name && !usedRecipeNames.has(recipeData.name)) {
+              if (!recipeData || !recipeData.name) {
+                console.error('Invalid recipe data received:', recipeData);
+                throw new Error('Invalid recipe data received from API');
+              }
+
+              if (!usedRecipeNames.has(recipeData.name)) {
                 const recipeToInsert = {
                   name: recipeData.name,
-                  description: recipeData.description || undefined,
-                  image_url: recipeData.imageUrl || undefined,
-                  prep_time: recipeData.prepTime || undefined,
-                  cook_time: recipeData.cookTime || undefined,
-                  servings: recipeData.servings || undefined,
-                  ingredients: Array.isArray(recipeData.ingredients) 
-                    ? recipeData.ingredients
-                    : [],
-                  instructions: Array.isArray(recipeData.instructions) 
-                    ? recipeData.instructions
-                    : [],
-                  tags: Array.isArray(recipeData.tags) 
-                    ? recipeData.tags
-                    : [],
+                  description: recipeData.description || 'No description available',
+                  image_url: recipeData.imageUrl,
+                  prep_time: recipeData.prepTime || 0,
+                  cook_time: recipeData.cookTime || 0,
+                  servings: recipeData.servings || 2,
+                  ingredients: recipeData.ingredients || [],
+                  instructions: recipeData.instructions || [],
+                  tags: recipeData.tags || [],
                   nutrition: recipeData.nutrition || {
                     calories: 0,
                     protein: 0,
                     carbs: 0,
                     fat: 0
                   },
-                  complexity: typeof recipeData.complexity === 'number' && [1, 2, 3].includes(recipeData.complexity)
-                    ? recipeData.complexity
-                    : 1
+                  complexity: recipeData.complexity || 1,
+                  created_at: new Date()
                 };
+
+                console.log('Inserting recipe:', JSON.stringify(recipeToInsert, null, 2));
 
                 const [newRecipe] = await db
                   .insert(recipes)

@@ -14,199 +14,11 @@ interface RecipeGenerationParams {
   excludeNames?: string[];
 }
 
-interface RecipeIngredient {
-  name: string;
-  amount: number;
-  unit: string;
-}
-
-interface RecipeNutrition {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-interface FallbackRecipe {
-  name: string;
-  description: string;
-  imageUrl?: string;
-  prepTime: number;
-  cookTime: number;
-  servings: number;
-  ingredients: RecipeIngredient[];
-  instructions: string[];
-  tags: string[];
-  nutrition: RecipeNutrition;
-  complexity: number;
-}
-
-// Default fallback recipes for different meal types
-export const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
-  breakfast: {
-    name: "Classic Oatmeal with Fruits",
-    description: "A healthy and filling breakfast of oatmeal topped with fresh fruits and nuts",
-    prepTime: 5,
-    cookTime: 10,
-    servings: 2,
-    complexity: 1,
-    ingredients: [
-      { name: "rolled oats", amount: 1, unit: "cup" },
-      { name: "milk", amount: 2, unit: "cups" },
-      { name: "banana", amount: 1, unit: "piece" },
-      { name: "honey", amount: 2, unit: "tablespoons" },
-      { name: "mixed berries", amount: 1, unit: "cup" }
-    ] as Array<{ name: string; amount: number; unit: string }>,
-    instructions: [
-      "Combine oats and milk in a pot",
-      "Cook over medium heat for 5-7 minutes, stirring occasionally",
-      "Top with sliced banana, berries, and honey"
-    ] as string[],
-    tags: ["breakfast", "healthy", "vegetarian"] as string[],
-    nutrition: { 
-      calories: 350, 
-      protein: 12, 
-      carbs: 68, 
-      fat: 6 
-    } as { calories: number; protein: number; carbs: number; fat: number }
-  },
-  lunch: {
-    name: "Mediterranean Quinoa Bowl",
-    description: "A nutritious bowl of quinoa with vegetables and chickpeas",
-    prepTime: 15,
-    cookTime: 20,
-    servings: 2,
-    complexity: 2,
-    ingredients: [
-      { name: "quinoa", amount: 1, unit: "cup" },
-      { name: "chickpeas", amount: 1, unit: "can" },
-      { name: "cucumber", amount: 1, unit: "piece" },
-      { name: "cherry tomatoes", amount: 1, unit: "cup" },
-      { name: "olive oil", amount: 2, unit: "tablespoons" }
-    ] as Array<{ name: string; amount: number; unit: string }>,
-    instructions: [
-      "Cook quinoa according to package instructions",
-      "Dice cucumber and halve tomatoes",
-      "Combine all ingredients in a bowl",
-      "Drizzle with olive oil and season to taste"
-    ] as string[],
-    tags: ["lunch", "vegetarian", "healthy"] as string[],
-    nutrition: { 
-      calories: 420, 
-      protein: 15, 
-      carbs: 62, 
-      fat: 14 
-    } as { calories: number; protein: number; carbs: number; fat: number }
-  },
-  dinner: {
-    name: "Baked Salmon with Roasted Vegetables",
-    description: "Simple and healthy baked salmon with seasonal vegetables",
-    prepTime: 15,
-    cookTime: 25,
-    servings: 2,
-    complexity: 2,
-    ingredients: [
-      { name: "salmon fillet", amount: 2, unit: "pieces" },
-      { name: "broccoli", amount: 2, unit: "cups" },
-      { name: "carrots", amount: 2, unit: "pieces" },
-      { name: "olive oil", amount: 2, unit: "tablespoons" },
-      { name: "lemon", amount: 1, unit: "piece" }
-    ] as Array<{ name: string; amount: number; unit: string }>,
-    instructions: [
-      "Preheat oven to 400°F (200°C)",
-      "Place salmon and vegetables on a baking sheet",
-      "Drizzle with olive oil and season",
-      "Bake for 20-25 minutes"
-    ] as string[],
-    tags: ["dinner", "healthy", "seafood"] as string[],
-    nutrition: { 
-      calories: 480, 
-      protein: 36, 
-      carbs: 22, 
-      fat: 28 
-    } as { calories: number; protein: number; carbs: number; fat: number }
-  }
-};
-
-// Helper function to check if recipe meets dietary restrictions
-function meetsRestrictions(recipe: FallbackRecipe | Partial<Recipe>, params: RecipeGenerationParams): boolean {
-  const allergies = params.allergies.map(a => a.toLowerCase());
-  const dietary = params.dietary.map(d => d.toLowerCase());
-  
-  // Check if recipe has ingredients and they're in the correct format
-  const recipeIngredients = Array.isArray(recipe.ingredients) 
-    ? recipe.ingredients
-    : [];
-  
-  // Enhanced allergy checking with common variations and related ingredients
-  const allergyMap: Record<string, string[]> = {
-    'eggs': ['egg', 'eggs', 'mayonnaise', 'mayo', 'meringue', 'custard', 'hollandaise'],
-    'dairy': ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose'],
-    'tree nuts': ['almond', 'cashew', 'pecan', 'walnut', 'pistachio', 'macadamia', 'hazelnut'],
-    'peanuts': ['peanut', 'groundnut', 'arachis'],
-    'shellfish': ['shrimp', 'crab', 'lobster', 'prawn', 'crayfish', 'langoustine'],
-    'wheat': ['wheat', 'flour', 'bread', 'pasta', 'semolina', 'couscous', 'bulgur'],
-    'soy': ['soy', 'tofu', 'edamame', 'tempeh', 'miso', 'tamari']
-  };
-
-  const hasAllergens = recipeIngredients.some(ing => {
-    if (typeof ing === 'object' && ing !== null && 'name' in ing) {
-      const ingredientName = String(ing.name).toLowerCase();
-      return allergies.some(allergy => {
-        const allergyKey = allergy.toLowerCase();
-        const relatedIngredients = allergyMap[allergyKey] || [allergyKey];
-        return relatedIngredients.some(allergen => 
-          ingredientName.includes(allergen.toLowerCase())
-        );
-      });
-    }
-    return false;
-  });
-  
-  if (hasAllergens) return false;
-  
-  // Ensure tags is an array before processing
-  const recipeTags = Array.isArray(recipe.tags) 
-    ? recipe.tags.map(tag => String(tag).toLowerCase())
-    : [];
-  
-  // Check dietary restrictions
-  if (dietary.length > 0 && !dietary.some(diet => recipeTags.includes(diet.toLowerCase()))) {
-    return false;
-  }
-  
-  // Check cuisine preferences
-  const cuisines = params.cuisine.map(c => c.toLowerCase());
-  if (cuisines.length > 0 && !cuisines.some(cuisine => recipeTags.includes(cuisine.toLowerCase()))) {
-    return false;
-  }
-  
-  // Check meat preferences
-  const meatTypes = params.meatTypes.map(m => m.toLowerCase());
-  if (meatTypes.length > 0) {
-    if (meatTypes.includes('none') && recipeIngredients.some(ing => 
-      typeof ing === 'object' && ing !== null && 'name' in ing && 
-      ['chicken', 'beef', 'pork', 'fish', 'lamb', 'turkey'].some(meat => 
-        String(ing.name).toLowerCase().includes(meat)
-      )
-    )) {
-      return false;
-    }
-    
-    if (!meatTypes.includes('none') && !meatTypes.some(meat => 
-      recipeIngredients.some(ing => 
-        typeof ing === 'object' && ing !== null && 'name' in ing && 
-        String(ing.name).toLowerCase().includes(meat)
-      )
-    )) {
-      return false;
-    }
-  }
-  
-  return true;
-}
-
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI API key is not configured");
+  }
+
   try {
     console.log('Generating recipe with params:', JSON.stringify(params, null, 2));
     
@@ -248,7 +60,7 @@ Please assign complexity based on:
       messages: [
         {
           role: "system",
-          content: "You are a professional chef and nutritionist who creates detailed, healthy recipes. Always respond with valid JSON containing all required fields.",
+          content: "You are a professional chef and nutritionist. Create detailed, healthy recipes following the dietary restrictions and allergies exactly. Always respond with complete, valid JSON containing all required fields.",
         },
         {
           role: "user",
@@ -260,6 +72,10 @@ Please assign complexity based on:
       temperature: 0.7,
       max_tokens: 1000,
     });
+
+    if (!completion.choices?.[0]?.message?.content) {
+      throw new Error("Invalid response format from OpenAI API");
+    }
 
     console.log('OpenAI API response:', completion.choices[0].message);
     
@@ -288,10 +104,6 @@ Please assign complexity based on:
     console.error("OpenAI API Error:", error);
     
     // Handle API errors with specific messages
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OpenAI API key is not configured");
-    }
-
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       throw new Error("Failed to connect to OpenAI API");
     }
