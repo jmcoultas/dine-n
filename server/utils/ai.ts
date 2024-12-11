@@ -56,14 +56,19 @@ export const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
       { name: "banana", amount: 1, unit: "piece" },
       { name: "honey", amount: 2, unit: "tablespoons" },
       { name: "mixed berries", amount: 1, unit: "cup" }
-    ],
+    ] as Array<{ name: string; amount: number; unit: string }>,
     instructions: [
       "Combine oats and milk in a pot",
       "Cook over medium heat for 5-7 minutes, stirring occasionally",
       "Top with sliced banana, berries, and honey"
-    ],
-    tags: ["breakfast", "healthy", "vegetarian"],
-    nutrition: { calories: 350, protein: 12, carbs: 68, fat: 6 }
+    ] as string[],
+    tags: ["breakfast", "healthy", "vegetarian"] as string[],
+    nutrition: { 
+      calories: 350, 
+      protein: 12, 
+      carbs: 68, 
+      fat: 6 
+    } as { calories: number; protein: number; carbs: number; fat: number }
   },
   lunch: {
     name: "Mediterranean Quinoa Bowl",
@@ -78,15 +83,20 @@ export const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
       { name: "cucumber", amount: 1, unit: "piece" },
       { name: "cherry tomatoes", amount: 1, unit: "cup" },
       { name: "olive oil", amount: 2, unit: "tablespoons" }
-    ],
+    ] as Array<{ name: string; amount: number; unit: string }>,
     instructions: [
       "Cook quinoa according to package instructions",
       "Dice cucumber and halve tomatoes",
       "Combine all ingredients in a bowl",
       "Drizzle with olive oil and season to taste"
-    ],
-    tags: ["lunch", "vegetarian", "healthy"],
-    nutrition: { calories: 420, protein: 15, carbs: 62, fat: 14 }
+    ] as string[],
+    tags: ["lunch", "vegetarian", "healthy"] as string[],
+    nutrition: { 
+      calories: 420, 
+      protein: 15, 
+      carbs: 62, 
+      fat: 14 
+    } as { calories: number; protein: number; carbs: number; fat: number }
   },
   dinner: {
     name: "Baked Salmon with Roasted Vegetables",
@@ -101,15 +111,20 @@ export const DEFAULT_RECIPES: Record<string, FallbackRecipe> = {
       { name: "carrots", amount: 2, unit: "pieces" },
       { name: "olive oil", amount: 2, unit: "tablespoons" },
       { name: "lemon", amount: 1, unit: "piece" }
-    ],
+    ] as Array<{ name: string; amount: number; unit: string }>,
     instructions: [
       "Preheat oven to 400°F (200°C)",
       "Place salmon and vegetables on a baking sheet",
       "Drizzle with olive oil and season",
       "Bake for 20-25 minutes"
-    ],
-    tags: ["dinner", "healthy", "seafood"],
-    nutrition: { calories: 480, protein: 36, carbs: 22, fat: 28 }
+    ] as string[],
+    tags: ["dinner", "healthy", "seafood"] as string[],
+    nutrition: { 
+      calories: 480, 
+      protein: 36, 
+      carbs: 22, 
+      fat: 28 
+    } as { calories: number; protein: number; carbs: number; fat: number }
   }
 };
 
