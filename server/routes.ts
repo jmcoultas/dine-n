@@ -260,17 +260,20 @@ export function registerRoutes(app: express.Express) {
                   cook_time: recipeData.cookTime || undefined,
                   servings: recipeData.servings || undefined,
                   ingredients: Array.isArray(recipeData.ingredients) 
-                    ? JSON.stringify(recipeData.ingredients)
-                    : null,
+                    ? recipeData.ingredients
+                    : [],
                   instructions: Array.isArray(recipeData.instructions) 
-                    ? JSON.stringify(recipeData.instructions)
-                    : null,
+                    ? recipeData.instructions
+                    : [],
                   tags: Array.isArray(recipeData.tags) 
-                    ? JSON.stringify(recipeData.tags)
-                    : null,
-                  nutrition: recipeData.nutrition 
-                    ? JSON.stringify(recipeData.nutrition)
-                    : null,
+                    ? recipeData.tags
+                    : [],
+                  nutrition: recipeData.nutrition || {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0
+                  },
                   complexity: typeof recipeData.complexity === 'number' && [1, 2, 3].includes(recipeData.complexity)
                     ? recipeData.complexity
                     : 1
@@ -301,14 +304,25 @@ export function registerRoutes(app: express.Express) {
               const fallbackToInsert = {
                 name: fallbackName,
                 description: fallbackRecipe.description || undefined,
-                imageUrl: fallbackRecipe.imageUrl || undefined,
-                prepTime: fallbackRecipe.prepTime || undefined,
-                cookTime: fallbackRecipe.cookTime || undefined,
+                image_url: fallbackRecipe.imageUrl || undefined,
+                prep_time: fallbackRecipe.prepTime || undefined,
+                cook_time: fallbackRecipe.cookTime || undefined,
                 servings: fallbackRecipe.servings || undefined,
-                ingredients: Array.isArray(fallbackRecipe.ingredients) ? fallbackRecipe.ingredients : undefined,
-                instructions: Array.isArray(fallbackRecipe.instructions) ? fallbackRecipe.instructions : undefined,
-                tags: Array.isArray(fallbackRecipe.tags) ? fallbackRecipe.tags : undefined,
-                nutrition: fallbackRecipe.nutrition || undefined,
+                ingredients: Array.isArray(fallbackRecipe.ingredients) 
+                  ? fallbackRecipe.ingredients 
+                  : [],
+                instructions: Array.isArray(fallbackRecipe.instructions) 
+                  ? fallbackRecipe.instructions 
+                  : [],
+                tags: Array.isArray(fallbackRecipe.tags) 
+                  ? fallbackRecipe.tags 
+                  : [],
+                nutrition: fallbackRecipe.nutrition || {
+                  calories: 0,
+                  protein: 0,
+                  carbs: 0,
+                  fat: 0
+                },
                 complexity: typeof fallbackRecipe.complexity === 'number' && [1, 2, 3].includes(fallbackRecipe.complexity)
                   ? fallbackRecipe.complexity
                   : 1

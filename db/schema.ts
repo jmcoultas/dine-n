@@ -18,10 +18,10 @@ export const recipes = pgTable("recipes", {
   prepTime: integer("prep_time"),
   cookTime: integer("cook_time"),
   servings: integer("servings"),
-  ingredients: jsonb("ingredients"),
-  instructions: jsonb("instructions"),
-  tags: jsonb("tags"),
-  nutrition: jsonb("nutrition"),
+  ingredients: jsonb("ingredients").$type<Array<{ name: string; amount: number; unit: string }>>(),
+  instructions: jsonb("instructions").$type<string[]>(),
+  tags: jsonb("tags").$type<string[]>(),
+  nutrition: jsonb("nutrition").$type<{ calories: number; protein: number; carbs: number; fat: number }>(),
   complexity: integer("complexity").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull()
 });
