@@ -208,18 +208,20 @@ function meetsRestrictions(recipe: FallbackRecipe | Partial<Recipe>, params: Rec
 
 export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
   try {
+    console.log('Generating recipe with params:', JSON.stringify(params, null, 2));
+    
     const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
       ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`
       : "";
       
     const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}.
-${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : ""}
-${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}. Do not include any ingredients that could contain these allergens.` : ""}
-${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : ""}
-${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : ""}
+${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : "No specific dietary restrictions"}
+${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}. Do not include any ingredients that could contain these allergens.` : "No allergies to consider"}
+${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : "No specific cuisine preference"}
+${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : "No specific meat preference"}
 ${excludeNamesStr}
 
-Response should be in JSON format with the following structure:
+You must respond with a valid recipe in this exact JSON format:
 {
   "name": "Recipe Name",
   "description": "Brief description",
@@ -233,33 +235,55 @@ Response should be in JSON format with the following structure:
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
 }
 
+The response must be valid JSON and include all fields. Generate appropriate values for each field.
+
 Please assign complexity based on:
 - Easy (1): < 5 ingredients, < 4 steps, < 30 min total time
 - Medium (2): 5-8 ingredients, 4-6 steps, 30-60 min total time
 - Hard (3): > 8 ingredients, > 6 steps, > 60 min total time`;
 
+    console.log('Generated prompt:', prompt);
+
     const completion = await openai.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: "You are a professional chef and nutritionist who creates detailed, healthy recipes.",
+          content: "You are a professional chef and nutritionist who creates detailed, healthy recipes. Always respond with valid JSON containing all required fields.",
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      model: "gpt-3.5-turbo",
+      model: "gpt-3.5-turbo-1106",
       response_format: { type: "json_object" },
       temperature: 0.7,
       max_tokens: 1000,
     });
 
-    const recipeData = JSON.parse(completion.choices[0].message.content || '{}') as Partial<Recipe>;
+    console.log('OpenAI API response:', completion.choices[0].message);
     
-    recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
-    
-    return recipeData;
+    const content = completion.choices[0].message.content;
+    if (!content) {
+      throw new Error("Empty response from OpenAI API");
+    }
+
+    try {
+      const recipeData = JSON.parse(content) as Partial<Recipe>;
+      console.log('Parsed recipe data:', JSON.stringify(recipeData, null, 2));
+      
+      // Validate required fields
+      if (!recipeData.name || !recipeData.description || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.instructions)) {
+        throw new Error("Missing required fields in recipe data");
+      }
+      
+      recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+      
+      return recipeData;
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error("Failed to parse recipe data from OpenAI response");
+    }
   } catch (error: any) {
     console.error("OpenAI API Error:", error);
     
