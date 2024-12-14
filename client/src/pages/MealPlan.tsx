@@ -39,15 +39,15 @@ export default function MealPlan() {
   interface Recipe {
     id: number;
     name: string;
-    description?: string;
-    imageUrl?: string;
-    prepTime?: number;
-    cookTime?: number;
-    servings?: number;
-    ingredients?: Array<RecipeIngredient>;
-    instructions?: Array<string>;
-    tags?: Array<string>;
-    nutrition?: RecipeNutrition;
+    description: string | null;
+    imageUrl: string | null;
+    prepTime: number | null;
+    cookTime: number | null;
+    servings: number | null;
+    ingredients: Array<RecipeIngredient> | null;
+    instructions: Array<string> | null;
+    tags: Array<string> | null;
+    nutrition: RecipeNutrition | null;
     complexity: 1 | 2 | 3;
   }
 
@@ -114,25 +114,28 @@ export default function MealPlan() {
     },
     onSuccess: (data) => {
       if (Array.isArray(data.recipes)) {
-        setGeneratedRecipes(data.recipes.map(recipe => {
-          const complexity = recipe.complexity;
-          if (complexity !== 1 && complexity !== 2 && complexity !== 3) {
-            return null;
-          }
-          return {
-            ...recipe,
-            complexity: complexity as 1 | 2 | 3,
-            description: recipe.description ?? undefined,
-            imageUrl: recipe.imageUrl ?? undefined,
-            prepTime: recipe.prepTime ?? undefined,
-            cookTime: recipe.cookTime ?? undefined,
-            servings: recipe.servings ?? undefined,
-            instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
-            tags: Array.isArray(recipe.tags) ? recipe.tags : [],
-            ingredients: recipe.ingredients ? JSON.parse(JSON.stringify(recipe.ingredients)) : undefined,
-            nutrition: recipe.nutrition ? JSON.parse(JSON.stringify(recipe.nutrition)) : undefined,
-          };
-        }));
+          const validRecipes = data.recipes
+            .filter((recipe): recipe is Recipe => {
+              if (!recipe || typeof recipe !== 'object') return false;
+              
+              const hasValidBasicProps = 
+                typeof recipe.id === 'number' &&
+                typeof recipe.name === 'string' &&
+                (recipe.complexity === 1 || recipe.complexity === 2 || recipe.complexity === 3);
+              
+              if (!hasValidBasicProps) return false;
+
+              // Validate nullable fields
+              if (recipe.description !== null && typeof recipe.description !== 'string') return false;
+              if (recipe.imageUrl !== null && typeof recipe.imageUrl !== 'string') return false;
+              if (recipe.prepTime !== null && typeof recipe.prepTime !== 'number') return false;
+              if (recipe.cookTime !== null && typeof recipe.cookTime !== 'number') return false;
+              if (recipe.servings !== null && typeof recipe.servings !== 'number') return false;
+
+              return true;
+            });
+          
+          setGeneratedRecipes(validRecipes);
         if (data.status === 'partial') {
           toast({
             title: "Using fallback recipes",
@@ -177,25 +180,32 @@ export default function MealPlan() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!generatedRecipes.length) {
+        throw new Error("No recipes generated to save");
+      }
+
       const mealPlan = await createMealPlan({
         name: "Weekly Plan",
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
       });
 
-      await createGroceryList({
-        userId: 1,
-        mealPlanId: mealPlan.id,
-        items: generatedRecipes
-          .filter((recipe): recipe is Recipe => recipe !== null)
-          .flatMap((recipe) =>
-            recipe.ingredients?.map((ingredient) => ({
-              ...ingredient,
-              checked: false,
-            })) ?? []
-          ),
-        created: new Date(),
-      });
+      const items = generatedRecipes.flatMap(recipe => 
+        recipe.ingredients?.map(ingredient => ({
+          ...ingredient,
+          checked: false,
+        })) ?? []
+      );
+
+      if (items.length > 0) {
+        await createGroceryList({
+          userId: mealPlan.userId, // Use the userId from the created meal plan
+          mealPlanId: mealPlan.id,
+          items,
+          created: new Date(),
+        });
+      }
 
       return mealPlan;
     },

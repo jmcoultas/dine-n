@@ -13,24 +13,24 @@ interface MealPlanCardProps {
   recipe: {
     id: number;
     name: string;
-    description?: string;
-    imageUrl?: string;
-    prepTime?: number;
-    cookTime?: number;
-    servings?: number;
-    ingredients?: Array<{
+    description: string | null;
+    imageUrl: string | null;
+    prepTime: number | null;
+    cookTime: number | null;
+    servings: number | null;
+    ingredients: Array<{
       name: string;
       amount: number;
       unit: string;
-    }>;
-    instructions?: string[];
-    tags?: string[];
-    nutrition?: {
+    }> | null;
+    instructions: string[] | null;
+    tags: string[] | null;
+    nutrition: {
       calories: number;
       protein: number;
       carbs: number;
       fat: number;
-    };
+    } | null;
     complexity: ComplexityLevel;
   };
   day: Date;
