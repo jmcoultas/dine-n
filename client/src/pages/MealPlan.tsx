@@ -127,8 +127,8 @@ export default function MealPlan() {
             prepTime: recipe.prepTime ?? undefined,
             cookTime: recipe.cookTime ?? undefined,
             servings: recipe.servings ?? undefined,
-            instructions: recipe.instructions ? JSON.parse(recipe.instructions) : undefined,
-            tags: recipe.tags ? JSON.parse(recipe.tags) : undefined,
+            instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+            tags: Array.isArray(recipe.tags) ? recipe.tags : [],
             ingredients: recipe.ingredients ? JSON.parse(JSON.stringify(recipe.ingredients)) : undefined,
             nutrition: recipe.nutrition ? JSON.parse(JSON.stringify(recipe.nutrition)) : undefined,
           };
@@ -178,17 +178,9 @@ export default function MealPlan() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const mealPlan = await createMealPlan({
-        userId: 1, // Mock user ID
         name: "Weekly Plan",
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        recipes: generatedRecipes
-          .filter((recipe): recipe is Recipe => recipe !== null)
-          .map((recipe, index) => ({
-            recipeId: recipe.id,
-            day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-            meal: (index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner") as MealType,
-          })),
       });
 
       await createGroceryList({
