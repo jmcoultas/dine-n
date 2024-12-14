@@ -236,7 +236,6 @@ export function registerRoutes(app: express.Express) {
         user: req.user?.id
       }, null, 2));
 
-      const mealsPerDay = 3;
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
       const suggestedRecipes = [];
       const usedRecipeNames = new Set<string>();
@@ -246,78 +245,64 @@ export function registerRoutes(app: express.Express) {
         allergies: preferences.allergies,
         cuisine: preferences.cuisine,
         meatTypes: preferences.meatTypes,
-        days,
-        mealsPerDay
+        days
       }, null, 2));
 
-      // Generate recipes for each day and meal
+      // Generate one recipe per meal type per day
       for (let day = 0; day < days; day++) {
-        for (let meal = 0; meal < mealsPerDay; meal++) {
-          console.log(`Generating recipe for day ${day + 1}, meal ${mealTypes[meal]}`);
-          let attempts = 0;
-          const maxAttempts = 5;
-          let recipeGenerated = false;
+        for (const mealType of mealTypes) {
+          console.log(`Generating recipe for day ${day + 1}, meal ${mealType}`);
           const usedNames = Array.from(usedRecipeNames);
-
-          while (attempts < maxAttempts && !recipeGenerated) {
-            try {
-              console.log(`Attempt ${attempts + 1} for ${mealTypes[meal]}`);
+          try {
+            console.log(`Generating recipe for ${mealType}`);
               
-              const recipeData = await generateRecipeRecommendation({
-                dietary: preferences?.dietary?.filter(Boolean) || [],
-                allergies: preferences?.allergies?.filter(Boolean) || [],
-                cuisine: preferences?.cuisine?.filter(Boolean) || [],
-                meatTypes: preferences?.meatTypes?.filter(Boolean) || [],
-                mealType: mealTypes[meal],
-                excludeNames: usedNames,
-              });
+            const recipeData = await generateRecipeRecommendation({
+              dietary: preferences?.dietary?.filter(Boolean) || [],
+              allergies: preferences?.allergies?.filter(Boolean) || [],
+              cuisine: preferences?.cuisine?.filter(Boolean) || [],
+              meatTypes: preferences?.meatTypes?.filter(Boolean) || [],
+              mealType: mealType,
+              excludeNames: usedNames,
+            });
 
-              if (!recipeData || !recipeData.name) {
-                console.error('Invalid recipe data received:', recipeData);
-                throw new Error('Invalid recipe data received from API');
-              }
-
-              if (!usedRecipeNames.has(recipeData.name)) {
-                const recipeToInsert = {
-                  name: recipeData.name,
-                  description: recipeData.description || 'No description available',
-                  image_url: recipeData.imageUrl,
-                  prep_time: recipeData.prepTime || 0,
-                  cook_time: recipeData.cookTime || 0,
-                  servings: recipeData.servings || 2,
-                  ingredients: recipeData.ingredients || [],
-                  instructions: recipeData.instructions || [],
-                  tags: recipeData.tags || [],
-                  nutrition: recipeData.nutrition || {
-                    calories: 0,
-                    protein: 0,
-                    carbs: 0,
-                    fat: 0
-                  },
-                  complexity: recipeData.complexity || 1,
-                  created_at: new Date()
-                };
-
-                console.log('Inserting recipe:', JSON.stringify(recipeToInsert, null, 2));
-
-                const [newRecipe] = await db
-                  .insert(recipes)
-                  .values(recipeToInsert)
-                  .returning();
-
-                usedRecipeNames.add(recipeData.name);
-                suggestedRecipes.push(newRecipe);
-                recipeGenerated = true;
-              }
-            } catch (error) {
-              attempts++;
-              continue;
+            if (!recipeData || !recipeData.name) {
+              console.error('Invalid recipe data received:', recipeData);
+              throw new Error('Invalid recipe data received from API');
             }
-          }
 
-          // If recipe generation failed after max attempts, skip this meal
-          if (!recipeGenerated) {
-            console.error(`Failed to generate recipe after ${maxAttempts} attempts for day ${day + 1}, meal ${mealTypes[meal]}`);
+            if (!usedRecipeNames.has(recipeData.name)) {
+              const recipeToInsert = {
+                name: recipeData.name,
+                description: recipeData.description || 'No description available',
+                image_url: recipeData.imageUrl,
+                prep_time: recipeData.prepTime || 0,
+                cook_time: recipeData.cookTime || 0,
+                servings: recipeData.servings || 2,
+                ingredients: recipeData.ingredients || [],
+                instructions: recipeData.instructions || [],
+                tags: recipeData.tags || [],
+                nutrition: recipeData.nutrition || {
+                  calories: 0,
+                  protein: 0,
+                  carbs: 0,
+                  fat: 0
+                },
+                complexity: recipeData.complexity || 1,
+                created_at: new Date()
+              };
+
+              console.log('Inserting recipe:', JSON.stringify(recipeToInsert, null, 2));
+
+              const [newRecipe] = await db
+                .insert(recipes)
+                .values(recipeToInsert)
+                .returning();
+
+              usedRecipeNames.add(recipeData.name);
+              suggestedRecipes.push(newRecipe);
+            }
+          } catch (error) {
+            console.error(`Failed to generate recipe for day ${day + 1}, meal ${mealType}:`, error);
             continue;
           }
         }
@@ -325,7 +310,7 @@ export function registerRoutes(app: express.Express) {
 
       res.json({
         recipes: suggestedRecipes,
-        status: suggestedRecipes.length === days * mealsPerDay ? 'success' : 'partial'
+        status: suggestedRecipes.length === days * mealTypes.length ? 'success' : 'partial'
       });
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
