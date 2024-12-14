@@ -278,10 +278,10 @@ export function registerRoutes(app: express.Express) {
                 prep_time: recipeData.prepTime || 0,
                 cook_time: recipeData.cookTime || 0,
                 servings: recipeData.servings || 2,
-                ingredients: recipeData.ingredients || [],
-                instructions: recipeData.instructions || [],
-                tags: recipeData.tags || [],
-                nutrition: recipeData.nutrition || {
+                ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
+                instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
+                tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
+                nutrition: recipeData.nutrition && typeof recipeData.nutrition === 'object' ? recipeData.nutrition : {
                   calories: 0,
                   protein: 0,
                   carbs: 0,
@@ -291,11 +291,20 @@ export function registerRoutes(app: express.Express) {
                 created_at: new Date()
               };
 
+              // Validate JSON fields before insertion
+              const validatedRecipe = {
+                ...recipeToInsert,
+                ingredients: JSON.stringify(recipeToInsert.ingredients),
+                instructions: JSON.stringify(recipeToInsert.instructions),
+                tags: JSON.stringify(recipeToInsert.tags),
+                nutrition: JSON.stringify(recipeToInsert.nutrition)
+              };
+
               console.log('Inserting recipe:', JSON.stringify(recipeToInsert, null, 2));
 
               const [newRecipe] = await db
                 .insert(recipes)
-                .values(recipeToInsert)
+                .values(validatedRecipe)
                 .returning();
 
               usedRecipeNames.add(recipeData.name);
