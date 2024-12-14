@@ -220,12 +220,21 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { preferences, days } = req.body;
+      
+      // Validate input parameters
       if (!preferences || !days) {
         return res.status(400).json({
           error: "Bad Request",
           message: "Missing required parameters: preferences and days"
         });
       }
+
+      // Log received parameters
+      console.log('Received parameters:', JSON.stringify({
+        preferences,
+        days,
+        user: req.user?.id
+      }, null, 2));
 
       const mealsPerDay = 3;
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];

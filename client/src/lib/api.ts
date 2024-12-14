@@ -31,6 +31,8 @@ interface GenerateMealPlanResponse {
 }
 
 export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<GenerateMealPlanResponse> {
+  console.log('API call parameters:', { preferences, days });
+  
   const response = await fetch(`${API_BASE}/generate-meal-plan`, {
     method: "POST",
     headers: {

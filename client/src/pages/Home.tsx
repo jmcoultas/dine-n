@@ -63,8 +63,15 @@ export default function Home() {
 
   const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
-      console.log('Generating meal plan with preferences:', prefs);
-      const response = await generateMealPlan(prefs, 2);
+      // Log the exact data being sent
+      const cleanPreferences = {
+        dietary: prefs.dietary.filter(Boolean),
+        allergies: prefs.allergies.filter(Boolean),
+        cuisine: prefs.cuisine.filter(Boolean),
+        meatTypes: prefs.meatTypes.filter(Boolean)
+      };
+      console.log('Generating meal plan with preferences:', cleanPreferences);
+      const response = await generateMealPlan(cleanPreferences, 2);
       console.log('Received response:', response);
       
       const recipes = response.recipes.map(recipe => {
