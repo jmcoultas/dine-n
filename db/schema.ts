@@ -19,7 +19,7 @@ export const recipes = pgTable("recipes", {
   cookTime: integer("cook_time"),
   servings: integer("servings"),
   ingredients: jsonb("ingredients").$type<Array<{ name: string; amount: number; unit: string }>>(),
-  instructions: jsonb("instructions").$type<{ steps: string[] }>(),
+  instructions: jsonb("instructions").$type<string[]>(),
   tags: jsonb("tags").$type<string[]>(),
   nutrition: jsonb("nutrition").$type<{ calories: number; protein: number; carbs: number; fat: number }>(),
   complexity: integer("complexity").notNull(),

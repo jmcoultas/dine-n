@@ -59,9 +59,7 @@ You must respond with a valid recipe in this exact JSON format:
   "cookTime": minutes (number),
   "servings": number,
   "ingredients": [{ "name": "ingredient", "amount": number, "unit": "unit" }],
-  "instructions": {
-    "steps": ["step 1", "step 2"]
-  },
+  "instructions": ["step 1", "step 2"],
   "tags": ["tag1", "tag2"],
   "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number },
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
