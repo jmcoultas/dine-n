@@ -1,8 +1,12 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { ChefHat } from "lucide-react";
+import { ChefHat, Heart } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/hooks/use-user";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 type ComplexityLevel = 1 | 2 | 3;
 
@@ -52,6 +56,48 @@ const mealColors: Record<MealPlanCardProps["meal"], string> = {
 
 export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const { toast } = useToast();
+  const { user } = useUser();
+  const queryClient = useQueryClient();
+
+  const toggleFavorite = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        throw new Error("Must be logged in to favorite recipes");
+      }
+      
+      const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        // For generated recipes (negative IDs), we need to send the full recipe data
+        body: JSON.stringify(recipe.id < 0 ? { recipe } : {})
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to favorite recipe");
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
+      toast({
+        title: "Recipe added to favorites",
+        description: "The recipe has been added to your collection",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Ensure type safety for complexity
   const complexity: ComplexityLevel = isValidComplexity(recipe.complexity) 
@@ -101,17 +147,33 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
             >
               {meal}
             </span>
-            {onRemove && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove();
-                }}
-                className="bg-background/80 hover:bg-background text-foreground rounded-full w-6 h-6 flex items-center justify-center transition-colors"
-              >
-                ×
-              </button>
-            )}
+            <div className="flex gap-2">
+              {user && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="bg-white/80 hover:bg-white/90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite.mutate();
+                  }}
+                >
+                  <Heart className="h-5 w-5 text-gray-500 hover:text-red-500 transition-colors" />
+                  <span className="sr-only">Add to favorites</span>
+                </Button>
+              )}
+              {onRemove && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove();
+                  }}
+                  className="bg-background/80 hover:bg-background text-foreground rounded-full w-6 h-6 flex items-center justify-center transition-colors"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <CardHeader className="p-4">
