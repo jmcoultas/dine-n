@@ -48,8 +48,8 @@ export function registerRoutes(app: express.Express) {
           complexity: recipes.complexity,
         })
         .from(userRecipes)
-        .innerJoin(recipes, eq(recipes.id, userRecipes.recipeId))
-        .where(eq(userRecipes.userId, req.user.id));
+        .innerJoin(recipes, eq(recipes.id, userRecipes.recipe_id))
+        .where(eq(userRecipes.user_id, req.user.id));
 
       res.setHeader('Content-Type', 'application/json');
       return res.json(userFavorites);
@@ -79,8 +79,8 @@ export function registerRoutes(app: express.Express) {
       }
 
       await db.insert(userRecipes).values({
-        userId: req.user!.id,
-        recipeId: recipeId,
+        user_id: req.user!.id,
+        recipe_id: recipeId,
       });
 
       res.json({ message: "Recipe added to favorites" });
@@ -101,8 +101,8 @@ export function registerRoutes(app: express.Express) {
         .delete(userRecipes)
         .where(
           and(
-            eq(userRecipes.userId, req.user!.id),
-            eq(userRecipes.recipeId, recipeId)
+            eq(userRecipes.user_id, req.user!.id),
+            eq(userRecipes.recipe_id, recipeId)
           )
         );
 
@@ -248,22 +248,33 @@ export function registerRoutes(app: express.Express) {
         days
       }, null, 2));
 
-      // Generate one recipe per meal type per day
+      // Generate exactly one recipe per meal type per day
       for (let day = 0; day < days; day++) {
         for (const mealType of mealTypes) {
           console.log(`Generating recipe for day ${day + 1}, meal ${mealType}`);
-          const usedNames = Array.from(usedRecipeNames);
           try {
-            console.log(`Generating recipe for ${mealType}`);
+            const existingNames = Array.from(usedRecipeNames);
+            console.log(`Generating recipe for ${mealType} with preferences:`, {
+              dietary: preferences.dietary,
+              allergies: preferences.allergies,
+              cuisine: preferences.cuisine,
+              meatTypes: preferences.meatTypes,
+              excludeNames: existingNames
+            });
               
             const recipeData = await generateRecipeRecommendation({
-              dietary: preferences?.dietary?.filter(Boolean) || [],
-              allergies: preferences?.allergies?.filter(Boolean) || [],
-              cuisine: preferences?.cuisine?.filter(Boolean) || [],
-              meatTypes: preferences?.meatTypes?.filter(Boolean) || [],
+              dietary: preferences.dietary.filter(Boolean),
+              allergies: preferences.allergies.filter(Boolean),
+              cuisine: preferences.cuisine.filter(Boolean),
+              meatTypes: preferences.meatTypes.filter(Boolean),
               mealType: mealType,
-              excludeNames: usedNames,
+              excludeNames: existingNames,
             });
+
+            if (!recipeData || typeof recipeData !== 'object') {
+              console.error('Invalid recipe data received:', recipeData);
+              throw new Error('Invalid recipe data received from API');
+            }
 
             if (!recipeData || !recipeData.name) {
               console.error('Invalid recipe data received:', recipeData);
@@ -271,23 +282,57 @@ export function registerRoutes(app: express.Express) {
             }
 
             if (!usedRecipeNames.has(recipeData.name)) {
+              // Validate and clean recipe data before insertion
+              const validatedIngredients = Array.isArray(recipeData.ingredients) 
+                ? recipeData.ingredients
+                    .filter(ing => ing && typeof ing === 'object')
+                    .map(ing => ({
+                      name: String(ing.name || '').trim(),
+                      amount: Number(ing.amount) || 0,
+                      unit: String(ing.unit || '').trim()
+                    }))
+                : [];
+
+              const validatedInstructions = Array.isArray(recipeData.instructions)
+                ? recipeData.instructions
+                    .filter(instruction => instruction && typeof instruction === 'string')
+                    .map(instruction => String(instruction).trim())
+                : [];
+
+              const validatedTags = Array.isArray(recipeData.tags)
+                ? recipeData.tags
+                    .filter(tag => tag && typeof tag === 'string')
+                    .map(tag => String(tag).trim())
+                : [];
+
+              const validatedNutrition = (() => {
+                if (recipeData.nutrition && typeof recipeData.nutrition === 'object') {
+                  const { calories, protein, carbs, fat } = recipeData.nutrition;
+                  if (!isNaN(Number(calories)) && !isNaN(Number(protein)) && 
+                      !isNaN(Number(carbs)) && !isNaN(Number(fat))) {
+                    return {
+                      calories: Math.max(0, Number(calories)),
+                      protein: Math.max(0, Number(protein)),
+                      carbs: Math.max(0, Number(carbs)),
+                      fat: Math.max(0, Number(fat))
+                    };
+                  }
+                }
+                return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+              })();
+
               const recipeToInsert = {
-                name: recipeData.name,
-                description: recipeData.description || 'No description available',
-                image_url: recipeData.imageUrl,
-                prep_time: recipeData.prepTime || 0,
-                cook_time: recipeData.cookTime || 0,
-                servings: recipeData.servings || 2,
-                ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
-                instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
-                tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
-                nutrition: recipeData.nutrition && typeof recipeData.nutrition === 'object' ? recipeData.nutrition : {
-                  calories: 0,
-                  protein: 0,
-                  carbs: 0,
-                  fat: 0
-                },
-                complexity: recipeData.complexity || 1,
+                name: String(recipeData.name || '').trim(),
+                description: String(recipeData.description || 'No description available').trim(),
+                image_url: String(recipeData.imageUrl || '').trim() || null,
+                prep_time: Math.max(0, Number(recipeData.prepTime) || 0),
+                cook_time: Math.max(0, Number(recipeData.cookTime) || 0),
+                servings: Math.max(1, Number(recipeData.servings) || 2),
+                ingredients: validatedIngredients,
+                instructions: validatedInstructions,
+                tags: validatedTags,
+                nutrition: validatedNutrition,
+                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
                 created_at: new Date()
               };
 
@@ -327,12 +372,19 @@ export function registerRoutes(app: express.Express) {
                 nutrition: (() => {
                   try {
                     if (typeof recipeData.nutrition === 'object' && recipeData.nutrition) {
-                      return {
-                        calories: Math.max(0, Number(recipeData.nutrition.calories)) || 0,
-                        protein: Math.max(0, Number(recipeData.nutrition.protein)) || 0,
-                        carbs: Math.max(0, Number(recipeData.nutrition.carbs)) || 0,
-                        fat: Math.max(0, Number(recipeData.nutrition.fat)) || 0
-                      };
+                      const calories = Number((recipeData.nutrition as any)?.calories);
+                      const protein = Number((recipeData.nutrition as any)?.protein);
+                      const carbs = Number((recipeData.nutrition as any)?.carbs);
+                      const fat = Number((recipeData.nutrition as any)?.fat);
+                      
+                      if (!isNaN(calories) && !isNaN(protein) && !isNaN(carbs) && !isNaN(fat)) {
+                        return {
+                          calories: Math.max(0, calories),
+                          protein: Math.max(0, protein),
+                          carbs: Math.max(0, carbs),
+                          fat: Math.max(0, fat)
+                        };
+                      }
                     }
                   } catch (e) {
                     console.error('Error processing nutrition data:', e);
