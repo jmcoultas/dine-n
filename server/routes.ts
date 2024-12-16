@@ -286,24 +286,32 @@ export function registerRoutes(app: express.Express) {
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
                     .filter(ing => ing && typeof ing === 'object')
-                    .map(ing => ({
-                      name: String(ing.name || '').trim(),
-                      amount: Number(ing.amount) || 0,
-                      unit: String(ing.unit || '').trim()
-                    }))
+                    .map(ing => {
+                      if (!ing || typeof ing !== 'object') return null;
+                      return {
+                        name: String(ing.name || '').trim(),
+                        amount: Number(ing.amount) || 0,
+                        unit: String(ing.unit || '').trim()
+                      };
+                    })
+                    .filter(Boolean)
                 : [];
+                
+                console.log('Validated ingredients:', JSON.stringify(validatedIngredients, null, 2));
 
               const validatedInstructions = Array.isArray(recipeData.instructions)
                 ? recipeData.instructions
                     .filter(instruction => instruction && typeof instruction === 'string')
                     .map(instruction => String(instruction).trim())
                 : [];
+                console.log('Validated instructions:', JSON.stringify(validatedInstructions, null, 2));
 
               const validatedTags = Array.isArray(recipeData.tags)
                 ? recipeData.tags
                     .filter(tag => tag && typeof tag === 'string')
                     .map(tag => String(tag).trim())
                 : [];
+                console.log('Validated tags:', JSON.stringify(validatedTags, null, 2));
 
               const validatedNutrition = (() => {
                 if (recipeData.nutrition && typeof recipeData.nutrition === 'object') {
@@ -320,6 +328,7 @@ export function registerRoutes(app: express.Express) {
                 }
                 return { calories: 0, protein: 0, carbs: 0, fat: 0 };
               })();
+              console.log('Validated nutrition:', JSON.stringify(validatedNutrition, null, 2));
 
               const recipeToInsert = {
                 name: String(recipeData.name || '').trim(),
@@ -410,11 +419,20 @@ export function registerRoutes(app: express.Express) {
               // Log the validated data before insertion
               console.log('Validated recipe data:', JSON.stringify(validatedRecipe, null, 2));
 
+              console.log('Inserting recipe:', JSON.stringify(validatedRecipe, null, 2));
+              
               const [newRecipe] = await db
                 .insert(recipes)
-                .values(validatedRecipe)
+                .values({
+                  ...validatedRecipe,
+                  ingredients: JSON.stringify(validatedRecipe.ingredients),
+                  instructions: JSON.stringify(validatedRecipe.instructions),
+                  tags: JSON.stringify(validatedRecipe.tags),
+                  nutrition: JSON.stringify(validatedRecipe.nutrition)
+                })
                 .returning();
-
+              
+              console.log('Successfully inserted recipe:', newRecipe.id);
               usedRecipeNames.add(recipeData.name);
               suggestedRecipes.push(newRecipe);
             }
