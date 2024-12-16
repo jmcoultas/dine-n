@@ -21,14 +21,17 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
 
   try {
     // Log detailed parameters at entry point
-    console.log('Generating recipe with params:', JSON.stringify({
-      dietary: params.dietary,
-      allergies: params.allergies,
-      cuisine: params.cuisine,
-      meatTypes: params.meatTypes,
+    // Ensure all arrays exist and remove any undefined/null values
+    const cleanParams = {
+      dietary: Array.isArray(params.dietary) ? params.dietary.filter(Boolean) : [],
+      allergies: Array.isArray(params.allergies) ? params.allergies.filter(Boolean) : [],
+      cuisine: Array.isArray(params.cuisine) ? params.cuisine.filter(Boolean) : [],
+      meatTypes: Array.isArray(params.meatTypes) ? params.meatTypes.filter(Boolean) : [],
       mealType: params.mealType,
-      excludeNames: params.excludeNames
-    }, null, 2));
+      excludeNames: Array.isArray(params.excludeNames) ? params.excludeNames.filter(Boolean) : []
+    };
+
+    console.log('Generating recipe with cleaned params:', JSON.stringify(cleanParams, null, 2));
     
     const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
       ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`

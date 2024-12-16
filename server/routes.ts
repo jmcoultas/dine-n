@@ -287,11 +287,19 @@ export function registerRoutes(app: express.Express) {
       const suggestedRecipes = [];
       const usedRecipeNames = new Set<string>();
 
-      console.log('Starting meal plan generation with preferences:', JSON.stringify({
-        dietary: preferences.dietary,
-        allergies: preferences.allergies,
-        cuisine: preferences.cuisine,
-        meatTypes: preferences.meatTypes,
+      // Ensure all preference arrays exist and are properly formatted
+      const normalizedPreferences = {
+        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
+        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
+        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : []
+      };
+
+      console.log('Starting meal plan generation with normalized preferences:', JSON.stringify({
+        dietary: normalizedPreferences.dietary,
+        allergies: normalizedPreferences.allergies,
+        cuisine: normalizedPreferences.cuisine,
+        meatTypes: normalizedPreferences.meatTypes,
         days
       }, null, 2));
 

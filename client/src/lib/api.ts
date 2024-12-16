@@ -32,13 +32,16 @@ interface GenerateMealPlanResponse {
 
 export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<GenerateMealPlanResponse> {
   // Log the exact data being sent
+  console.log('Raw preferences received:', preferences);
+  
+  // Only filter out falsy values but keep empty arrays
   const cleanPreferences = {
-    dietary: preferences.dietary.filter(Boolean),
-    allergies: preferences.allergies.filter(Boolean),
-    cuisine: preferences.cuisine.filter(Boolean),
-    meatTypes: preferences.meatTypes.filter(Boolean)
+    dietary: Array.isArray(preferences.dietary) ? preferences.dietary.filter(Boolean) : [],
+    allergies: Array.isArray(preferences.allergies) ? preferences.allergies.filter(Boolean) : [],
+    cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine.filter(Boolean) : [],
+    meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes.filter(Boolean) : []
   };
-  console.log('Generating meal plan with preferences:', cleanPreferences);
+  console.log('Cleaned preferences being sent to API:', cleanPreferences);
   const response = await fetch(`${API_BASE}/generate-meal-plan`, {
     method: "POST",
     headers: {
