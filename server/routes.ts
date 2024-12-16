@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { generateRecipeRecommendation } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes } from "@db/schema";
 import { db } from "../db";
+import { transformInstructionsForDB, transformInstructionsForClient } from "./utils/transformers";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
