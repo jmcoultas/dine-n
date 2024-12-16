@@ -77,23 +77,25 @@ export function registerRoutes(app: express.Express) {
           return res.status(400).json({ error: "Recipe data is required for temporary recipes" });
         }
 
-        // Insert the recipe into the database
+        // Transform and insert the recipe into the database
+        const transformedRecipe = {
+          name: recipeData.name,
+          description: recipeData.description,
+          image_url: recipeData.imageUrl,
+          prep_time: recipeData.prepTime,
+          cook_time: recipeData.cookTime,
+          servings: recipeData.servings,
+          ingredients: recipeData.ingredients,
+          instructions: { steps: recipeData.instructions },
+          tags: recipeData.tags,
+          nutrition: recipeData.nutrition,
+          complexity: recipeData.complexity,
+          created_at: new Date()
+        };
+
         const [savedRecipe] = await db
           .insert(recipes)
-          .values({
-            name: recipeData.name,
-            description: recipeData.description,
-            image_url: recipeData.imageUrl,
-            prep_time: recipeData.prepTime,
-            cook_time: recipeData.cookTime,
-            servings: recipeData.servings,
-            ingredients: JSON.stringify(recipeData.ingredients),
-            instructions: JSON.stringify(recipeData.instructions),
-            tags: JSON.stringify(recipeData.tags),
-            nutrition: JSON.stringify(recipeData.nutrition),
-            complexity: recipeData.complexity,
-            created_at: new Date()
-          })
+          .values(transformedRecipe)
           .returning();
 
         // Add to user's favorites using the new permanent ID
