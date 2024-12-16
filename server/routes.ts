@@ -291,16 +291,72 @@ export function registerRoutes(app: express.Express) {
                 created_at: new Date()
               };
 
-              // Validate JSON fields before insertion
+              // Format and validate recipe data for database insertion
               const validatedRecipe = {
-                ...recipeToInsert,
-                ingredients: JSON.stringify(recipeToInsert.ingredients),
-                instructions: JSON.stringify(recipeToInsert.instructions),
-                tags: JSON.stringify(recipeToInsert.tags),
-                nutrition: JSON.stringify(recipeToInsert.nutrition)
+                name: recipeData.name,
+                description: recipeData.description || 'No description available',
+                image_url: recipeData.imageUrl,
+                prep_time: recipeData.prepTime || 0,
+                cook_time: recipeData.cookTime || 0,
+                servings: recipeData.servings || 2,
+                ingredients: Array.isArray(recipeData.ingredients) 
+                  ? recipeData.ingredients.map(ing => {
+                      try {
+                        const ingredient = ing as { name?: string; amount?: number; unit?: string };
+                        return {
+                          name: String(ingredient?.name || '').trim(),
+                          amount: Number(ingredient?.amount || 0),
+                          unit: String(ingredient?.unit || '').trim()
+                        };
+                      } catch (e) {
+                        console.error('Error processing ingredient:', ing, e);
+                        return null;
+                      }
+                    }).filter(Boolean)
+                  : [],
+                instructions: Array.isArray(recipeData.instructions)
+                  ? recipeData.instructions
+                      .filter(instruction => instruction && typeof instruction === 'string')
+                      .map(instruction => String(instruction).trim())
+                  : [],
+                tags: Array.isArray(recipeData.tags)
+                  ? recipeData.tags
+                      .filter(tag => tag && typeof tag === 'string')
+                      .map(tag => String(tag).trim())
+                  : [],
+                nutrition: (() => {
+                  try {
+                    if (typeof recipeData.nutrition === 'object' && recipeData.nutrition) {
+                      return {
+                        calories: Math.max(0, Number(recipeData.nutrition.calories)) || 0,
+                        protein: Math.max(0, Number(recipeData.nutrition.protein)) || 0,
+                        carbs: Math.max(0, Number(recipeData.nutrition.carbs)) || 0,
+                        fat: Math.max(0, Number(recipeData.nutrition.fat)) || 0
+                      };
+                    }
+                  } catch (e) {
+                    console.error('Error processing nutrition data:', e);
+                  }
+                  return {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0
+                  };
+                })(),
+                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity || 1))),
+                created_at: new Date()
               };
 
-              console.log('Inserting recipe:', JSON.stringify(recipeToInsert, null, 2));
+              // Validate all arrays are properly formatted
+              if (!Array.isArray(validatedRecipe.ingredients) || 
+                  !Array.isArray(validatedRecipe.instructions) || 
+                  !Array.isArray(validatedRecipe.tags)) {
+                throw new Error('Invalid array format in recipe data');
+              }
+
+              // Log the validated data before insertion
+              console.log('Validated recipe data:', JSON.stringify(validatedRecipe, null, 2));
 
               const [newRecipe] = await db
                 .insert(recipes)
