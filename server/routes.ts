@@ -69,6 +69,45 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
+      // If it's a temporary recipe (negative ID), we need to save it first
+      if (recipeId < 0) {
+        const recipeData = req.body.recipe;
+        if (!recipeData) {
+          return res.status(400).json({ error: "Recipe data is required for temporary recipes" });
+        }
+
+        // Insert the recipe into the database
+        const [savedRecipe] = await db
+          .insert(recipes)
+          .values({
+            name: recipeData.name,
+            description: recipeData.description,
+            image_url: recipeData.imageUrl,
+            prep_time: recipeData.prepTime,
+            cook_time: recipeData.cookTime,
+            servings: recipeData.servings,
+            ingredients: JSON.stringify(recipeData.ingredients),
+            instructions: JSON.stringify(recipeData.instructions),
+            tags: JSON.stringify(recipeData.tags),
+            nutrition: JSON.stringify(recipeData.nutrition),
+            complexity: recipeData.complexity,
+            created_at: new Date()
+          })
+          .returning();
+
+        // Add to user's favorites using the new permanent ID
+        await db.insert(userRecipes).values({
+          user_id: req.user!.id,
+          recipe_id: savedRecipe.id,
+        });
+
+        return res.json({ 
+          message: "Recipe saved and added to favorites",
+          permanentId: savedRecipe.id 
+        });
+      }
+
+      // For existing recipes, just add to favorites
       const [recipe] = await db
         .select()
         .from(recipes)
@@ -419,22 +458,16 @@ export function registerRoutes(app: express.Express) {
               // Log the validated data before insertion
               console.log('Validated recipe data:', JSON.stringify(validatedRecipe, null, 2));
 
-              console.log('Inserting recipe:', JSON.stringify(validatedRecipe, null, 2));
+              // Instead of saving to database, just add the validated recipe to our suggestions
+              const generatedRecipe = {
+                ...validatedRecipe,
+                // Generate a temporary ID for frontend reference
+                id: -(suggestedRecipes.length + 1), // Using negative IDs to distinguish from DB records
+              };
               
-              const [newRecipe] = await db
-                .insert(recipes)
-                .values({
-                  ...validatedRecipe,
-                  ingredients: JSON.stringify(validatedRecipe.ingredients),
-                  instructions: JSON.stringify(validatedRecipe.instructions),
-                  tags: JSON.stringify(validatedRecipe.tags),
-                  nutrition: JSON.stringify(validatedRecipe.nutrition)
-                })
-                .returning();
-              
-              console.log('Successfully inserted recipe:', newRecipe.id);
+              console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
               usedRecipeNames.add(recipeData.name);
-              suggestedRecipes.push(newRecipe);
+              suggestedRecipes.push(generatedRecipe);
             }
           } catch (error) {
             console.error(`Failed to generate recipe for day ${day + 1}, meal ${mealType}:`, error);
