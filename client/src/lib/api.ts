@@ -48,7 +48,15 @@ export async function generateMealPlan(preferences: MealPlanPreferences, days: n
       "Content-Type": "application/json",
     },
     credentials: "include",
-    body: JSON.stringify({ preferences, days }),
+    body: JSON.stringify({
+      preferences: {
+        dietary: preferences.dietary,
+        allergies: preferences.allergies,
+        cuisine: preferences.cuisine,
+        meatTypes: preferences.meatTypes
+      },
+      days
+    }),
   });
 
   if (!response.ok) {

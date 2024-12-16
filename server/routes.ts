@@ -317,6 +317,14 @@ export function registerRoutes(app: express.Express) {
               excludeNames: existingNames
             });
               
+            console.log(`Generating recipe for ${mealType} with preferences:`, {
+              dietary: preferences.dietary,
+              allergies: preferences.allergies,
+              cuisine: preferences.cuisine,
+              meatTypes: preferences.meatTypes,
+              excludeNames: existingNames
+            });
+              
             const recipeData = await generateRecipeRecommendation({
               dietary: preferences.dietary.filter(Boolean),
               allergies: preferences.allergies.filter(Boolean),

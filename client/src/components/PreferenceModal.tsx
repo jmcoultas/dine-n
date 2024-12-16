@@ -149,27 +149,42 @@ export default function PreferenceModal({
       const updatedPreferences = { ...prev };
       const currentValues = prev[field];
 
+      let newPreferences;
       if (field === "dietary") {
         if (value === "No Preference") {
-          return {
+          newPreferences = {
             ...prev,
             [field]: ["No Preference" as PreferenceType]
           };
+        } else {
+          const noPreference = "No Preference" as PreferenceType;
+          const hasNoPreference = currentValues.some(v => v === noPreference);
+          if (hasNoPreference) {
+            newPreferences = {
+              ...prev,
+              [field]: [value as PreferenceType]
+            };
+          } else {
+            newPreferences = {
+              ...prev,
+              [field]: [...currentValues.filter(v => v !== "No Preference"), value as any]
+            };
+          }
         }
-        const noPreference = "No Preference" as PreferenceType;
-        const hasNoPreference = currentValues.some(v => v === noPreference);
-        if (hasNoPreference) {
-          return {
-            ...prev,
-            [field]: [value as PreferenceType]
-          };
-        }
+      } else {
+        newPreferences = {
+          ...prev,
+          [field]: [...currentValues.filter(v => v !== "No Preference"), value as any]
+        };
       }
 
-      return {
-        ...prev,
-        [field]: [...currentValues.filter(v => v !== "No Preference"), value as any]
-      };
+      // Log the updated preferences
+      console.log('PreferenceModal - Updated preferences:', JSON.stringify(newPreferences, null, 2));
+      
+      // Call the update callback
+      onUpdatePreferences(newPreferences);
+      
+      return newPreferences;
     });
   };
 

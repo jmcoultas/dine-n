@@ -109,7 +109,13 @@ export default function MealPlan() {
   // Mutations
   const generateMutation = useMutation({
     mutationFn: () => {
-      console.log('Sending preferences to API:', preferences);
+      // Log the exact preferences being sent to the API
+      console.log('MealPlan.tsx - Preferences being sent to API:', JSON.stringify({
+        dietary: preferences.dietary,
+        allergies: preferences.allergies,
+        cuisine: preferences.cuisine,
+        meatTypes: preferences.meatTypes
+      }, null, 2));
       return generateMealPlan(preferences, 2);
     },
     onSuccess: (data) => {
