@@ -275,6 +275,14 @@ export function registerRoutes(app: express.Express) {
         user: req.user?.id
       }, null, 2));
 
+      console.log('Starting meal plan generation with preferences:', JSON.stringify({
+        dietary: preferences.dietary,
+        allergies: preferences.allergies,
+        cuisine: preferences.cuisine,
+        meatTypes: preferences.meatTypes,
+        days
+      }, null, 2));
+
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
       const suggestedRecipes = [];
       const usedRecipeNames = new Set<string>();

@@ -20,11 +20,26 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
   }
 
   try {
-    console.log('Generating recipe with params:', JSON.stringify(params, null, 2));
+    // Log detailed parameters at entry point
+    console.log('Generating recipe with params:', JSON.stringify({
+      dietary: params.dietary,
+      allergies: params.allergies,
+      cuisine: params.cuisine,
+      meatTypes: params.meatTypes,
+      mealType: params.mealType,
+      excludeNames: params.excludeNames
+    }, null, 2));
     
     const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
       ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`
       : "";
+    
+    console.log('User preferences being applied:', JSON.stringify({
+      dietary: params.dietary,
+      allergies: params.allergies,
+      cuisine: params.cuisine,
+      meatTypes: params.meatTypes
+    }, null, 2));
       
     const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}.
 ${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : "No specific dietary restrictions"}
