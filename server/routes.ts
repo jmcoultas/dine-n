@@ -86,7 +86,7 @@ export function registerRoutes(app: express.Express) {
           cook_time: recipeData.cookTime,
           servings: recipeData.servings,
           ingredients: recipeData.ingredients,
-          instructions: { steps: recipeData.instructions },
+          instructions: recipeData.instructions,
           tags: recipeData.tags,
           nutrition: recipeData.nutrition,
           complexity: recipeData.complexity,
