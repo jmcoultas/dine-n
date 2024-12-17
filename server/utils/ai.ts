@@ -111,7 +111,30 @@ Please assign complexity based on:
         throw new Error("Missing required fields in recipe data");
       }
       
-      recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+      // Generate image using DALL-E 3
+      try {
+        console.log('Generating image for recipe:', recipeData.name);
+        const imageResponse = await openai.images.generate({
+          model: "dall-e-3",
+          prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle, styled like a professional food photography shot.`,
+          n: 1,
+          size: "1024x1024",
+          quality: "standard",
+          style: "natural"
+        });
+
+        if (imageResponse.data && imageResponse.data[0]?.url) {
+          console.log('Successfully generated image for recipe:', recipeData.name);
+          recipeData.imageUrl = imageResponse.data[0].url;
+        } else {
+          console.warn('No image URL in DALL-E response, falling back to placeholder');
+          recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+        }
+      } catch (imageError) {
+        console.error('Error generating image with DALL-E:', imageError);
+        // Fallback to Unsplash if DALL-E fails
+        recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+      }
       
       return recipeData;
     } catch (parseError) {
