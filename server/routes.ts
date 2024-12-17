@@ -415,7 +415,7 @@ export function registerRoutes(app: express.Express) {
               const validatedRecipe = {
                 name: recipeData.name,
                 description: recipeData.description || 'No description available',
-                image_url: recipeData.imageUrl,
+                imageUrl: recipeData.imageUrl || null,
                 prep_time: recipeData.prepTime || 0,
                 cook_time: recipeData.cookTime || 0,
                 servings: recipeData.servings || 2,

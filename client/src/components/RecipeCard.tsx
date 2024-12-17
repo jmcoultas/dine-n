@@ -32,7 +32,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
   const queryClient = useQueryClient();
   
   // Add null checks for optional properties
-  const imageUrl = recipe.imageUrl ?? '';
+  const imageUrl = recipe.imageUrl || recipe.image_url || '';
   const description = recipe.description ?? '';
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
