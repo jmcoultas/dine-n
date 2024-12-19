@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { eq, and, type Json } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { type Json } from "drizzle-orm/pg-core";
 import { generateRecipeRecommendation } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes } from "@db/schema";
 import { db } from "../db";
