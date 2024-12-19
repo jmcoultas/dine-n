@@ -500,7 +500,7 @@ export function registerRoutes(app: express.Express) {
               console.log('Validated recipe data:', JSON.stringify(validatedRecipe, null, 2));
 
               // Instead of saving to database, just add the validated recipe to our suggestions
-              const generatedRecipe = {
+              const generatedRecipe: Partial<Recipe> = {
                 ...validatedRecipe,
                 // Generate a temporary ID for frontend reference
                 id: -(suggestedRecipes.length + 1), // Using negative IDs to distinguish from DB records
