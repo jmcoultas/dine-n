@@ -349,15 +349,15 @@ export function registerRoutes(app: express.Express) {
 
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
-              interface IngredientInput {
-                name?: string;
-                amount?: number;
-                unit?: string;
-              }
-
+              type JsonObject = { [key: string]: Json };
+              
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
-                    .filter((ing): ing is IngredientInput => ing && typeof ing === 'object')
+                    .filter((ing): ing is JsonObject => 
+                      ing !== null && 
+                      typeof ing === 'object' &&
+                      !Array.isArray(ing)
+                    )
                     .map(ing => ({
                       name: String(ing?.name || '').trim(),
                       amount: Number(ing?.amount) || 0,
