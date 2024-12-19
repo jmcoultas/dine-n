@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and } from "drizzle-orm";
-import { type Json } from "drizzle-orm/pg-core";
+import { type json } from "drizzle-orm/pg-core";
 import { generateRecipeRecommendation } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes } from "@db/schema";
 import { db } from "../db";
@@ -350,7 +350,7 @@ export function registerRoutes(app: express.Express) {
 
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
-              type JsonObject = { [key: string]: Json };
+              type JsonObject = { [key: string]: json };
               
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
