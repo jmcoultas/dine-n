@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useUser } from "@/hooks/use-user";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,7 +40,7 @@ export default function MealPlan() {
   interface Recipe {
     id: number;
     name: string;
-    created_at: Date;
+    created_at?: Date;
     description: string | null;
     imageUrl: string | null;
     prepTime: number | null;
@@ -185,6 +186,8 @@ export default function MealPlan() {
     },
   });
 
+  const { user } = useUser();
+  
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!generatedRecipes.length) {
