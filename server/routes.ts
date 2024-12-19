@@ -350,7 +350,7 @@ export function registerRoutes(app: express.Express) {
 
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
-              type JsonObject = { [key: string]: json };
+              type JsonObject = { [key: string]: typeof json };
               
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
