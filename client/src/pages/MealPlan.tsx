@@ -46,10 +46,19 @@ export default function MealPlan() {
     prepTime: number | null;
     cookTime: number | null;
     servings: number | null;
-    ingredients: Array<RecipeIngredient> | null;
-    instructions: Array<string> | null;
-    tags: Array<string> | null;
-    nutrition: RecipeNutrition | null;
+    ingredients: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+    }>;
+    instructions: string[];
+    tags: string[];
+    nutrition: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
     complexity: 1 | 2 | 3;
   }
 
@@ -127,9 +136,9 @@ export default function MealPlan() {
               if (!recipe || typeof recipe !== 'object') return false;
               
               const hasValidBasicProps = 
-                typeof recipe.id === 'number' &&
-                typeof recipe.name === 'string' &&
-                (recipe.complexity === 1 || recipe.complexity === 2 || recipe.complexity === 3);
+                typeof (recipe as any).id === 'number' &&
+                typeof (recipe as any).name === 'string' &&
+                ((recipe as any).complexity === 1 || (recipe as any).complexity === 2 || (recipe as any).complexity === 3);
               
               if (!hasValidBasicProps) return false;
 
