@@ -161,3 +161,66 @@ Please assign complexity based on:
     throw new Error("Failed to generate recipe recommendation");
   }
 }
+interface SubstitutionRequest {
+  ingredient: string;
+  dietary?: string[];
+  allergies?: string[];
+}
+
+export async function generateIngredientSubstitution({ ingredient, dietary = [], allergies = [] }: SubstitutionRequest): Promise<{ substitutions: string[], reasoning: string }> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI API key is not configured");
+  }
+
+  try {
+    const prompt = `Generate cooking ingredient substitutions for "${ingredient}".
+${dietary.length > 0 ? `Must follow dietary restrictions: ${dietary.join(", ")}` : ""}
+${allergies.length > 0 ? `Must avoid these allergens: ${allergies.join(", ")}` : ""}
+
+Provide response in this exact JSON format:
+{
+  "substitutions": ["option1", "option2", "option3"],
+  "reasoning": "Brief explanation of why these substitutions work"
+}
+
+The substitutions must be common ingredients that are easy to find in most grocery stores.
+Each substitution must maintain similar culinary function (texture, flavor profile, cooking properties).
+Consider dietary restrictions and allergies as absolute requirements - do not suggest any substitutes that violate them.`;
+
+    const completion = await openai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a professional chef specializing in ingredient substitutions and dietary accommodations. Provide accurate, practical substitutions that maintain the culinary function of ingredients while respecting dietary restrictions.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      model: "gpt-3.5-turbo-1106",
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    if (!completion.choices?.[0]?.message?.content) {
+      throw new Error("Invalid response format from OpenAI API");
+    }
+
+    const content = completion.choices[0].message.content;
+    const response = JSON.parse(content);
+
+    if (!Array.isArray(response.substitutions) || typeof response.reasoning !== 'string') {
+      throw new Error("Invalid response format from OpenAI API");
+    }
+
+    return {
+      substitutions: response.substitutions,
+      reasoning: response.reasoning,
+    };
+  } catch (error: any) {
+    console.error("OpenAI API Error:", error);
+    throw new Error("Failed to generate ingredient substitutions");
+  }
+}

@@ -85,3 +85,36 @@ export async function createGroceryList(groceryList: Omit<GroceryList, "id">): P
   });
   return response.json();
 }
+
+
+interface SubstitutionResponse {
+  substitutions: string[];
+  reasoning: string;
+}
+
+export async function getIngredientSubstitutions(
+  ingredient: string,
+  preferences?: { dietary?: string[]; allergies?: string[] }
+): Promise<SubstitutionResponse> {
+  const response = await fetch(`${API_BASE}/substitute-ingredient`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      ingredient,
+      ...preferences
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("You must be logged in to get ingredient substitutions");
+    }
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to get ingredient substitutions");
+  }
+
+  return response.json();
+}

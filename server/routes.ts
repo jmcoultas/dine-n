@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and } from "drizzle-orm";
-import { generateRecipeRecommendation } from "./utils/ai";
+import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes, type Recipe } from "@db/schema";
 import { db } from "../db";
 import { transformInstructionsForDB, transformInstructionsForClient } from "./utils/transformers";
@@ -349,7 +349,7 @@ export function registerRoutes(app: express.Express) {
 
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
-              type JsonObject = { [key: string]: Json };
+              type JsonObject = { [key: string]: any };
               
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
@@ -529,4 +529,39 @@ export function registerRoutes(app: express.Express) {
       });
     }
   });
+
+  // Ingredient Substitution endpoint
+  app.post("/api/substitute-ingredient", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { ingredient, dietary, allergies } = req.body;
+
+      if (!ingredient) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameter: ingredient"
+        });
+      }
+
+      console.log('Generating substitutions for:', {
+        ingredient,
+        dietary: dietary || [],
+        allergies: allergies || []
+      });
+
+      const substitutions = await generateIngredientSubstitution({
+        ingredient,
+        dietary: Array.isArray(dietary) ? dietary : [],
+        allergies: Array.isArray(allergies) ? allergies : []
+      });
+
+      res.json(substitutions);
+    } catch (error: any) {
+      console.error("Error generating substitutions:", error);
+      res.status(500).json({
+        error: "Failed to generate substitutions",
+        message: error.message
+      });
+    }
+  });
+
 }
