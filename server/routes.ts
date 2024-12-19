@@ -349,18 +349,20 @@ export function registerRoutes(app: express.Express) {
 
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
+              interface IngredientInput {
+                name?: string;
+                amount?: number;
+                unit?: string;
+              }
+
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
-                    .filter(ing => ing && typeof ing === 'object')
-                    .map(ing => {
-                      if (!ing || typeof ing !== 'object') return null;
-                      return {
-                        name: String(ing.name || '').trim(),
-                        amount: Number(ing.amount) || 0,
-                        unit: String(ing.unit || '').trim()
-                      };
-                    })
-                    .filter(Boolean)
+                    .filter((ing): ing is IngredientInput => ing && typeof ing === 'object')
+                    .map(ing => ({
+                      name: String(ing?.name || '').trim(),
+                      amount: Number(ing?.amount) || 0,
+                      unit: String(ing?.unit || '').trim()
+                    }))
                 : [];
                 
                 console.log('Validated ingredients:', JSON.stringify(validatedIngredients, null, 2));
@@ -380,15 +382,27 @@ export function registerRoutes(app: express.Express) {
                 console.log('Validated tags:', JSON.stringify(validatedTags, null, 2));
 
               const validatedNutrition = (() => {
-                if (recipeData.nutrition && typeof recipeData.nutrition === 'object') {
-                  const { calories, protein, carbs, fat } = recipeData.nutrition;
-                  if (!isNaN(Number(calories)) && !isNaN(Number(protein)) && 
-                      !isNaN(Number(carbs)) && !isNaN(Number(fat))) {
+                interface NutritionInput {
+                  calories?: number | string;
+                  protein?: number | string;
+                  carbs?: number | string;
+                  fat?: number | string;
+                }
+                
+                const nutrition = recipeData.nutrition as NutritionInput;
+                if (nutrition && typeof nutrition === 'object') {
+                  const calories = Number(nutrition.calories);
+                  const protein = Number(nutrition.protein);
+                  const carbs = Number(nutrition.carbs);
+                  const fat = Number(nutrition.fat);
+                  
+                  if (!isNaN(calories) && !isNaN(protein) && 
+                      !isNaN(carbs) && !isNaN(fat)) {
                     return {
-                      calories: Math.max(0, Number(calories)),
-                      protein: Math.max(0, Number(protein)),
-                      carbs: Math.max(0, Number(carbs)),
-                      fat: Math.max(0, Number(fat))
+                      calories: Math.max(0, calories),
+                      protein: Math.max(0, protein),
+                      carbs: Math.max(0, carbs),
+                      fat: Math.max(0, fat)
                     };
                   }
                 }
