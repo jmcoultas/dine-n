@@ -203,10 +203,10 @@ export default function MealPlan() {
       });
 
       const items = generatedRecipes.flatMap(recipe => 
-        recipe.ingredients?.map(ingredient => ({
+        recipe ? (recipe.ingredients?.map(ingredient => ({
           ...ingredient,
           checked: false,
-        })) ?? []
+        })) ?? []) : []
       );
 
       if (items.length > 0) {
