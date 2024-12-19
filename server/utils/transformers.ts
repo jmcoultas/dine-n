@@ -12,10 +12,11 @@ export function transformInstructionsForDB(recipe: Partial<Recipe>): Partial<Rec
 }
 
 export function transformInstructionsForClient(recipe: Partial<Recipe>): Partial<Recipe> {
-  if (recipe.instructions && 'steps' in recipe.instructions) {
+  const instructions = recipe.instructions;
+  if (instructions && typeof instructions === 'object' && !Array.isArray(instructions) && 'steps' in instructions) {
     return {
       ...recipe,
-      instructions: recipe.instructions.steps
+      instructions: instructions.steps
     };
   }
   return recipe;
