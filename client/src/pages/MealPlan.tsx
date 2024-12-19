@@ -39,6 +39,7 @@ export default function MealPlan() {
   interface Recipe {
     id: number;
     name: string;
+    created_at: Date;
     description: string | null;
     imageUrl: string | null;
     prepTime: number | null;
@@ -195,6 +196,7 @@ export default function MealPlan() {
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         createdAt: new Date(),
+        userId: user?.id ?? 0, // Add userId from current user
       });
 
       const items = generatedRecipes.flatMap(recipe => 
