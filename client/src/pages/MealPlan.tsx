@@ -40,7 +40,7 @@ export default function MealPlan() {
   interface Recipe {
     id: number;
     name: string;
-    created_at?: Date;
+    created_at: Date;
     description: string | null;
     imageUrl: string | null;
     prepTime: number | null;
