@@ -351,23 +351,22 @@ export function registerRoutes(app: express.Express) {
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
               interface IngredientType {
-                name?: string;
-                amount?: number;
-                unit?: string;
+                name: string;
+                amount: number;
+                unit: string;
               }
               
               const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
-                    .filter((ing): ing is IngredientType => 
+                    .filter((ing): ing is Record<string, unknown> => 
                       ing !== null && 
                       typeof ing === 'object' &&
-                      !Array.isArray(ing) &&
-                      'name' in ing
+                      !Array.isArray(ing)
                     )
                     .map(ing => ({
-                      name: String(ing?.name || '').trim(),
-                      amount: Number(ing?.amount) || 0,
-                      unit: String(ing?.unit || '').trim()
+                      name: String(ing.name || '').trim(),
+                      amount: Number(ing.amount) || 0,
+                      unit: String(ing.unit || '').trim()
                     }))
                 : [];
                 
