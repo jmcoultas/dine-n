@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import PreferenceModal from "@/components/PreferenceModal";
 import { generateMealPlan } from "@/lib/api";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 const HERO_IMAGES = [
   "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
@@ -63,7 +64,6 @@ export default function Home() {
 
   const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
-      // Log the exact data being sent
       const cleanPreferences = {
         dietary: prefs.dietary.filter(Boolean),
         allergies: prefs.allergies.filter(Boolean),
@@ -73,7 +73,7 @@ export default function Home() {
       console.log('Generating meal plan with preferences:', cleanPreferences);
       const response = await generateMealPlan(cleanPreferences, 2);
       console.log('Received response:', response);
-      
+
       const recipes = response.recipes.map(recipe => {
         const typedRecipe: Recipe = {
           id: recipe.id,
@@ -83,7 +83,7 @@ export default function Home() {
           prepTime: recipe.prepTime || undefined,
           cookTime: recipe.cookTime || undefined,
           servings: recipe.servings || undefined,
-          ingredients: Array.isArray(recipe.ingredients) 
+          ingredients: Array.isArray(recipe.ingredients)
             ? recipe.ingredients.map(ing => {
                 const ingredient = ing as { name?: string; amount?: number; unit?: string };
                 return {
@@ -93,7 +93,7 @@ export default function Home() {
                 };
               })
             : undefined,
-          instructions: Array.isArray(recipe.instructions) 
+          instructions: Array.isArray(recipe.instructions)
             ? recipe.instructions.map(String)
             : undefined,
           tags: Array.isArray(recipe.tags)
@@ -113,7 +113,7 @@ export default function Home() {
         };
         return typedRecipe;
       });
-      
+
       return {
         recipes,
         status: response.status as 'success' | 'partial'
@@ -131,9 +131,9 @@ export default function Home() {
       });
     },
     onError: (error: unknown) => {
-      const err = error as Error & { 
-        response?: { 
-          data?: { 
+      const err = error as Error & {
+        response?: {
+          data?: {
             type?: string;
             error?: string;
             message?: string;
@@ -143,18 +143,18 @@ export default function Home() {
               status?: number;
               message?: string;
             }
-          } 
-        } 
+          }
+        }
       };
-      
+
       const errorData = err.response?.data;
-      const errorMessage = errorData?.error || 
-                          errorData?.message || 
-                          err.message || 
+      const errorMessage = errorData?.error ||
+                          errorData?.message ||
+                          err.message ||
                           "Failed to generate meal plan. Please try again.";
       const errorDetails = errorData?.details || '';
       const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
-      
+
       toast({
         title: "Error",
         description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}${import.meta.env.DEV ? debugInfo : ''}`,
@@ -169,6 +169,9 @@ export default function Home() {
 
   return (
     <div className="space-y-16">
+      {generateMutation.isPending && (
+        <LoadingAnimation message="Cooking up your personalized meal plan..." />
+      )}
       <section
         className="relative h-[600px] rounded-lg overflow-hidden bg-cover bg-center"
         style={{
@@ -185,16 +188,16 @@ export default function Home() {
             your grocery shopping with our intelligent cooking companion.
           </p>
           {user ? (
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-primary hover:bg-primary/90"
               onClick={() => setShowPreferences(true)}
             >
               Start Planning
             </Button>
           ) : (
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-primary hover:bg-primary/90"
               onClick={() => setLocation("/auth")}
             >
