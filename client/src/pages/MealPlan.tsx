@@ -6,12 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
-import { generateMealPlan, createMealPlan, createGroceryList } from "@/lib/api";
+import { createMealPlan, createGroceryList } from "@/lib/api";
 
 export default function MealPlan() {
   // Type definitions
@@ -23,6 +22,21 @@ export default function MealPlan() {
 
   // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState<{
+    dietary: PreferenceType[];
+    allergies: AllergyType[];
+    cuisine: CuisineType[];
+    meatTypes: MeatType[];
+  }>(() => {
+    const savedPreferences = localStorage.getItem('mealPlanPreferences');
+    return savedPreferences ? JSON.parse(savedPreferences) : {
+      dietary: [],
+      allergies: [],
+      cuisine: [],
+      meatTypes: [],
+    };
+  });
 
   interface RecipeIngredient {
     name: string;
@@ -85,21 +99,6 @@ export default function MealPlan() {
       return [];
     }
   });
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [preferences, setPreferences] = useState<{
-    dietary: PreferenceType[];
-    allergies: AllergyType[];
-    cuisine: CuisineType[];
-    meatTypes: MeatType[];
-  }>(() => {
-    const savedPreferences = localStorage.getItem('mealPlanPreferences');
-    return savedPreferences ? JSON.parse(savedPreferences) : {
-      dietary: [],
-      allergies: [],
-      cuisine: [],
-      meatTypes: [],
-    };
-  });
 
   // Save preferences to localStorage whenever they change
   useEffect(() => {
@@ -109,6 +108,7 @@ export default function MealPlan() {
   // Hooks
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useUser();
 
   // Effects
   useEffect(() => {
@@ -117,86 +117,6 @@ export default function MealPlan() {
     };
   }, []);
 
-  // Mutations
-  const generateMutation = useMutation({
-    mutationFn: () => {
-      // Log the exact preferences being sent to the API
-      console.log('MealPlan.tsx - Preferences being sent to API:', JSON.stringify({
-        dietary: preferences.dietary,
-        allergies: preferences.allergies,
-        cuisine: preferences.cuisine,
-        meatTypes: preferences.meatTypes
-      }, null, 2));
-      return generateMealPlan(preferences, 2);
-    },
-    onSuccess: (data) => {
-      if (Array.isArray(data.recipes)) {
-          const validRecipes = data.recipes
-            .filter((recipe): recipe is Recipe => {
-              if (!recipe || typeof recipe !== 'object') return false;
-              
-              const hasValidBasicProps = 
-                typeof (recipe as any).id === 'number' &&
-                typeof (recipe as any).name === 'string' &&
-                ((recipe as any).complexity === 1 || (recipe as any).complexity === 2 || (recipe as any).complexity === 3);
-              
-              if (!hasValidBasicProps) return false;
-
-              // Validate nullable fields
-              if (recipe.description !== null && typeof recipe.description !== 'string') return false;
-              if (recipe.imageUrl !== null && typeof recipe.imageUrl !== 'string') return false;
-              if (recipe.prepTime !== null && typeof recipe.prepTime !== 'number') return false;
-              if (recipe.cookTime !== null && typeof recipe.cookTime !== 'number') return false;
-              if (recipe.servings !== null && typeof recipe.servings !== 'number') return false;
-
-              return true;
-            });
-          
-          setGeneratedRecipes(validRecipes);
-        if (data.status === 'partial') {
-          toast({
-            title: "Using fallback recipes",
-            description: "Generated meal plan with pre-defined recipes that match your preferences.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Meal plan generated!",
-            description: "Your personalized meal plan is ready.",
-          });
-        }
-      }
-    },
-    onError: (error: any) => {
-      const errorType = error.response?.data?.type;
-      let title = "Error";
-      let description = "Failed to generate meal plan. Please try again.";
-
-      switch (errorType) {
-        case "service_unavailable":
-          title = "Service Unavailable";
-          description = "Recipe generation service is temporarily unavailable. Please try again later.";
-          break;
-        case "connection_error":
-          title = "Connection Error";
-          description = "Unable to connect to the recipe service. Please check your connection.";
-          break;
-        case "invalid_preferences":
-          title = "Invalid Preferences";
-          description = "Unable to generate recipes with the selected preferences. Please adjust and try again.";
-          break;
-      }
-
-      toast({
-        title,
-        description,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const { user } = useUser();
-  
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!generatedRecipes.length) {
@@ -208,10 +128,10 @@ export default function MealPlan() {
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         createdAt: new Date(),
-        userId: user?.id ?? 0, // Add userId from current user
+        userId: user?.id ?? 0,
       });
 
-      const items = generatedRecipes.flatMap(recipe => 
+      const items = generatedRecipes.flatMap(recipe =>
         recipe ? (recipe.ingredients?.map(ingredient => ({
           ...ingredient,
           checked: false,
@@ -220,7 +140,7 @@ export default function MealPlan() {
 
       if (items.length > 0) {
         await createGroceryList({
-          userId: mealPlan.userId, // Use the userId from the created meal plan
+          userId: mealPlan.userId,
           mealPlanId: mealPlan.id,
           items,
           created: new Date(),
@@ -251,16 +171,16 @@ export default function MealPlan() {
               <h3 className="text-sm font-semibold mb-2">Current Preferences</h3>
               {Object.entries(preferences).some(([_, values]) => values.length > 0) ? (
                 <div className="space-y-3">
-                  {Object.entries(preferences).map(([key, values]) => 
+                  {Object.entries(preferences).map(([key, values]) =>
                     values.length > 0 ? (
                       <div key={key} className="space-y-1.5">
                         <p className="text-sm font-medium capitalize">{key}:</p>
                         <div className="flex flex-wrap gap-2">
                           {values.map((item) => (
-                            <Badge 
-                              key={item} 
+                            <Badge
+                              key={item}
                               variant={
-                                key === 'allergies' ? 'destructive' : 
+                                key === 'allergies' ? 'destructive' :
                                 key === 'dietary' ? 'default' :
                                 'secondary'
                               }
@@ -293,8 +213,8 @@ export default function MealPlan() {
         onOpenChange={setShowPreferences}
         preferences={preferences}
         onUpdatePreferences={setPreferences}
-        isGenerating={generateMutation.isPending}
-        onGenerate={() => generateMutation.mutate()}
+        isGenerating={false}
+        onGenerate={() => {}}
       />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
@@ -304,25 +224,8 @@ export default function MealPlan() {
               mode="single"
               selected={selectedDate}
               onSelect={(date) => date && setSelectedDate(date)}
-              className="rounded-md border mb-4"
+              className="rounded-md border"
             />
-            <Button
-              className="w-full"
-              onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Generate Meal Plan
-                </>
-              )}
-            </Button>
           </CardContent>
         </Card>
 
@@ -341,7 +244,7 @@ export default function MealPlan() {
                       const recipe = generatedRecipes[index];
                       const currentDay = new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000);
                       const mealType = index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner";
-                      
+
                       return recipe ? (
                         <MealPlanCard
                           key={recipe.id}
@@ -354,8 +257,7 @@ export default function MealPlan() {
                             newRecipes[index] = null;
                             setGeneratedRecipes(newRecipes);
                             localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes.filter(Boolean)));
-                            
-                            // Update localStorage and show success message
+
                             toast({
                               title: "Recipe removed",
                               description: `${removedRecipe?.name || 'Recipe'} has been removed from your meal plan and grocery list updated.`,
@@ -363,8 +265,8 @@ export default function MealPlan() {
                           }}
                         />
                       ) : (
-                        <div 
-                          key={`empty-${index}`} 
+                        <div
+                          key={`empty-${index}`}
                           className="border-2 border-dashed rounded-lg p-4 flex items-center justify-center"
                         >
                           <span className="text-muted-foreground">
@@ -387,9 +289,9 @@ export default function MealPlan() {
           </TabsContent>
 
           <TabsContent value="grocery">
-            <GroceryList 
+            <GroceryList
               items={
-                Array.isArray(generatedRecipes) 
+                Array.isArray(generatedRecipes)
                   ? generatedRecipes
                       .filter((recipe): recipe is Recipe => recipe !== null)
                       .flatMap(recipe => recipe.ingredients ?? [])
