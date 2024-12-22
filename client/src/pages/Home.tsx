@@ -6,7 +6,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import PreferenceModal from "@/components/PreferenceModal";
 import { generateMealPlan } from "@/lib/api";
-import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 const HERO_IMAGES = [
   "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
@@ -169,9 +168,6 @@ export default function Home() {
 
   return (
     <div className="space-y-16">
-      {generateMutation.isPending && (
-        <LoadingAnimation message="Cooking up your personalized meal plan..." />
-      )}
       <section
         className="relative h-[600px] rounded-lg overflow-hidden bg-cover bg-center"
         style={{

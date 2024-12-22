@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
 type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
@@ -178,12 +179,9 @@ export default function PreferenceModal({
         };
       }
 
-      // Log the updated preferences
       console.log('PreferenceModal - Updated preferences:', JSON.stringify(newPreferences, null, 2));
-      
-      // Call the update callback
       onUpdatePreferences(newPreferences);
-      
+
       return newPreferences;
     });
   };
@@ -201,6 +199,9 @@ export default function PreferenceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {isGenerating && (
+        <LoadingAnimation message="Cooking up your personalized meal plan..." />
+      )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{currentStepConfig.title}</DialogTitle>
@@ -239,7 +240,7 @@ export default function PreferenceModal({
                           const field = currentStepConfig.field as PreferenceField;
                           const typedOption = option as PreferenceValueType;
                           const isSelected = tempPreferences[field].some(v => v === typedOption);
-                          
+
                           return (
                             <div
                               key={option}
@@ -325,17 +326,10 @@ export default function PreferenceModal({
           </div>
           <Button onClick={handleNext} disabled={isGenerating}>
             {isLastStep ? (
-              isGenerating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Generate Meal Plan
-                </>
-              )
+              <>
+                <Wand2 className="mr-2 h-4 w-4" />
+                Generate Meal Plan
+              </>
             ) : (
               <>
                 Next

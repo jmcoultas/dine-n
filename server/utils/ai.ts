@@ -116,7 +116,7 @@ Please assign complexity based on:
         console.log('Generating image for recipe:', recipeData.name);
         const imageResponse = await openai.images.generate({
           model: "dall-e-3",
-          prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle, styled like a professional food photography shot.`,
+          prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
           n: 1,
           size: "1024x1024",
           quality: "standard",
