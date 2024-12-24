@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
-import { useLocation } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,16 +11,6 @@ import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { createMealPlan, createGroceryList } from "@/lib/api";
-import { recipeSchema, type Recipe } from '@/types/recipe';
-import { z } from 'zod';
-
-// Define a schema for the grocery list item
-const groceryItemSchema = z.object({
-  name: z.string(),
-  amount: z.number(),
-  unit: z.string(),
-  checked: z.boolean().default(false),
-});
 
 export default function MealPlan() {
   // Type definitions
@@ -62,6 +51,31 @@ export default function MealPlan() {
     fat: number;
   }
 
+  interface Recipe {
+    id: number;
+    name: string;
+    created_at: Date;
+    description: string | null;
+    imageUrl: string | null;
+    prepTime: number | null;
+    cookTime: number | null;
+    servings: number | null;
+    ingredients: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+    }>;
+    instructions: string[];
+    tags: string[];
+    nutrition: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    complexity: 1 | 2 | 3;
+  }
+
   interface MealPlanRecipe {
     recipeId: number;
     day: string;
@@ -95,7 +109,6 @@ export default function MealPlan() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useUser();
-  const [_, setLocation] = useLocation();
 
   // Effects
   useEffect(() => {
@@ -110,63 +123,6 @@ export default function MealPlan() {
         throw new Error("No recipes generated to save");
       }
 
-      // First, ensure all recipes are properly validated and saved
-      const savedRecipes = await Promise.all(
-        generatedRecipes
-          .filter((recipe): recipe is Recipe => recipe !== null)
-          .map(async (recipe) => {
-            if (recipe.id < 0) {
-              try {
-                // Validate recipe data using Zod schema
-                const validatedRecipe = recipeSchema.parse({
-                  ...recipe,
-                  description: recipe.description || null,
-                  imageUrl: recipe.imageUrl || null,
-                  prepTime: recipe.prepTime || 0,
-                  cookTime: recipe.cookTime || 0,
-                  servings: recipe.servings || 2,
-                  ingredients: recipe.ingredients?.map(ing => ({
-                    name: String(ing.name || '').trim(),
-                    amount: Number(ing.amount) || 0,
-                    unit: String(ing.unit || '').trim()
-                  })) ?? [],
-                  instructions: recipe.instructions?.map(str => String(str).trim()) ?? [],
-                  tags: recipe.tags?.map(tag => String(tag).trim()) ?? [],
-                  nutrition: {
-                    calories: Number(recipe.nutrition?.calories) || 0,
-                    protein: Number(recipe.nutrition?.protein) || 0,
-                    carbs: Number(recipe.nutrition?.carbs) || 0,
-                    fat: Number(recipe.nutrition?.fat) || 0
-                  },
-                  complexity: recipe.complexity || 1
-                });
-
-                // Save validated recipe to favorites
-                const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
-                  method: 'POST',
-                  credentials: 'include',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({ recipe: validatedRecipe })
-                });
-
-                if (!response.ok) {
-                  throw new Error(`Failed to save recipe: ${recipe.name}`);
-                }
-
-                const result = await response.json();
-                return { ...recipe, id: result.permanentId };
-              } catch (error) {
-                console.error(`Error saving recipe ${recipe.name}:`, error);
-                throw error;
-              }
-            }
-            return recipe;
-          })
-      );
-
-      // Create the meal plan with the saved recipes
       const mealPlan = await createMealPlan({
         name: "Weekly Plan",
         startDate: selectedDate,
@@ -175,44 +131,31 @@ export default function MealPlan() {
         userId: user?.id ?? 0,
       });
 
-      // Validate and create grocery list items
-      const groceryItems = savedRecipes.flatMap(recipe =>
-        recipe.ingredients?.map(ingredient =>
-          groceryItemSchema.parse({
-            ...ingredient,
-            checked: false,
-          })
-        ) ?? []
+      const items = generatedRecipes.flatMap(recipe =>
+        recipe ? (recipe.ingredients?.map(ingredient => ({
+          ...ingredient,
+          checked: false,
+        })) ?? []) : []
       );
 
-      if (groceryItems.length > 0) {
+      if (items.length > 0) {
         await createGroceryList({
           userId: mealPlan.userId,
           mealPlanId: mealPlan.id,
-          items: groceryItems,
+          items,
           created: new Date(),
         });
       }
 
-      return { mealPlan, savedRecipes };
+      return mealPlan;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mealPlans"] });
-      queryClient.invalidateQueries({ queryKey: ["recipes", "favorites"] });
       toast({
         title: "Success!",
-        description: "Meal plan saved with grocery list. Redirecting to your recipes...",
+        description: "Meal plan saved with grocery list.",
       });
-      // Ensure we navigate to the recipes page after successful save
-      setLocation("/recipes");
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
   });
 
   return (

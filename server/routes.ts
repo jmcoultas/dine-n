@@ -56,7 +56,7 @@ export function registerRoutes(app: express.Express) {
       return res.json(userFavorites);
     } catch (error: any) {
       console.error("Error fetching favorite recipes:", error);
-      return res.status(500).json({
+      return res.status(500).json({ 
         error: "Failed to fetch favorite recipes",
         message: error.message
       });
@@ -77,72 +77,37 @@ export function registerRoutes(app: express.Express) {
           return res.status(400).json({ error: "Recipe data is required for temporary recipes" });
         }
 
-        // Validate and transform arrays before database insertion
-        const validateArray = <T>(arr: any, validator: (item: any) => item is T): T[] => {
-          if (!Array.isArray(arr)) return [];
-          return arr.filter((item): item is T => validator(item));
-        };
-
-        // Ingredient validator
-        const isValidIngredient = (item: any): item is { name: string; amount: number; unit: string } => {
-          return (
-            item &&
-            typeof item === 'object' &&
-            typeof item.name === 'string' &&
-            typeof item.amount === 'number' &&
-            typeof item.unit === 'string'
-          );
-        };
-
-        // Transform and validate recipe data
+        // Transform and insert the recipe into the database
         const transformedRecipe = {
-          name: String(recipeData.name || '').trim(),
-          description: String(recipeData.description || 'No description available').trim(),
-          image_url: String(recipeData.imageUrl || '').trim() || null,
-          prep_time: Math.max(0, Number(recipeData.prepTime) || 0),
-          cook_time: Math.max(0, Number(recipeData.cookTime) || 0),
-          servings: Math.max(1, Number(recipeData.servings) || 2),
-          ingredients: validateArray(recipeData.ingredients, isValidIngredient),
-          instructions: validateArray(recipeData.instructions,
-            (item): item is string => typeof item === 'string'
-          ).map(str => str.trim()),
-          tags: validateArray(recipeData.tags,
-            (item): item is string => typeof item === 'string'
-          ).map(str => str.trim()),
-          nutrition: {
-            calories: Math.max(0, Number(recipeData.nutrition?.calories) || 0),
-            protein: Math.max(0, Number(recipeData.nutrition?.protein) || 0),
-            carbs: Math.max(0, Number(recipeData.nutrition?.carbs) || 0),
-            fat: Math.max(0, Number(recipeData.nutrition?.fat) || 0)
-          },
-          complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
+          name: recipeData.name,
+          description: recipeData.description,
+          image_url: recipeData.imageUrl,
+          prep_time: recipeData.prepTime,
+          cook_time: recipeData.cookTime,
+          servings: recipeData.servings,
+          ingredients: recipeData.ingredients,
+          instructions: recipeData.instructions,
+          tags: recipeData.tags,
+          nutrition: recipeData.nutrition,
+          complexity: recipeData.complexity,
           created_at: new Date()
         };
 
-        console.log('Validated recipe data:', JSON.stringify(transformedRecipe, null, 2));
+        const [savedRecipe] = await db
+          .insert(recipes)
+          .values(transformedRecipe)
+          .returning();
 
-        try {
-          const [savedRecipe] = await db
-            .insert(recipes)
-            .values(transformedRecipe)
-            .returning();
+        // Add to user's favorites using the new permanent ID
+        await db.insert(userRecipes).values({
+          user_id: req.user!.id,
+          recipe_id: savedRecipe.id,
+        });
 
-          await db.insert(userRecipes).values({
-            user_id: req.user!.id,
-            recipe_id: savedRecipe.id,
-          });
-
-          return res.json({
-            message: "Recipe saved and added to favorites",
-            permanentId: savedRecipe.id
-          });
-        } catch (dbError) {
-          console.error('Database error:', dbError);
-          return res.status(500).json({
-            error: "Failed to save recipe to database",
-            details: (dbError as Error).message
-          });
-        }
+        return res.json({ 
+          message: "Recipe saved and added to favorites",
+          permanentId: savedRecipe.id 
+        });
       }
 
       // For existing recipes, just add to favorites
@@ -163,10 +128,7 @@ export function registerRoutes(app: express.Express) {
       res.json({ message: "Recipe added to favorites" });
     } catch (error: any) {
       console.error("Error adding recipe to favorites:", error);
-      res.status(500).json({
-        error: "Failed to add recipe to favorites",
-        details: error.message
-      });
+      res.status(500).json({ error: "Failed to add recipe to favorites" });
     }
   });
 
@@ -210,7 +172,7 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { name, startDate, endDate } = req.body;
-
+      
       const [newMealPlan] = await db
         .insert(mealPlans)
         .values({
@@ -233,7 +195,7 @@ export function registerRoutes(app: express.Express) {
     try {
       const { mealPlanId } = req.params;
       const parsedMealPlanId = parseInt(mealPlanId);
-
+      
       if (isNaN(parsedMealPlanId)) {
         return res.status(400).json({ error: "Invalid meal plan ID" });
       }
@@ -300,7 +262,7 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { preferences, days } = req.body;
-
+      
       // Validate input parameters
       if (!preferences || !days) {
         return res.status(400).json({
@@ -357,7 +319,7 @@ export function registerRoutes(app: express.Express) {
               meatTypes: preferences.meatTypes,
               excludeNames: existingNames
             });
-
+              
             console.log(`Generating recipe for ${mealType} with preferences:`, {
               dietary: preferences.dietary,
               allergies: preferences.allergies,
@@ -365,7 +327,7 @@ export function registerRoutes(app: express.Express) {
               meatTypes: preferences.meatTypes,
               excludeNames: existingNames
             });
-
+              
             const recipeData = await generateRecipeRecommendation({
               dietary: preferences.dietary.filter(Boolean),
               allergies: preferences.allergies.filter(Boolean),
@@ -388,11 +350,11 @@ export function registerRoutes(app: express.Express) {
             if (!usedRecipeNames.has(recipeData.name)) {
               // Validate and clean recipe data before insertion
               type JsonObject = { [key: string]: any };
-
-              const validatedIngredients = Array.isArray(recipeData.ingredients)
+              
+              const validatedIngredients = Array.isArray(recipeData.ingredients) 
                 ? recipeData.ingredients
-                    .filter((ing): ing is JsonObject =>
-                      ing !== null &&
+                    .filter((ing): ing is JsonObject => 
+                      ing !== null && 
                       typeof ing === 'object' &&
                       !Array.isArray(ing)
                     )
@@ -402,22 +364,22 @@ export function registerRoutes(app: express.Express) {
                       unit: String(ing?.unit || '').trim()
                     }))
                 : [];
-
-              console.log('Validated ingredients:', JSON.stringify(validatedIngredients, null, 2));
+                
+                console.log('Validated ingredients:', JSON.stringify(validatedIngredients, null, 2));
 
               const validatedInstructions = Array.isArray(recipeData.instructions)
                 ? recipeData.instructions
                     .filter(instruction => instruction && typeof instruction === 'string')
                     .map(instruction => String(instruction).trim())
                 : [];
-              console.log('Validated instructions:', JSON.stringify(validatedInstructions, null, 2));
+                console.log('Validated instructions:', JSON.stringify(validatedInstructions, null, 2));
 
               const validatedTags = Array.isArray(recipeData.tags)
                 ? recipeData.tags
                     .filter(tag => tag && typeof tag === 'string')
                     .map(tag => String(tag).trim())
                 : [];
-              console.log('Validated tags:', JSON.stringify(validatedTags, null, 2));
+                console.log('Validated tags:', JSON.stringify(validatedTags, null, 2));
 
               const validatedNutrition = (() => {
                 interface NutritionInput {
@@ -426,16 +388,16 @@ export function registerRoutes(app: express.Express) {
                   carbs?: number | string;
                   fat?: number | string;
                 }
-
+                
                 const nutrition = recipeData.nutrition as NutritionInput;
                 if (nutrition && typeof nutrition === 'object') {
                   const calories = Number(nutrition.calories);
                   const protein = Number(nutrition.protein);
                   const carbs = Number(nutrition.carbs);
                   const fat = Number(nutrition.fat);
-
-                  if (!isNaN(calories) && !isNaN(protein) &&
-                    !isNaN(carbs) && !isNaN(fat)) {
+                  
+                  if (!isNaN(calories) && !isNaN(protein) && 
+                      !isNaN(carbs) && !isNaN(fat)) {
                     return {
                       calories: Math.max(0, calories),
                       protein: Math.max(0, protein),
@@ -471,30 +433,30 @@ export function registerRoutes(app: express.Express) {
                 prep_time: recipeData.prepTime || 0,
                 cook_time: recipeData.cookTime || 0,
                 servings: recipeData.servings || 2,
-                ingredients: Array.isArray(recipeData.ingredients)
+                ingredients: Array.isArray(recipeData.ingredients) 
                   ? recipeData.ingredients.map(ing => {
-                    try {
-                      const ingredient = ing as { name?: string; amount?: number; unit?: string };
-                      return {
-                        name: String(ingredient?.name || '').trim(),
-                        amount: Number(ingredient?.amount || 0),
-                        unit: String(ingredient?.unit || '').trim()
-                      };
-                    } catch (e) {
-                      console.error('Error processing ingredient:', ing, e);
-                      return null;
-                    }
-                  }).filter(Boolean)
+                      try {
+                        const ingredient = ing as { name?: string; amount?: number; unit?: string };
+                        return {
+                          name: String(ingredient?.name || '').trim(),
+                          amount: Number(ingredient?.amount || 0),
+                          unit: String(ingredient?.unit || '').trim()
+                        };
+                      } catch (e) {
+                        console.error('Error processing ingredient:', ing, e);
+                        return null;
+                      }
+                    }).filter(Boolean)
                   : [],
                 instructions: Array.isArray(recipeData.instructions)
                   ? recipeData.instructions
-                    .filter(instruction => instruction && typeof instruction === 'string')
-                    .map(instruction => String(instruction).trim())
+                      .filter(instruction => instruction && typeof instruction === 'string')
+                      .map(instruction => String(instruction).trim())
                   : [],
                 tags: Array.isArray(recipeData.tags)
                   ? recipeData.tags
-                    .filter(tag => tag && typeof tag === 'string')
-                    .map(tag => String(tag).trim())
+                      .filter(tag => tag && typeof tag === 'string')
+                      .map(tag => String(tag).trim())
                   : [],
                 nutrition: (() => {
                   try {
@@ -503,7 +465,7 @@ export function registerRoutes(app: express.Express) {
                       const protein = Number((recipeData.nutrition as any)?.protein);
                       const carbs = Number((recipeData.nutrition as any)?.carbs);
                       const fat = Number((recipeData.nutrition as any)?.fat);
-
+                      
                       if (!isNaN(calories) && !isNaN(protein) && !isNaN(carbs) && !isNaN(fat)) {
                         return {
                           calories: Math.max(0, calories),
@@ -528,9 +490,9 @@ export function registerRoutes(app: express.Express) {
               };
 
               // Validate all arrays are properly formatted
-              if (!Array.isArray(validatedRecipe.ingredients) ||
-                !Array.isArray(validatedRecipe.instructions) ||
-                !Array.isArray(validatedRecipe.tags)) {
+              if (!Array.isArray(validatedRecipe.ingredients) || 
+                  !Array.isArray(validatedRecipe.instructions) || 
+                  !Array.isArray(validatedRecipe.tags)) {
                 throw new Error('Invalid array format in recipe data');
               }
 
@@ -543,7 +505,7 @@ export function registerRoutes(app: express.Express) {
                 // Generate a temporary ID for frontend reference
                 id: -(suggestedRecipes.length + 1), // Using negative IDs to distinguish from DB records
               };
-
+              
               console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
               usedRecipeNames.add(recipeData.name);
               suggestedRecipes.push(generatedRecipe);
@@ -601,4 +563,5 @@ export function registerRoutes(app: express.Express) {
       });
     }
   });
+
 }
