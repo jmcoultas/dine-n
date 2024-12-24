@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
+import { useLocation } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -109,6 +110,7 @@ export default function MealPlan() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const [_, setLocation] = useLocation();
 
   // Effects
   useEffect(() => {
@@ -123,6 +125,32 @@ export default function MealPlan() {
         throw new Error("No recipes generated to save");
       }
 
+      // First, ensure all recipes are saved properly
+      const savedRecipes = await Promise.all(
+        generatedRecipes
+          .filter((recipe): recipe is Recipe => recipe !== null)
+          .map(async (recipe) => {
+            if (recipe.id < 0) {
+              // Save temporary recipe to favorites
+              const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ recipe })
+              });
+
+              if (!response.ok) {
+                throw new Error(`Failed to save recipe: ${recipe.name}`);
+              }
+
+              return response.json();
+            }
+            return recipe;
+          })
+      );
+
       const mealPlan = await createMealPlan({
         name: "Weekly Plan",
         startDate: selectedDate,
@@ -131,7 +159,7 @@ export default function MealPlan() {
         userId: user?.id ?? 0,
       });
 
-      const items = generatedRecipes.flatMap(recipe =>
+      const items = savedRecipes.flatMap(recipe =>
         recipe ? (recipe.ingredients?.map(ingredient => ({
           ...ingredient,
           checked: false,
@@ -147,15 +175,25 @@ export default function MealPlan() {
         });
       }
 
-      return mealPlan;
+      return { mealPlan, savedRecipes };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mealPlans"] });
+      queryClient.invalidateQueries({ queryKey: ["recipes", "favorites"] });
       toast({
         title: "Success!",
-        description: "Meal plan saved with grocery list.",
+        description: "Meal plan saved with grocery list. Redirecting to your recipes...",
       });
+      // Navigate to recipes page after successful save
+      setLocation("/recipes");
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   return (
