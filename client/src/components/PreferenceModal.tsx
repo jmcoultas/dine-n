@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -28,59 +27,25 @@ const STEPS = [
     title: "Dietary Preferences",
     description: "Select any dietary restrictions or preferences you follow.",
     field: "dietary" as const,
-    options: [
-      "No Preference",
-      "Vegetarian",
-      "Vegan",
-      "Gluten-Free",
-      "Keto",
-      "Paleo",
-      "Mediterranean"
-    ] as const
+    options: PreferenceSchema.shape.dietary.element.options
   },
   {
     title: "Allergies",
     description: "Select any food allergies or intolerances.",
     field: "allergies" as const,
-    options: [
-      "Dairy",
-      "Eggs",
-      "Tree Nuts",
-      "Peanuts",
-      "Shellfish",
-      "Wheat",
-      "Soy"
-    ] as const
+    options: PreferenceSchema.shape.allergies.element.options
   },
   {
     title: "Cuisine Preferences",
     description: "Select your preferred cuisine types.",
     field: "cuisine" as const,
-    options: [
-      "Italian",
-      "Mexican",
-      "Chinese",
-      "Japanese",
-      "Indian",
-      "Thai",
-      "Mediterranean",
-      "American",
-      "French"
-    ] as const
+    options: PreferenceSchema.shape.cuisine.element.options
   },
   {
     title: "Meat Preferences",
     description: "Select your preferred meat types.",
     field: "meatTypes" as const,
-    options: [
-      "Chicken",
-      "Beef",
-      "Pork",
-      "Fish",
-      "Lamb",
-      "Turkey",
-      "None"
-    ] as const
+    options: PreferenceSchema.shape.meatTypes.element.options
   },
   {
     title: "Review & Generate",
@@ -131,41 +96,54 @@ export default function PreferenceModal({
   };
 
   const handleSelectPreference = (field: PreferenceField, value: string) => {
-    const validatedValue = PreferenceSchema.shape[field].element.parse(value);
+    const parsed = PreferenceSchema.shape[field].element.safeParse(value);
+    if (!parsed.success) return;
+
     setTempPreferences((prev) => {
       const currentValues = prev[field];
+      let newValues: string[];
 
       if (field === "dietary" && value === "No Preference") {
-        const newPrefs = {
-          ...prev,
-          [field]: [validatedValue]
-        };
-        onUpdatePreferences(newPrefs);
-        return newPrefs;
+        newValues = [value];
+      } else if (field === "dietary" && currentValues.includes("No Preference")) {
+        newValues = [value];
+      } else {
+        newValues = [...currentValues, value];
       }
-
-      const newValues = field === "dietary" && currentValues.includes("No Preference")
-        ? [validatedValue]
-        : [...currentValues, validatedValue];
 
       const newPrefs = {
         ...prev,
         [field]: newValues
       };
-      onUpdatePreferences(newPrefs);
-      return newPrefs;
+
+      // Validate the entire preferences object
+      const validated = PreferenceSchema.safeParse(newPrefs);
+      if (validated.success) {
+        onUpdatePreferences(validated.data);
+        return validated.data;
+      }
+
+      return prev;
     });
   };
 
   const handleRemovePreference = (field: PreferenceField, value: string) => {
-    const validatedValue = PreferenceSchema.shape[field].element.parse(value);
+    const parsed = PreferenceSchema.shape[field].element.safeParse(value);
+    if (!parsed.success) return;
+
     setTempPreferences((prev) => {
       const newPrefs = {
         ...prev,
-        [field]: prev[field].filter((item) => item !== validatedValue)
+        [field]: prev[field].filter((item) => item !== value)
       };
-      onUpdatePreferences(newPrefs);
-      return newPrefs;
+
+      const validated = PreferenceSchema.safeParse(newPrefs);
+      if (validated.success) {
+        onUpdatePreferences(validated.data);
+        return validated.data;
+      }
+
+      return prev;
     });
   };
 
@@ -202,7 +180,7 @@ export default function PreferenceModal({
             <>
               {currentStepConfig.field && (
                 <div className="space-y-2">
-                  <Select defaultOpen={false}>
+                  <Select>
                     <SelectTrigger className="w-full">
                       <SelectValue
                         placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()} (optional)`}
@@ -235,35 +213,9 @@ export default function PreferenceModal({
                             </div>
                           );
                         })}
-                        <div className="mt-2 pt-2 border-t">
-                          <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => {
-                              const trigger = document.querySelector('[role="combobox"]') as HTMLElement;
-                              if (trigger) {
-                                trigger.click();
-                                const dropdown = document.querySelector('[role="listbox"]');
-                                if (dropdown) {
-                                  (dropdown as HTMLElement).style.display = 'none';
-                                }
-                              }
-                            }}
-                          >
-                            Done
-                          </Button>
-                        </div>
                       </div>
                     </SelectContent>
                   </Select>
-                  <div className="text-sm space-y-1">
-                    <p className="font-medium text-primary">✨ Multi-Select Enabled</p>
-                    <p className="text-muted-foreground">
-                      • Click multiple options to add them
-                      • Click the badges below to remove selections
-                      • All selections are optional
-                    </p>
-                  </div>
                 </div>
               )}
 
