@@ -23,31 +23,11 @@ import type { Preferences } from "@db/schema";
 
 type PreferenceField = keyof Preferences;
 
-// Define specific preference value types based on the schema
-type DietaryPreference = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
-type AllergyPreference = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
-type CuisinePreference = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
-type MeatPreference = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
-
-type PreferenceValue<T extends PreferenceField> = 
-  T extends "dietary" ? DietaryPreference :
-  T extends "allergies" ? AllergyPreference :
-  T extends "cuisine" ? CuisinePreference :
-  T extends "meatTypes" ? MeatPreference :
-  never;
-
-interface Step {
-  title: string;
-  description: string;
-  field: PreferenceField | null;
-  options: PreferenceValue<PreferenceField>[];
-}
-
-const STEPS: Step[] = [
+const STEPS = [
   {
     title: "Dietary Preferences",
     description: "Select any dietary restrictions or preferences you follow.",
-    field: "dietary",
+    field: "dietary" as const,
     options: [
       "No Preference",
       "Vegetarian",
@@ -56,12 +36,12 @@ const STEPS: Step[] = [
       "Keto",
       "Paleo",
       "Mediterranean"
-    ] as DietaryPreference[]
+    ] as const
   },
   {
     title: "Allergies",
     description: "Select any food allergies or intolerances.",
-    field: "allergies",
+    field: "allergies" as const,
     options: [
       "Dairy",
       "Eggs",
@@ -70,12 +50,12 @@ const STEPS: Step[] = [
       "Shellfish",
       "Wheat",
       "Soy"
-    ] as AllergyPreference[]
+    ] as const
   },
   {
     title: "Cuisine Preferences",
     description: "Select your preferred cuisine types.",
-    field: "cuisine",
+    field: "cuisine" as const,
     options: [
       "Italian",
       "Mexican",
@@ -86,12 +66,12 @@ const STEPS: Step[] = [
       "Mediterranean",
       "American",
       "French"
-    ] as CuisinePreference[]
+    ] as const
   },
   {
     title: "Meat Preferences",
     description: "Select your preferred meat types.",
-    field: "meatTypes",
+    field: "meatTypes" as const,
     options: [
       "Chicken",
       "Beef",
@@ -100,15 +80,15 @@ const STEPS: Step[] = [
       "Lamb",
       "Turkey",
       "None"
-    ] as MeatPreference[]
+    ] as const
   },
   {
     title: "Review & Generate",
     description: "Review your preferences and generate your meal plan.",
     field: null,
-    options: []
+    options: [] as const
   }
-];
+] as const;
 
 interface PreferenceModalProps {
   open: boolean;
@@ -150,43 +130,39 @@ export default function PreferenceModal({
     setCurrentStep((prev) => prev - 1);
   };
 
-  const handleSelectPreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
+  const handleSelectPreference = (field: PreferenceField, value: string) => {
+    const validatedValue = PreferenceSchema.shape[field].element.parse(value);
     setTempPreferences((prev) => {
       const currentValues = prev[field];
 
-      if (field === "dietary") {
-        if (value === "No Preference") {
-          const newPrefs = {
-            ...prev,
-            [field]: ["No Preference" as const]
-          };
-          onUpdatePreferences(newPrefs);
-          return newPrefs;
-        } else {
-          const filtered = currentValues.filter(v => v !== "No Preference");
-          const newPrefs = {
-            ...prev,
-            [field]: [...filtered, value]
-          };
-          onUpdatePreferences(newPrefs);
-          return newPrefs;
-        }
+      if (field === "dietary" && value === "No Preference") {
+        const newPrefs = {
+          ...prev,
+          [field]: [validatedValue]
+        };
+        onUpdatePreferences(newPrefs);
+        return newPrefs;
       }
+
+      const newValues = field === "dietary" && currentValues.includes("No Preference")
+        ? [validatedValue]
+        : [...currentValues, validatedValue];
 
       const newPrefs = {
         ...prev,
-        [field]: [...currentValues, value]
+        [field]: newValues
       };
       onUpdatePreferences(newPrefs);
       return newPrefs;
     });
   };
 
-  const handleRemovePreference = <T extends PreferenceField>(field: T, value: PreferenceValue<T>) => {
+  const handleRemovePreference = (field: PreferenceField, value: string) => {
+    const validatedValue = PreferenceSchema.shape[field].element.parse(value);
     setTempPreferences((prev) => {
       const newPrefs = {
         ...prev,
-        [field]: prev[field].filter((item) => item !== value)
+        [field]: prev[field].filter((item) => item !== validatedValue)
       };
       onUpdatePreferences(newPrefs);
       return newPrefs;
@@ -207,9 +183,11 @@ export default function PreferenceModal({
         <div className="mt-4 space-y-4">
           {isLastStep ? (
             <div className="space-y-6">
-              {(Object.entries(tempPreferences) as [PreferenceField, PreferenceValue<PreferenceField>[]][]).map(([key, values]) => (
+              {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
                 <div key={key} className="space-y-2">
-                  <h4 className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
+                  <h4 className="font-medium capitalize">
+                    {key.replace(/([A-Z])/g, ' $1').trim()}
+                  </h4>
                   <div className="flex flex-wrap gap-2">
                     {values.length > 0 ? values.map((item) => (
                       <Badge key={item} variant="secondary">{item}</Badge>
@@ -233,7 +211,7 @@ export default function PreferenceModal({
                     <SelectContent>
                       <div className="p-2">
                         {currentStepConfig.field && currentStepConfig.options.map((option) => {
-                          const field = currentStepConfig.field as PreferenceField;
+                          const field = currentStepConfig.field!;
                           const isSelected = tempPreferences[field].includes(option);
 
                           return (
@@ -242,9 +220,9 @@ export default function PreferenceModal({
                               className="flex items-center gap-2 px-2 py-1 hover:bg-accent rounded-sm cursor-pointer"
                               onClick={() => {
                                 if (isSelected) {
-                                  handleRemovePreference(field, option as PreferenceValue<typeof field>);
+                                  handleRemovePreference(field, option);
                                 } else {
-                                  handleSelectPreference(field, option as PreferenceValue<typeof field>);
+                                  handleSelectPreference(field, option);
                                 }
                               }}
                             >
@@ -299,7 +277,7 @@ export default function PreferenceModal({
                     {item}
                     <button
                       className="ml-1 hover:bg-muted rounded-full"
-                      onClick={() => handleRemovePreference(currentStepConfig.field!, item as PreferenceValue<typeof currentStepConfig.field>)}
+                      onClick={() => handleRemovePreference(currentStepConfig.field!, item)}
                     >
                       ×
                     </button>
