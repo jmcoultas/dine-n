@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Loader2, Moon, Sun } from "lucide-react";
+import { Loader2, Moon, Sun, Settings } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
+import PreferenceModal from "@/components/PreferenceModal";
+import { PreferenceSchema } from "@db/schema";
+import type { Preferences } from "@db/schema";
 
 interface ProfileFormData {
   name: string;
@@ -21,6 +24,13 @@ export default function UserProfile() {
     name: '',
     email: '',
   });
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState<Preferences>({
+    dietary: [],
+    allergies: [],
+    cuisine: [],
+    meatTypes: [],
+  });
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -30,18 +40,33 @@ export default function UserProfile() {
         name: user.name || '',
         email: user.email || '',
       });
+
+      // Parse the preferences using the schema to ensure type safety
+      if (user.preferences) {
+        const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
+        if (parsedPrefs.success) {
+          setPreferences(parsedPrefs.data);
+        } else {
+          setPreferences({
+            dietary: [],
+            allergies: [],
+            cuisine: [],
+            meatTypes: [],
+          });
+        }
+      }
     }
   }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
+
     try {
       // Enhanced validation
       const normalizedEmail = formData.email.trim().toLowerCase();
       const normalizedName = formData.name.trim();
-      
+
       // Email validation using regex
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!normalizedName) {
@@ -51,7 +76,7 @@ export default function UserProfile() {
       if (!normalizedEmail || !emailRegex.test(normalizedEmail)) {
         throw new Error("Please enter a valid email address");
       }
-      
+
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: {
@@ -61,6 +86,7 @@ export default function UserProfile() {
         body: JSON.stringify({
           name: normalizedName,
           email: normalizedEmail,
+          preferences
         }),
       });
 
@@ -98,6 +124,63 @@ export default function UserProfile() {
     }
   };
 
+  const handlePreferencesSave = async (newPreferences: Preferences) => {
+    // Validate preferences before saving
+    const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
+    if (!parsedPrefs.success) {
+      toast({
+        title: "Error",
+        description: "Invalid preferences format",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPreferences(parsedPrefs.data);
+    setShowPreferences(false);
+
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          preferences: parsedPrefs.data
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update preferences');
+      }
+
+      // Invalidate the user query to refresh the data
+      await queryClient.invalidateQueries({ queryKey: ['user'] });
+
+      toast({
+        title: "Success",
+        description: "Preferences updated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update preferences",
+        variant: "destructive",
+      });
+
+      // Revert preferences on error
+      if (user?.preferences) {
+        const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
+        if (parsedPrefs.success) {
+          setPreferences(parsedPrefs.data);
+        }
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -115,7 +198,7 @@ export default function UserProfile() {
   }
 
   return (
-    <div className="container max-w-2xl mx-auto py-8">
+    <div className="container max-w-2xl mx-auto py-8 space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Profile Settings</CardTitle>
@@ -161,6 +244,73 @@ export default function UserProfile() {
           </CardFooter>
         </form>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Meal Preferences</CardTitle>
+          <CardDescription>
+            Manage your dietary preferences, allergies, and cuisine choices
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {preferences ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Dietary Preferences</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {preferences.dietary.length > 0
+                      ? preferences.dietary.join(", ")
+                      : "No dietary preferences set"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Allergies</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {preferences.allergies.length > 0
+                      ? preferences.allergies.join(", ")
+                      : "No allergies set"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Preferred Cuisines</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {preferences.cuisine.length > 0
+                      ? preferences.cuisine.join(", ")
+                      : "No cuisine preferences set"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Meat Preferences</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {preferences.meatTypes.length > 0
+                      ? preferences.meatTypes.join(", ")
+                      : "No meat preferences set"}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No preferences set</p>
+            )}
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button
+            variant="outline"
+            onClick={() => setShowPreferences(true)}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Edit Preferences
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <PreferenceModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+        preferences={preferences}
+        onUpdatePreferences={handlePreferencesSave}
+      />
     </div>
   );
 }

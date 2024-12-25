@@ -2,11 +2,20 @@ import { pgTable, integer, text, timestamp, jsonb, boolean } from "drizzle-orm/p
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define preference types
+export const PreferenceSchema = z.object({
+  dietary: z.array(z.enum(["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo", "Mediterranean"])),
+  allergies: z.array(z.enum(["Dairy", "Eggs", "Tree Nuts", "Peanuts", "Shellfish", "Wheat", "Soy"])),
+  cuisine: z.array(z.enum(["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"])),
+  meatTypes: z.array(z.enum(["Chicken", "Beef", "Pork", "Fish", "Lamb", "Turkey", "None"]))
+});
+
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   email: text("email").notNull().unique(),
   name: text("name"),
   password_hash: text("password_hash").notNull(),
+  preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -59,7 +68,6 @@ export const groceryLists = pgTable("grocery_lists", {
   created: timestamp("created").notNull(),
 });
 
-// Schemas for validation
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertRecipeSchema = createInsertSchema(recipes);
@@ -71,9 +79,9 @@ export const selectMealPlanSchema = createSelectSchema(mealPlans);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
 
-// Types
 export type User = z.infer<typeof selectUserSchema>;
 export type Recipe = z.infer<typeof selectRecipeSchema>;
 export type UserRecipe = z.infer<typeof selectUserRecipeSchema>;
 export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
+export type Preferences = z.infer<typeof PreferenceSchema>;

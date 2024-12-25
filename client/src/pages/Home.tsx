@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
@@ -6,6 +6,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import PreferenceModal from "@/components/PreferenceModal";
 import { generateMealPlan } from "@/lib/api";
+import { PreferenceSchema } from "@db/schema";
+import type { Preferences } from "@db/schema";
+import { RecipeResponseSchema, type Recipe } from "@/lib/types";
 
 const HERO_IMAGES = [
   "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
@@ -16,18 +19,6 @@ const HERO_IMAGES = [
 export default function Home() {
   const { user } = useUser();
   const [showPreferences, setShowPreferences] = useState(false);
-  type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
-  type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
-  type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
-  type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
-
-  interface Preferences {
-    dietary: Array<PreferenceType>;
-    allergies: Array<AllergyType>;
-    cuisine: Array<CuisineType>;
-    meatTypes: Array<MeatType>;
-  }
-
   const [preferences, setPreferences] = useState<Preferences>({
     dietary: [],
     allergies: [],
@@ -36,30 +27,16 @@ export default function Home() {
   });
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    if (user?.preferences) {
+      const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
+      if (parsedPrefs.success) {
+        setPreferences(parsedPrefs.data);
+      }
+    }
+  }, [user]);
+
   const { toast } = useToast();
-  interface Recipe {
-    id: number;
-    name: string;
-    description?: string;
-    imageUrl?: string;
-    prepTime?: number;
-    cookTime?: number;
-    servings?: number;
-    ingredients?: Array<{
-      name: string;
-      amount: number;
-      unit: string;
-    }>;
-    instructions?: string[];
-    tags?: string[];
-    nutrition?: {
-      calories: number;
-      protein: number;
-      carbs: number;
-      fat: number;
-    };
-    complexity: 1 | 2 | 3;
-  }
 
   const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
@@ -73,50 +50,12 @@ export default function Home() {
       const response = await generateMealPlan(cleanPreferences, 2);
       console.log('Received response:', response);
 
-      const recipes = response.recipes.map(recipe => {
-        const typedRecipe: Recipe = {
-          id: recipe.id,
-          name: recipe.name,
-          description: recipe.description || undefined,
-          imageUrl: recipe.imageUrl || undefined,
-          prepTime: recipe.prepTime || undefined,
-          cookTime: recipe.cookTime || undefined,
-          servings: recipe.servings || undefined,
-          ingredients: Array.isArray(recipe.ingredients)
-            ? recipe.ingredients.map(ing => {
-                const ingredient = ing as { name?: string; amount?: number; unit?: string };
-                return {
-                  name: String(ingredient?.name || ''),
-                  amount: Number(ingredient?.amount || 0),
-                  unit: String(ingredient?.unit || '')
-                };
-              })
-            : undefined,
-          instructions: Array.isArray(recipe.instructions)
-            ? recipe.instructions.map(String)
-            : undefined,
-          tags: Array.isArray(recipe.tags)
-            ? recipe.tags.map(String)
-            : undefined,
-          nutrition: typeof recipe.nutrition === 'object' && recipe.nutrition
-            ? {
-                calories: Number((recipe.nutrition as any)?.calories || 0),
-                protein: Number((recipe.nutrition as any)?.protein || 0),
-                carbs: Number((recipe.nutrition as any)?.carbs || 0),
-                fat: Number((recipe.nutrition as any)?.fat || 0)
-              }
-            : undefined,
-          complexity: (typeof recipe.complexity === 'number' && [1, 2, 3].includes(recipe.complexity))
-            ? recipe.complexity as 1 | 2 | 3
-            : 1
-        };
-        return typedRecipe;
-      });
+      const result = RecipeResponseSchema.safeParse(response);
+      if (!result.success) {
+        throw new Error('Invalid response format from server');
+      }
 
-      return {
-        recipes,
-        status: response.status as 'success' | 'partial'
-      };
+      return result.data;
     },
     onSuccess: (data) => {
       setShowPreferences(false);
@@ -148,9 +87,9 @@ export default function Home() {
 
       const errorData = err.response?.data;
       const errorMessage = errorData?.error ||
-                          errorData?.message ||
-                          err.message ||
-                          "Failed to generate meal plan. Please try again.";
+                        errorData?.message ||
+                        err.message ||
+                        "Failed to generate meal plan. Please try again.";
       const errorDetails = errorData?.details || '';
       const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
 
