@@ -100,7 +100,7 @@ export default function PreferenceModal({
     if (!parsed.success) return;
 
     setTempPreferences((prev) => {
-      const currentValues = prev[field] as string[];
+      const currentValues = prev[field] || [];
       let newValues: string[];
 
       if (field === "dietary" && value === "No Preference") {
@@ -134,7 +134,7 @@ export default function PreferenceModal({
     setTempPreferences((prev) => {
       const newPrefs = {
         ...prev,
-        [field]: prev[field].filter((item) => item !== value)
+        [field]: (prev[field] || []).filter((item) => item !== value)
       };
 
       const validated = PreferenceSchema.safeParse(newPrefs);
