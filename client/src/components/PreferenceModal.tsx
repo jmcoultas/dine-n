@@ -100,7 +100,7 @@ export default function PreferenceModal({
     if (!parsed.success) return;
 
     setTempPreferences((prev) => {
-      const currentValues = prev[field];
+      const currentValues = prev[field] as string[];
       let newValues: string[];
 
       if (field === "dietary" && value === "No Preference") {
@@ -190,7 +190,7 @@ export default function PreferenceModal({
                       <div className="p-2">
                         {currentStepConfig.field && currentStepConfig.options.map((option) => {
                           const field = currentStepConfig.field!;
-                          const isSelected = tempPreferences[field].includes(option);
+                          const isSelected = (tempPreferences[field] as string[]).includes(option);
 
                           return (
                             <div
