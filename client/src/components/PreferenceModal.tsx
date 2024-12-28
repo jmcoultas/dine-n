@@ -141,12 +141,9 @@ export default function PreferenceModal({
           }
 
           // Debounce the update to prevent rapid API calls
-          const timeoutId = setTimeout(() => {
+          setTimeout(() => {
             onUpdatePreferences(validated.data);
           }, 500);
-
-          // Cleanup timeout on next update
-          return () => clearTimeout(timeoutId);
 
           return validated.data;
         } catch (error) {
