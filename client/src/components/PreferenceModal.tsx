@@ -117,10 +117,12 @@ export default function PreferenceModal({
 
           if (field === "dietary" && value === "No Preference") {
             newValues = [value];
-          } else if (field === "dietary" && currentValues.includes(value as any)) {
-            newValues = [value];
+          } else if (field === "dietary" && currentValues.includes(value)) {
+            // If already selected, remove it
+            newValues = currentValues.filter(v => v !== value);
           } else {
-            newValues = [...currentValues, value];
+            // Add new value, ensuring no duplicates
+            newValues = [...new Set([...currentValues, value])];
           }
 
           const newPrefs = {
@@ -140,7 +142,11 @@ export default function PreferenceModal({
             return prev;
           }
 
-          onUpdatePreferences(validated.data);
+          // Update parent component
+          setTimeout(() => {
+            onUpdatePreferences(validated.data);
+          }, 0);
+
           return validated.data;
         } catch (error) {
           console.error('Error updating preferences:', {
