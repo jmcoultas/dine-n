@@ -25,6 +25,43 @@ export default function Home() {
     cuisine: [],
     meatTypes: [],
   });
+
+  const handlePreferencesSave = async (newPreferences: Preferences) => {
+    const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
+    if (!parsedPrefs.success) {
+      toast({
+        title: "Error",
+        description: "Invalid preferences format",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPreferences(parsedPrefs.data);
+
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          preferences: parsedPrefs.data
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update preferences');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update preferences",
+        variant: "destructive",
+      });
+    }
+  };
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -184,7 +221,7 @@ export default function Home() {
         open={showPreferences}
         onOpenChange={setShowPreferences}
         preferences={preferences}
-        onUpdatePreferences={setPreferences}
+        onUpdatePreferences={handlePreferencesSave}
         isGenerating={generateMutation.isPending}
         onGenerate={handleGenerate}
       />
