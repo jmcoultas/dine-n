@@ -143,10 +143,15 @@ export default function PreferenceModal({
           onUpdatePreferences(validated.data);
           return validated.data;
         } catch (error) {
-          console.error('Error updating preferences:', error);
+          console.error('Error updating preferences:', {
+            error,
+            currentState: prev,
+            attemptedValue: value,
+            field
+          });
           toast({
             title: "Error",
-            description: "Failed to update preferences",
+            description: error instanceof Error ? error.message : "Failed to update preferences",
             variant: "destructive",
           });
           return prev;
