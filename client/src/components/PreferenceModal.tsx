@@ -112,12 +112,12 @@ export default function PreferenceModal({
 
       setTempPreferences((prev) => {
         try {
-          const currentValues = Array.isArray(prev[field]) ? prev[field] : [];
+          const currentValues = Array.isArray(prev[field]) ? prev[field] as string[] : [];
           let newValues: string[];
 
           if (field === "dietary" && value === "No Preference") {
             newValues = [value];
-          } else if (field === "dietary" && currentValues.includes("No Preference")) {
+          } else if (field === "dietary" && currentValues.includes(value as any)) {
             newValues = [value];
           } else {
             newValues = [...currentValues, value];
