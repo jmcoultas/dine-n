@@ -71,6 +71,7 @@ export function setupAuth(app: Express) {
             email: users.email,
             name: users.name,
             password_hash: users.password_hash,
+            preferences: users.preferences,
             createdAt: users.createdAt,
           })
           .from(users)
