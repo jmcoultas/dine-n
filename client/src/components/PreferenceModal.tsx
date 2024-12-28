@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   Select,
   SelectContent,
@@ -72,6 +73,7 @@ export default function PreferenceModal({
   isGenerating = false,
   onGenerate,
 }: PreferenceModalProps) {
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
 
@@ -96,35 +98,68 @@ export default function PreferenceModal({
   };
 
   const handleSelectPreference = (field: PreferenceField, value: string) => {
-    const parsed = PreferenceSchema.shape[field].element.safeParse(value);
-    if (!parsed.success) return;
-
-    setTempPreferences((prev) => {
-      const currentValues = prev[field] || [];
-      let newValues: string[];
-
-      if (field === "dietary" && value === "No Preference") {
-        newValues = [value];
-      } else if (field === "dietary" && currentValues.includes("No Preference")) {
-        newValues = [value];
-      } else {
-        newValues = [...currentValues, value];
+    try {
+      const parsed = PreferenceSchema.shape[field].element.safeParse(value);
+      if (!parsed.success) {
+        console.error('Invalid preference value:', parsed.error);
+        toast({
+          title: "Error",
+          description: "Invalid preference selection",
+          variant: "destructive",
+        });
+        return;
       }
 
-      const newPrefs = {
-        ...prev,
-        [field]: newValues
-      };
+      setTempPreferences((prev) => {
+        try {
+          const currentValues = Array.isArray(prev[field]) ? prev[field] : [];
+          let newValues: string[];
 
-      // Validate the entire preferences object
-      const validated = PreferenceSchema.safeParse(newPrefs);
-      if (validated.success) {
-        onUpdatePreferences(validated.data);
-        return validated.data;
-      }
+          if (field === "dietary" && value === "No Preference") {
+            newValues = [value];
+          } else if (field === "dietary" && currentValues.includes("No Preference")) {
+            newValues = [value];
+          } else {
+            newValues = [...currentValues, value];
+          }
 
-      return prev;
-    });
+          const newPrefs = {
+            ...prev,
+            [field]: newValues
+          };
+
+          // Validate the entire preferences object
+          const validated = PreferenceSchema.safeParse(newPrefs);
+          if (!validated.success) {
+            console.error('Invalid preferences:', validated.error);
+            toast({
+              title: "Error",
+              description: "Invalid preference combination",
+              variant: "destructive",
+            });
+            return prev;
+          }
+
+          onUpdatePreferences(validated.data);
+          return validated.data;
+        } catch (error) {
+          console.error('Error updating preferences:', error);
+          toast({
+            title: "Error",
+            description: "Failed to update preferences",
+            variant: "destructive",
+          });
+          return prev;
+        }
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRemovePreference = (field: PreferenceField, value: string) => {
