@@ -140,11 +140,7 @@ export default function PreferenceModal({
             return prev;
           }
 
-          // Debounce the update to prevent rapid API calls
-          setTimeout(() => {
-            onUpdatePreferences(validated.data);
-          }, 500);
-
+          onUpdatePreferences(validated.data);
           return validated.data;
         } catch (error) {
           console.error('Error updating preferences:', {
