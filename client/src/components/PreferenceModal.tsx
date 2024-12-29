@@ -85,9 +85,32 @@ export default function PreferenceModal({
   const isLastStep = currentStep === STEPS.length - 1;
   const isFirstStep = currentStep === 0;
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (isLastStep) {
-      onGenerate?.();
+      try {
+        const response = await fetch('/api/user/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            preferences: tempPreferences
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update preferences');
+        }
+
+        onGenerate?.();
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to update preferences",
+          variant: "destructive",
+        });
+      }
     } else {
       setCurrentStep((prev) => prev + 1);
     }
