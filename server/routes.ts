@@ -565,3 +565,30 @@ export function registerRoutes(app: express.Express) {
   });
 
 }
+  // User Profile Routes
+  app.put("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { preferences } = req.body;
+      
+      // Validate preferences using our schema
+      const parsedPrefs = PreferenceSchema.safeParse(preferences);
+      if (!parsedPrefs.success) {
+        return res.status(400).json({ 
+          error: "Invalid preferences format",
+          details: parsedPrefs.error 
+        });
+      }
+
+      // Update user preferences in database
+      await db
+        .update(users)
+        .set({ preferences: parsedPrefs.data })
+        .where(eq(users.id, req.user!.id));
+
+      res.json({ message: "Preferences updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating preferences:", error);
+      res.status(500).json({ error: "Failed to update preferences" });
+    }
+  });
+
