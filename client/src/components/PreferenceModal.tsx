@@ -76,6 +76,11 @@ export default function PreferenceModal({
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
+  let debounceTimer: NodeJS.Timeout | null = null;
+
+  const debouncedUpdate = (newPrefs: Preferences) => {
+    onUpdatePreferences(newPrefs);
+  };
 
   useEffect(() => {
     setTempPreferences(preferences);
@@ -203,7 +208,8 @@ export default function PreferenceModal({
 
       const validated = PreferenceSchema.safeParse(newPrefs);
       if (validated.success) {
-        onUpdatePreferences(validated.data);
+        // Update local state immediately
+        setTimeout(() => debouncedUpdate(newPrefs), 500);
         return validated.data;
       }
 
