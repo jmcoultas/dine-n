@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Recipe } from "@/lib/types";
 
 type ComplexityLevel = 1 | 2 | 3;
 
@@ -14,29 +15,7 @@ const isValidComplexity = (value: number): value is ComplexityLevel =>
   value === 1 || value === 2 || value === 3;
 
 interface MealPlanCardProps {
-  recipe: {
-    id: number;
-    name: string;
-    description: string | null;
-    imageUrl: string | null;
-    prepTime: number | null;
-    cookTime: number | null;
-    servings: number | null;
-    ingredients: Array<{
-      name: string;
-      amount: number;
-      unit: string;
-    }> | null;
-    instructions: string[] | null;
-    tags: string[] | null;
-    nutrition: {
-      calories: number;
-      protein: number;
-      carbs: number;
-      fat: number;
-    } | null;
-    complexity: ComplexityLevel;
-  };
+  recipe: Recipe;
   day: Date;
   meal: "breakfast" | "lunch" | "dinner";
   onRemove?: () => void;
@@ -65,29 +44,28 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       if (!user) {
         throw new Error("Must be logged in to favorite recipes");
       }
-      
+
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
-        },
-        // For generated recipes (negative IDs), we need to send the full recipe data
-        body: JSON.stringify(recipe.id < 0 ? { recipe } : {})
+        }
       });
-      
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to favorite recipe");
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || "Failed to favorite recipe");
       }
-      
+
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
+      queryClient.invalidateQueries({ queryKey: ['temporaryRecipes'] });
       toast({
         title: "Recipe added to favorites",
-        description: "The recipe has been added to your collection",
+        description: data.message,
       });
     },
     onError: (error: Error) => {
@@ -105,25 +83,12 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     : 1;
 
   // Add strict null checking for optional properties
-  const prepTime = recipe.prepTime ?? 0;
-  const cookTime = recipe.cookTime ?? 0;
+  const prepTime = recipe.prep_time ?? 0;
+  const cookTime = recipe.cook_time ?? 0;
   const totalTime = prepTime + cookTime;
   const servings = recipe.servings ?? 2;
-  const imageUrl = recipe.imageUrl ?? '';
+  const imageUrl = recipe.image_url ?? '';
   const description = recipe.description ?? '';
-
-  // Add strict null checking for nutrition
-  const nutrition = {
-    calories: recipe.nutrition?.calories ?? 0,
-    protein: recipe.nutrition?.protein ?? 0,
-    carbs: recipe.nutrition?.carbs ?? 0,
-    fat: recipe.nutrition?.fat ?? 0,
-  } as const;
-
-  // Ensure arrays are defined with proper typing
-  const ingredients = recipe.ingredients ?? [];
-  const instructions = recipe.instructions ?? [];
-  const tags = recipe.tags ?? [];
 
   return (
     <>
@@ -201,15 +166,17 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
           <DialogHeader>
             <DialogTitle>{recipe.name}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
-            <div className="aspect-video relative rounded-lg overflow-hidden">
-              <img
-                src={imageUrl}
-                alt={recipe.name}
-                className="object-cover w-full h-full"
-              />
-            </div>
+            {imageUrl && (
+              <div className="aspect-video relative rounded-lg overflow-hidden">
+                <img
+                  src={imageUrl}
+                  alt={recipe.name}
+                  className="object-cover w-full h-full"
+                />
+              </div>
+            )}
 
             <div className="flex gap-2 flex-wrap">
               <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
@@ -229,54 +196,60 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold mb-2">Ingredients</h3>
-                <ul className="list-disc list-inside space-y-1">
-                  {ingredients.map((ingredient, i) => (
-                    <li key={i}>
-                      {ingredient.amount} {ingredient.unit} {ingredient.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {recipe.ingredients && recipe.ingredients.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2">Ingredients</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {recipe.ingredients.map((ingredient, i) => (
+                      <li key={i}>
+                        {ingredient.amount} {ingredient.unit} {ingredient.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
-              <div>
-                <h3 className="font-semibold mb-2">Instructions</h3>
-                <ol className="list-decimal list-inside space-y-1">
-                  {instructions.map((step, i) => (
-                    <li key={i}>{step}</li>
-                  ))}
-                </ol>
-              </div>
+              {recipe.instructions && recipe.instructions.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2">Instructions</h3>
+                  <ol className="list-decimal list-inside space-y-1">
+                    {recipe.instructions.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </div>
 
-            <div>
-              <h3 className="font-semibold mb-2">Nutrition</h3>
-              <div className="grid grid-cols-4 gap-4 text-center">
-                <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{nutrition.calories}</div>
-                  <div className="text-sm text-muted-foreground">Calories</div>
-                </div>
-                <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{nutrition.protein}g</div>
-                  <div className="text-sm text-muted-foreground">Protein</div>
-                </div>
-                <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{nutrition.carbs}g</div>
-                  <div className="text-sm text-muted-foreground">Carbs</div>
-                </div>
-                <div className="bg-muted rounded-lg p-2">
-                  <div className="font-semibold">{nutrition.fat}g</div>
-                  <div className="text-sm text-muted-foreground">Fat</div>
+            {recipe.nutrition && (
+              <div>
+                <h3 className="font-semibold mb-2">Nutrition</h3>
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div className="bg-muted rounded-lg p-2">
+                    <div className="font-semibold">{recipe.nutrition.calories}</div>
+                    <div className="text-sm text-muted-foreground">Calories</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-2">
+                    <div className="font-semibold">{recipe.nutrition.protein}g</div>
+                    <div className="text-sm text-muted-foreground">Protein</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-2">
+                    <div className="font-semibold">{recipe.nutrition.carbs}g</div>
+                    <div className="text-sm text-muted-foreground">Carbs</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-2">
+                    <div className="font-semibold">{recipe.nutrition.fat}g</div>
+                    <div className="text-sm text-muted-foreground">Fat</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {tags.length > 0 && (
+            {recipe.tags && recipe.tags.length > 0 && (
               <div>
                 <h3 className="font-semibold mb-2">Tags</h3>
                 <div className="flex flex-wrap gap-2">
-                  {tags.map((tag, i) => (
+                  {recipe.tags.map((tag, i) => (
                     <span key={i} className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
                       {tag}
                     </span>
