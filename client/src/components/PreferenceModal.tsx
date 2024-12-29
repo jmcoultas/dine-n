@@ -122,7 +122,7 @@ export default function PreferenceModal({
             newValues = currentValues.filter(v => v !== value);
           } else {
             // Add new value, ensuring no duplicates
-            newValues = [...new Set([...currentValues, value])];
+            newValues = Array.from(new Set([...currentValues, value]));
           }
 
           const newPrefs = {
