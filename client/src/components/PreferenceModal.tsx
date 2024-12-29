@@ -304,7 +304,7 @@ export default function PreferenceModal({
           )}
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row justify-between gap-4 mt-6">
+        <DialogFooter className="flex justify-between mt-6">
           <div>
             {!isFirstStep && (
               <Button variant="outline" onClick={handleBack}>
@@ -313,14 +313,14 @@ export default function PreferenceModal({
               </Button>
             )}
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex gap-2">
             <Button 
               variant="outline" 
               onClick={() => onUpdatePreferences(tempPreferences)}
             >
               Save Preferences
             </Button>
-            <Button onClick={handleNext} disabled={isGenerating} className="whitespace-nowrap">
+            <Button onClick={handleNext} disabled={isGenerating}>
               {isLastStep ? (
                 <>
                   <Wand2 className="mr-2 h-4 w-4" />
