@@ -106,15 +106,26 @@ Please assign complexity based on:
       const recipeData = JSON.parse(content) as Partial<Recipe>;
       console.log('Parsed recipe data:', JSON.stringify(recipeData, null, 2));
       
-      // Validate required fields
+      // Start image generation as soon as we have the name
+      const imagePromise = recipeData.name ? 
+        openai.images.generate({
+          model: "dall-e-3",
+          prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
+          n: 1,
+          size: "1024x1024",
+          quality: "standard",
+          style: "natural"
+        }) : Promise.resolve(null);
+
+      // Validate required fields while image generates
       if (!recipeData.name || !recipeData.description || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.instructions)) {
         throw new Error("Missing required fields in recipe data");
       }
-      
-      // Generate image using DALL-E 3
+
+      // Wait for image generation
       try {
         console.log('Generating image for recipe:', recipeData.name);
-        const imageResponse = await openai.images.generate({
+        const imageResponse = await imagePromise;
           model: "dall-e-3",
           prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
           n: 1,
