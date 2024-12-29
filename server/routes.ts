@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
-import { recipes, mealPlans, groceryLists, users, userRecipes, type Recipe } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, userRecipes, type Recipe, PreferenceSchema } from "@db/schema";
 import { db } from "../db";
 import { transformInstructionsForDB, transformInstructionsForClient } from "./utils/transformers";
 
