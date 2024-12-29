@@ -4,9 +4,9 @@ export const RecipeSchema = z.object({
   id: z.number(),
   name: z.string(),
   description: z.string().nullable(),
-  image_url: z.string().nullable(),
-  prep_time: z.number().nullable(),
-  cook_time: z.number().nullable(),
+  imageUrl: z.string().nullable(),
+  prepTime: z.number().nullable(),
+  cookTime: z.number().nullable(),
   servings: z.number().nullable(),
   ingredients: z.array(z.object({
     name: z.string(),
@@ -23,7 +23,7 @@ export const RecipeSchema = z.object({
   }),
   complexity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   created_at: z.date(),
-  expires_at: z.date().optional()
+  expiresAt: z.date().optional()
 });
 
 export type Recipe = z.infer<typeof RecipeSchema>;

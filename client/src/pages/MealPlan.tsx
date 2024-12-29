@@ -39,18 +39,34 @@ export default function MealPlan() {
     };
   });
 
-  const { data: temporaryRecipes = [], isLoading } = useQuery<Recipe[]>({
+
+  interface MealPlanRecipe {
+    recipeId: number;
+    day: string;
+    meal: MealType;
+  }
+
+  interface MealPlan {
+    id: number;
+    userId: number;
+    name: string;
+    startDate: Date;
+    endDate: Date;
+    recipes: MealPlanRecipe[];
+  }
+
+  const { data: temporaryRecipes, isLoading } = useQuery<Recipe[]>({
     queryKey: ['temporaryRecipes'],
     queryFn: getTemporaryRecipes,
     refetchInterval: 60000, // Refetch every minute to update expiration status
   });
 
-  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
+  const [generatedRecipes, setGeneratedRecipes] = useState<(Recipe | null)[]>([]);
 
   // Update recipes when temporary recipes are fetched
   useEffect(() => {
     if (temporaryRecipes) {
-      setGeneratedRecipes([...temporaryRecipes]);
+      setGeneratedRecipes(temporaryRecipes);
     }
   }, [temporaryRecipes]);
 
@@ -67,23 +83,23 @@ export default function MealPlan() {
 
       const mealPlan = await createMealPlan({
         name: "Weekly Plan",
-        start_date: selectedDate,
-        end_date: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        created_at: new Date(),
-        user_id: user?.id ?? 0,
+        startDate: selectedDate,
+        endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
+        userId: user?.id ?? 0,
       });
 
       const items = generatedRecipes.flatMap(recipe =>
-        recipe.ingredients?.map(ingredient => ({
+        recipe ? (recipe.ingredients?.map(ingredient => ({
           ...ingredient,
           checked: false,
-        })) ?? []
+        })) ?? []) : []
       );
 
       if (items.length > 0) {
         await createGroceryList({
-          user_id: mealPlan.user_id,
-          meal_plan_id: mealPlan.id,
+          userId: mealPlan.userId,
+          mealPlanId: mealPlan.id,
           items,
           created: new Date(),
         });
@@ -184,12 +200,12 @@ export default function MealPlan() {
                 </div>
               ) : generatedRecipes.length > 0 ? (
                 <>
-                  {temporaryRecipes[0]?.expires_at && (
+                  {temporaryRecipes?.[0]?.expiresAt && (
                     <div className="bg-yellow-100 dark:bg-yellow-900/20 p-4 rounded-lg mb-4">
                       <p className="text-sm text-yellow-800 dark:text-yellow-200">
                         This meal plan will expire in{" "}
                         {Math.ceil(
-                          (new Date(temporaryRecipes[0].expires_at).getTime() - new Date().getTime()) /
+                          (new Date(temporaryRecipes[0].expiresAt).getTime() - new Date().getTime()) /
                           (1000 * 60 * 60 * 24)
                         )}{" "}
                         days. Save it to keep it permanently!
@@ -211,7 +227,7 @@ export default function MealPlan() {
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
                             const removedRecipe = newRecipes[index];
-                            newRecipes.splice(index, 1);
+                            newRecipes[index] = null;
                             setGeneratedRecipes(newRecipes);
 
                             toast({
@@ -248,6 +264,7 @@ export default function MealPlan() {
             <GroceryList
               items={
                 generatedRecipes
+                  .filter((recipe): recipe is Recipe => recipe !== null)
                   .flatMap(recipe => recipe.ingredients ?? [])
               }
             />
