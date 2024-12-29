@@ -177,7 +177,7 @@ export function registerRoutes(app: express.Express) {
         .insert(mealPlans)
         .values({
           name,
-          userId: req.user!.id,
+          user_id: req.user!.id,
           startDate: new Date(startDate),
           endDate: new Date(endDate),
         })
@@ -244,7 +244,7 @@ export function registerRoutes(app: express.Express) {
       const [newGroceryList] = await db
         .insert(groceryLists)
         .values({
-          userId: req.user!.id,
+          user_id: req.user!.id,
           mealPlanId,
           items,
           created: new Date(),
@@ -567,7 +567,7 @@ export function registerRoutes(app: express.Express) {
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
           .values({
-            userId: req.user!.id,
+            user_id: req.user!.id,
             name: recipe.name,
             description: recipe.description || null,
             imageUrl: recipe.imageUrl,

@@ -65,14 +65,18 @@ export default function MealPlan() {
     expiresAt: Date;
   }
 
-  const [generatedRecipes, setGeneratedRecipes] = useState<TemporaryRecipe[]>([]);
+  const [generatedRecipes, setGeneratedRecipes] = useState<(TemporaryRecipe | null)[]>([]);
 
   // Update recipes when temporary recipes are fetched
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
       setGeneratedRecipes(temporaryRecipes.map(recipe => ({
         ...recipe,
-        expiresAt: new Date(recipe.expiresAt)
+        expiresAt: new Date(recipe.expires_at),
+        ingredients: recipe.ingredients as { name: string; amount: number; unit: string; }[],
+        instructions: recipe.instructions as string[],
+        tags: recipe.tags as string[],
+        nutrition: recipe.nutrition as { calories: number; protein: number; carbs: number; fat: number; }
       })));
     }
   }, [temporaryRecipes]);

@@ -28,6 +28,10 @@ export const RecipeSchema = z.object({
 
 export type Recipe = z.infer<typeof RecipeSchema>;
 
+export type TemporaryRecipe = Recipe & {
+  expiresAt: Date;
+};
+
 export const RecipeResponseSchema = z.object({
   recipes: z.array(RecipeSchema),
   status: z.union([z.literal('success'), z.literal('partial')])
