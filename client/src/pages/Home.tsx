@@ -139,14 +139,7 @@ export default function Home() {
             <Button
               size="lg"
               className="bg-primary hover:bg-primary/90"
-              onClick={() => {
-                // Start from the final step if user has existing preferences
-                const hasExistingPreferences = Object.values(preferences).some(arr => arr.length > 0);
-                setShowPreferences(true);
-                if (hasExistingPreferences) {
-                  setCurrentStep(4); // Final step index
-                }
-              }}
+              onClick={() => setShowPreferences(true)}
             >
               Start Planning
             </Button>

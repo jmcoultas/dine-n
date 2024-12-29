@@ -63,7 +63,6 @@ interface PreferenceModalProps {
   onUpdatePreferences: (preferences: Preferences) => void;
   isGenerating?: boolean;
   onGenerate?: () => void;
-  initialStep?: number;
 }
 
 export default function PreferenceModal({
@@ -75,7 +74,7 @@ export default function PreferenceModal({
   onGenerate,
 }: PreferenceModalProps) {
   const { toast } = useToast();
-  const [currentStep, setCurrentStep] = useState(props.initialStep || 0);
+  const [currentStep, setCurrentStep] = useState(0);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
 
   useEffect(() => {
