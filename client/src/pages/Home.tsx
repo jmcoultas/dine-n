@@ -18,15 +18,51 @@ const HERO_IMAGES = [
 
 export default function Home() {
   const { user } = useUser();
+  const [showPreferences, setShowPreferences] = useState(false);
   const [preferences, setPreferences] = useState<Preferences>({
     dietary: [],
     allergies: [],
     cuisine: [],
     meatTypes: [],
   });
-  const [, setLocation] = useLocation();
-  const [showPreferences, setShowPreferences] = useState(false);
 
+  const handlePreferencesSave = async (newPreferences: Preferences) => {
+    const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
+    if (!parsedPrefs.success) {
+      toast({
+        title: "Error",
+        description: "Invalid preferences format",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPreferences(parsedPrefs.data);
+
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          preferences: parsedPrefs.data
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update preferences');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update preferences",
+        variant: "destructive",
+      });
+    }
+  };
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (user?.preferences) {
