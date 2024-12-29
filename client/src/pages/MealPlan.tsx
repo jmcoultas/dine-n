@@ -39,7 +39,6 @@ export default function MealPlan() {
     };
   });
 
-
   interface MealPlanRecipe {
     recipeId: number;
     day: string;
@@ -55,7 +54,7 @@ export default function MealPlan() {
     recipes: MealPlanRecipe[];
   }
 
-  const { data: temporaryRecipes, isLoading } = useQuery({
+  const { data: temporaryRecipes, isLoading } = useQuery<Recipe[]>({
     queryKey: ['temporaryRecipes'],
     queryFn: getTemporaryRecipes,
     refetchInterval: 60000, // Refetch every minute to update expiration status
@@ -66,7 +65,7 @@ export default function MealPlan() {
   // Update recipes when temporary recipes are fetched
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
-      setGeneratedRecipes(temporaryRecipes);
+      setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe => recipe !== null));
     }
   }, [temporaryRecipes]);
 
@@ -90,10 +89,10 @@ export default function MealPlan() {
       });
 
       const items = generatedRecipes.flatMap(recipe =>
-        recipe ? (recipe.ingredients?.map(ingredient => ({
+        recipe.ingredients?.map(ingredient => ({
           ...ingredient,
           checked: false,
-        })) ?? []) : []
+        })) ?? []
       );
 
       if (items.length > 0) {
@@ -227,7 +226,7 @@ export default function MealPlan() {
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
                             const removedRecipe = newRecipes[index];
-                            newRecipes[index] = null;
+                            newRecipes.splice(index, 1); // Remove the recipe instead of setting to null
                             setGeneratedRecipes(newRecipes);
 
                             toast({
