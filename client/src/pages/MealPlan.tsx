@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
-import { createMealPlan, createGroceryList } from "@/lib/api";
+import { createMealPlan, createGroceryList, getTemporaryRecipes } from "@/lib/api";
+import type { Recipe } from "@/lib/types";
 
 export default function MealPlan() {
   // Type definitions
@@ -38,43 +39,6 @@ export default function MealPlan() {
     };
   });
 
-  interface RecipeIngredient {
-    name: string;
-    amount: number;
-    unit: string;
-  }
-
-  interface RecipeNutrition {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  }
-
-  interface Recipe {
-    id: number;
-    name: string;
-    created_at: Date;
-    description: string | null;
-    imageUrl: string | null;
-    prepTime: number | null;
-    cookTime: number | null;
-    servings: number | null;
-    ingredients: Array<{
-      name: string;
-      amount: number;
-      unit: string;
-    }>;
-    instructions: string[];
-    tags: string[];
-    nutrition: {
-      calories: number;
-      protein: number;
-      carbs: number;
-      fat: number;
-    };
-    complexity: 1 | 2 | 3;
-  }
 
   interface MealPlanRecipe {
     recipeId: number;
@@ -91,31 +55,25 @@ export default function MealPlan() {
     recipes: MealPlanRecipe[];
   }
 
-  const [generatedRecipes, setGeneratedRecipes] = useState<(Recipe | null)[]>(() => {
-    const savedRecipes = localStorage.getItem('generatedRecipes');
-    try {
-      return savedRecipes ? JSON.parse(savedRecipes) : [];
-    } catch {
-      return [];
-    }
+  const { data: temporaryRecipes, isLoading } = useQuery<Recipe[]>({
+    queryKey: ['temporaryRecipes'],
+    queryFn: getTemporaryRecipes,
+    refetchInterval: 60000, // Refetch every minute to update expiration status
   });
+
+  const [generatedRecipes, setGeneratedRecipes] = useState<(Recipe | null)[]>([]);
+
+  // Update recipes when temporary recipes are fetched
+  useEffect(() => {
+    if (temporaryRecipes) {
+      setGeneratedRecipes(temporaryRecipes);
+    }
+  }, [temporaryRecipes]);
 
   // Save preferences to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
-
-  // Hooks
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { user } = useUser();
-
-  // Effects
-  useEffect(() => {
-    return () => {
-      localStorage.removeItem('generatedRecipes');
-    };
-  }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -157,6 +115,10 @@ export default function MealPlan() {
       });
     },
   });
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useUser();
 
   return (
     <div className="space-y-8">
@@ -207,7 +169,7 @@ export default function MealPlan() {
         onOpenChange={setShowPreferences}
         preferences={preferences}
         onUpdatePreferences={setPreferences}
-        isGenerating={false}
+        isGenerating={isLoading}
         onGenerate={() => {}}
       />
 
@@ -231,8 +193,25 @@ export default function MealPlan() {
 
           <TabsContent value="meals" className="mt-6">
             <div className="grid gap-6">
-              {generatedRecipes.length > 0 ? (
+              {isLoading ? (
+                <div className="text-center py-12">
+                  <span className="loading loading-spinner"></span>
+                  Loading meal plan...
+                </div>
+              ) : generatedRecipes.length > 0 ? (
                 <>
+                  {temporaryRecipes?.[0]?.expiresAt && (
+                    <div className="bg-yellow-100 dark:bg-yellow-900/20 p-4 rounded-lg mb-4">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                        This meal plan will expire in{" "}
+                        {Math.ceil(
+                          (new Date(temporaryRecipes[0].expiresAt).getTime() - new Date().getTime()) /
+                          (1000 * 60 * 60 * 24)
+                        )}{" "}
+                        days. Save it to keep it permanently!
+                      </p>
+                    </div>
+                  )}
                   <div className="grid md:grid-cols-3 gap-6">
                     {Array.from({ length: 6 }).map((_, index) => {
                       const recipe = generatedRecipes[index];
@@ -244,13 +223,12 @@ export default function MealPlan() {
                           key={recipe.id}
                           recipe={recipe}
                           day={currentDay}
-                          meal={mealType}
+                          meal={mealType as MealType}
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
                             const removedRecipe = newRecipes[index];
                             newRecipes[index] = null;
                             setGeneratedRecipes(newRecipes);
-                            localStorage.setItem('generatedRecipes', JSON.stringify(newRecipes.filter(Boolean)));
 
                             toast({
                               title: "Recipe removed",
@@ -285,11 +263,9 @@ export default function MealPlan() {
           <TabsContent value="grocery">
             <GroceryList
               items={
-                Array.isArray(generatedRecipes)
-                  ? generatedRecipes
-                      .filter((recipe): recipe is Recipe => recipe !== null)
-                      .flatMap(recipe => recipe.ingredients ?? [])
-                  : []
+                generatedRecipes
+                  .filter((recipe): recipe is Recipe => recipe !== null)
+                  .flatMap(recipe => recipe.ingredients ?? [])
               }
             />
           </TabsContent>

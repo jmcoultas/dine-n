@@ -3,25 +3,27 @@ import { z } from "zod";
 export const RecipeSchema = z.object({
   id: z.number(),
   name: z.string(),
-  description: z.string().optional(),
-  imageUrl: z.string().optional(),
-  prepTime: z.number().optional(),
-  cookTime: z.number().optional(),
-  servings: z.number().optional(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  prepTime: z.number().nullable(),
+  cookTime: z.number().nullable(),
+  servings: z.number().nullable(),
   ingredients: z.array(z.object({
     name: z.string(),
     amount: z.number(),
     unit: z.string()
-  })).optional(),
-  instructions: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
+  })),
+  instructions: z.array(z.string()),
+  tags: z.array(z.string()),
   nutrition: z.object({
     calories: z.number(),
     protein: z.number(),
     carbs: z.number(),
     fat: z.number()
-  }).optional(),
-  complexity: z.union([z.literal(1), z.literal(2), z.literal(3)])
+  }),
+  complexity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  created_at: z.date(),
+  expiresAt: z.date().optional()
 });
 
 export type Recipe = z.infer<typeof RecipeSchema>;
