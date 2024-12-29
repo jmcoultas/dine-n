@@ -61,23 +61,12 @@ export default function MealPlan() {
     refetchInterval: 60000, // Refetch every minute to update expiration status
   });
 
-  interface TemporaryRecipe extends Recipe {
-    expiresAt: Date;
-  }
-
-  const [generatedRecipes, setGeneratedRecipes] = useState<(TemporaryRecipe | null)[]>([]);
+  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
 
   // Update recipes when temporary recipes are fetched
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
-      setGeneratedRecipes(temporaryRecipes.map(recipe => ({
-        ...recipe,
-        expiresAt: new Date(recipe.expires_at),
-        ingredients: recipe.ingredients as { name: string; amount: number; unit: string; }[],
-        instructions: recipe.instructions as string[],
-        tags: recipe.tags as string[],
-        nutrition: recipe.nutrition as { calories: number; protein: number; carbs: number; fat: number; }
-      })));
+      setGeneratedRecipes(temporaryRecipes);
     }
   }, [temporaryRecipes]);
 
