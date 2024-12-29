@@ -564,7 +564,6 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-}
   // User Profile Routes
   app.put("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -591,4 +590,5 @@ export function registerRoutes(app: express.Express) {
       res.status(500).json({ error: "Failed to update preferences" });
     }
   });
+}
 
