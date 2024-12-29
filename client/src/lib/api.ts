@@ -37,7 +37,8 @@ export async function getTemporaryRecipes(): Promise<Recipe[]> {
   if (!response.ok) {
     throw new Error("Failed to fetch temporary recipes");
   }
-  return response.json();
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<GenerateMealPlanResponse> {

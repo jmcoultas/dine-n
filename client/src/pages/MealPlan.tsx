@@ -55,17 +55,17 @@ export default function MealPlan() {
     recipes: MealPlanRecipe[];
   }
 
-  const { data: temporaryRecipes, isLoading } = useQuery<Recipe[]>({
+  const { data: temporaryRecipes, isLoading } = useQuery({
     queryKey: ['temporaryRecipes'],
     queryFn: getTemporaryRecipes,
     refetchInterval: 60000, // Refetch every minute to update expiration status
   });
 
-  const [generatedRecipes, setGeneratedRecipes] = useState<(Recipe | null)[]>([]);
+  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
 
   // Update recipes when temporary recipes are fetched
   useEffect(() => {
-    if (temporaryRecipes) {
+    if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
       setGeneratedRecipes(temporaryRecipes);
     }
   }, [temporaryRecipes]);
