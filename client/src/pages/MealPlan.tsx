@@ -13,15 +13,30 @@ import GroceryList from "@/components/GroceryList";
 import { createMealPlan, createGroceryList, getTemporaryRecipes } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 
+type MealType = "breakfast" | "lunch" | "dinner";
+
+interface MealPlanRecipe {
+  recipeId: number;
+  day: string;
+  meal: MealType;
+}
+
+interface MealPlan {
+  id: number;
+  userId: number;
+  name: string;
+  startDate: Date;
+  endDate: Date;
+  recipes: MealPlanRecipe[];
+}
+
 export default function MealPlan() {
   // Type definitions
   type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
   type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
   type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
   type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
-  type MealType = "breakfast" | "lunch" | "dinner";
 
-  // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
   const [preferences, setPreferences] = useState<{
@@ -38,21 +53,6 @@ export default function MealPlan() {
       meatTypes: [],
     };
   });
-
-  interface MealPlanRecipe {
-    recipeId: number;
-    day: string;
-    meal: MealType;
-  }
-
-  interface MealPlan {
-    id: number;
-    userId: number;
-    name: string;
-    startDate: Date;
-    endDate: Date;
-    recipes: MealPlanRecipe[];
-  }
 
   const { data: temporaryRecipes, isLoading } = useQuery<Recipe[]>({
     queryKey: ['temporaryRecipes'],
@@ -226,12 +226,12 @@ export default function MealPlan() {
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
                             const removedRecipe = newRecipes[index];
-                            newRecipes.splice(index, 1); // Remove the recipe instead of setting to null
+                            newRecipes.splice(index, 1);
                             setGeneratedRecipes(newRecipes);
 
                             toast({
                               title: "Recipe removed",
-                              description: `${removedRecipe?.name || 'Recipe'} has been removed from your meal plan and grocery list updated.`,
+                              description: `${removedRecipe?.name || 'Recipe'} has been removed from your meal plan.`,
                             });
                           }}
                         />
@@ -263,7 +263,6 @@ export default function MealPlan() {
             <GroceryList
               items={
                 generatedRecipes
-                  .filter((recipe): recipe is Recipe => recipe !== null)
                   .flatMap(recipe => recipe.ingredients ?? [])
               }
             />
