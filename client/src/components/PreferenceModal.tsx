@@ -25,32 +25,32 @@ type PreferenceField = keyof Preferences;
 
 const STEPS = [
   {
-    title: "Dietary Preferences",
-    description: "Select any dietary restrictions or preferences you follow.",
+    title: "Welcome to Your Meal Preferences",
+    description: "Let's personalize your meal planning experience. We'll guide you through a few quick steps to understand your dietary needs and preferences.",
     field: "dietary" as const,
     options: PreferenceSchema.shape.dietary.element.options
   },
   {
-    title: "Allergies",
-    description: "Select any food allergies or intolerances.",
+    title: "Food Allergies & Intolerances",
+    description: "Your safety matters. Select any food allergies or intolerances you have.",
     field: "allergies" as const,
     options: PreferenceSchema.shape.allergies.element.options
   },
   {
     title: "Cuisine Preferences",
-    description: "Select your preferred cuisine types.",
+    description: "What types of cuisine do you enjoy? Select all that interest you.",
     field: "cuisine" as const,
     options: PreferenceSchema.shape.cuisine.element.options
   },
   {
     title: "Meat Preferences",
-    description: "Select your preferred meat types.",
+    description: "Select your preferred types of meat, or skip if you're vegetarian.",
     field: "meatTypes" as const,
     options: PreferenceSchema.shape.meatTypes.element.options
   },
   {
-    title: "Review & Generate",
-    description: "Review your preferences and generate your meal plan.",
+    title: "Almost Done!",
+    description: "Review your preferences below. You can always change these later.",
     field: null,
     options: [] as const
   }
@@ -134,52 +134,34 @@ export default function PreferenceModal({
       }
 
       setTempPreferences((prev) => {
-        try {
-          const currentValues = Array.isArray(prev[field]) ? prev[field] as string[] : [];
-          let newValues: string[];
+        const currentValues = Array.isArray(prev[field]) ? prev[field] as string[] : [];
+        let newValues: string[];
 
-          if (field === "dietary" && value === "No Preference") {
-            newValues = [value];
-          } else if (field === "dietary" && currentValues.includes(value)) {
-            // If already selected, remove it
-            newValues = currentValues.filter(v => v !== value);
-          } else {
-            // Add new value, ensuring no duplicates
-            newValues = Array.from(new Set([...currentValues, value]));
-          }
+        if (field === "dietary" && value === "No Preference") {
+          newValues = [value];
+        } else if (currentValues.includes(value)) {
+          newValues = currentValues.filter(v => v !== value);
+        } else {
+          newValues = Array.from(new Set([...currentValues, value]));
+        }
 
-          const newPrefs = {
-            ...prev,
-            [field]: newValues
-          };
+        const newPrefs = {
+          ...prev,
+          [field]: newValues
+        };
 
-          // Validate the entire preferences object
-          const validated = PreferenceSchema.safeParse(newPrefs);
-          if (!validated.success) {
-            console.error('Invalid preferences:', validated.error);
-            toast({
-              title: "Error",
-              description: "Invalid preference combination",
-              variant: "destructive",
-            });
-            return prev;
-          }
-
-          return validated.data;
-        } catch (error) {
-          console.error('Error updating preferences:', {
-            error,
-            currentState: prev,
-            attemptedValue: value,
-            field
-          });
+        const validated = PreferenceSchema.safeParse(newPrefs);
+        if (!validated.success) {
+          console.error('Invalid preferences:', validated.error);
           toast({
             title: "Error",
-            description: error instanceof Error ? error.message : "Failed to update preferences",
+            description: "Invalid preference combination",
             variant: "destructive",
           });
           return prev;
         }
+
+        return validated.data;
       });
     } catch (error) {
       console.error('Unexpected error:', error);
@@ -216,13 +198,24 @@ export default function PreferenceModal({
       {isGenerating && (
         <LoadingAnimation message="Cooking up your personalized meal plan..." />
       )}
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{currentStepConfig.title}</DialogTitle>
           <DialogDescription>{currentStepConfig.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="mt-4 space-y-4">
+        {/* Progress indicator */}
+        <div className="w-full bg-secondary h-2 rounded-full mt-4">
+          <div 
+            className="bg-primary h-full rounded-full transition-all duration-300"
+            style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
+          />
+        </div>
+        <div className="text-sm text-muted-foreground text-center mt-1">
+          Step {currentStep + 1} of {STEPS.length}
+        </div>
+
+        <div className="mt-6 space-y-4">
           {isLastStep ? (
             <div className="space-y-6">
               {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
@@ -247,11 +240,11 @@ export default function PreferenceModal({
                   <Select>
                     <SelectTrigger className="w-full">
                       <SelectValue
-                        placeholder={`Select multiple ${currentStepConfig.title.toLowerCase()} (optional)`}
+                        placeholder={`Select ${currentStepConfig.title.toLowerCase()} (optional)`}
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <div className="p-2">
+                      <div className="p-2 max-h-[300px] overflow-y-auto">
                         {currentStepConfig.field && currentStepConfig.options.map((option) => {
                           const field = currentStepConfig.field!;
                           const isSelected = (tempPreferences[field] as string[]).includes(option);
@@ -259,7 +252,7 @@ export default function PreferenceModal({
                           return (
                             <div
                               key={option}
-                              className="flex items-center gap-2 px-2 py-1 hover:bg-accent rounded-sm cursor-pointer"
+                              className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
                               onClick={() => {
                                 if (isSelected) {
                                   handleRemovePreference(field, option);
@@ -304,23 +297,34 @@ export default function PreferenceModal({
           )}
         </div>
 
-        <DialogFooter className="flex justify-between mt-6">
-          <div>
+        <DialogFooter className="flex flex-col-reverse sm:flex-row justify-between gap-2 mt-6">
+          <div className="w-full sm:w-auto">
             {!isFirstStep && (
-              <Button variant="outline" onClick={handleBack}>
+              <Button 
+                variant="outline" 
+                onClick={handleBack}
+                className="w-full sm:w-auto"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {isLastStep && (
+              <Button 
+                variant="outline" 
+                onClick={() => onUpdatePreferences(tempPreferences)}
+                className="w-full sm:w-auto"
+              >
+                Save Preferences
+              </Button>
+            )}
             <Button 
-              variant="outline" 
-              onClick={() => onUpdatePreferences(tempPreferences)}
+              onClick={handleNext} 
+              disabled={isGenerating}
+              className="w-full sm:w-auto"
             >
-              Save Preferences
-            </Button>
-            <Button onClick={handleNext} disabled={isGenerating}>
               {isLastStep ? (
                 <>
                   <Wand2 className="mr-2 h-4 w-4" />
