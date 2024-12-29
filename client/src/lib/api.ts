@@ -125,3 +125,37 @@ export async function getIngredientSubstitutions(
 
   return response.json();
 }
+
+interface ShareMealPlanResponse {
+  isPublic: boolean;
+  shareId: string | null;
+  shareUrl: string | null;
+}
+
+export async function toggleMealPlanSharing(mealPlanId: number): Promise<ShareMealPlanResponse> {
+  const response = await fetch(`${API_BASE}/meal-plans/${mealPlanId}/share`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to toggle meal plan sharing");
+  }
+
+  return response.json();
+}
+
+export async function getSharedMealPlan(shareId: string): Promise<MealPlan> {
+  const response = await fetch(`${API_BASE}/meal-plans/shared/${shareId}`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch shared meal plan");
+  }
+
+  return response.json();
+}
