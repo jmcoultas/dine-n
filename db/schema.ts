@@ -16,16 +16,16 @@ export const users = pgTable("users", {
   name: text("name"),
   password_hash: text("password_hash").notNull(),
   preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
-  created_at: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const recipes = pgTable("recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
   description: text("description"),
-  image_url: text("image_url"),
-  prep_time: integer("prep_time"),
-  cook_time: integer("cook_time"),
+  imageUrl: text("image_url"),
+  prepTime: integer("prep_time"),
+  cookTime: integer("cook_time"),
   servings: integer("servings"),
   ingredients: jsonb("ingredients").$type<Array<{ name: string; amount: number; unit: string }>>(),
   instructions: jsonb("instructions").$type<string[]>(),
@@ -33,24 +33,6 @@ export const recipes = pgTable("recipes", {
   nutrition: jsonb("nutrition").$type<{ calories: number; protein: number; carbs: number; fat: number }>(),
   complexity: integer("complexity").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull()
-});
-
-export const temporaryRecipes = pgTable("temporary_recipes", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  user_id: integer("user_id").notNull().references(() => users.id),
-  name: text("name").notNull(),
-  description: text("description"),
-  image_url: text("image_url"),
-  prep_time: integer("prep_time"),
-  cook_time: integer("cook_time"),
-  servings: integer("servings"),
-  ingredients: jsonb("ingredients").$type<Array<{ name: string; amount: number; unit: string }>>(),
-  instructions: jsonb("instructions").$type<string[]>(),
-  tags: jsonb("tags").$type<string[]>(),
-  nutrition: jsonb("nutrition").$type<{ calories: number; protein: number; carbs: number; fat: number }>(),
-  complexity: integer("complexity").notNull(),
-  created_at: timestamp("created_at").defaultNow().notNull(),
-  expires_at: timestamp("expires_at").notNull()
 });
 
 export const userRecipes = pgTable("user_recipes", {
@@ -62,42 +44,65 @@ export const userRecipes = pgTable("user_recipes", {
 
 export const mealPlans = pgTable("meal_plans", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  user_id: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
-  start_date: timestamp("start_date").notNull(),
-  end_date: timestamp("end_date").notNull(),
-  created_at: timestamp("created_at").defaultNow().notNull(),
-  share_id: text("share_id").unique(),
-  is_public: boolean("is_public").default(false).notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const mealPlanRecipes = pgTable("meal_plan_recipes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  mealPlanId: integer("meal_plan_id").notNull().references(() => mealPlans.id),
+  recipeId: integer("recipe_id").notNull().references(() => recipes.id),
+  day: timestamp("day").notNull(),
+  meal: text("meal").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const groceryLists = pgTable("grocery_lists", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  user_id: integer("user_id").notNull().references(() => users.id),
-  meal_plan_id: integer("meal_plan_id").references(() => mealPlans.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  mealPlanId: integer("meal_plan_id").references(() => mealPlans.id),
   items: jsonb("items").notNull(),
   created: timestamp("created").notNull(),
 });
 
-// Create schemas for validation
+export const temporaryRecipes = pgTable("temporary_recipes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  prepTime: integer("prep_time"),
+  cookTime: integer("cook_time"),
+  servings: integer("servings"),
+  ingredients: jsonb("ingredients").$type<Array<{ name: string; amount: number; unit: string }>>(),
+  instructions: jsonb("instructions").$type<string[]>(),
+  tags: jsonb("tags").$type<string[]>(),
+  nutrition: jsonb("nutrition").$type<{ calories: number; protein: number; carbs: number; fat: number }>(),
+  complexity: integer("complexity").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertRecipeSchema = createInsertSchema(recipes);
 export const selectRecipeSchema = createSelectSchema(recipes);
-export const insertTemporaryRecipeSchema = createInsertSchema(temporaryRecipes);
-export const selectTemporaryRecipeSchema = createSelectSchema(temporaryRecipes);
+export const selectUserRecipeSchema = createSelectSchema(userRecipes);
+export const insertUserRecipeSchema = createInsertSchema(userRecipes);
 export const insertMealPlanSchema = createInsertSchema(mealPlans);
 export const selectMealPlanSchema = createSelectSchema(mealPlans);
-export const insertUserRecipeSchema = createInsertSchema(userRecipes);
-export const selectUserRecipeSchema = createSelectSchema(userRecipes);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
+export const insertTemporaryRecipeSchema = createInsertSchema(temporaryRecipes);
+export const selectTemporaryRecipeSchema = createSelectSchema(temporaryRecipes);
 
-// Export types
 export type User = z.infer<typeof selectUserSchema>;
 export type Recipe = z.infer<typeof selectRecipeSchema>;
-export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;
-export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type UserRecipe = z.infer<typeof selectUserRecipeSchema>;
+export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
 export type Preferences = z.infer<typeof PreferenceSchema>;
+export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;

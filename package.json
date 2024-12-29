@@ -54,7 +54,6 @@
     "input-otp": "^1.2.4",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
-    "nanoid": "^5.0.9",
     "openai": "^4.73.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
