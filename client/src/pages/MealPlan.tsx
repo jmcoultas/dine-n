@@ -22,8 +22,7 @@ export default function MealPlan() {
 
   // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [preferences, setPreferences] = useState<{
+  const [preferences] = useState<{
     dietary: PreferenceType[];
     allergies: AllergyType[];
     cuisine: CuisineType[];
@@ -199,12 +198,6 @@ export default function MealPlan() {
               )}
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setShowPreferences(true)}
-          >
-            Set Preferences
-          </Button>
         </div>
       </div>
 
