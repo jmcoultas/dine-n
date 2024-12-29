@@ -140,7 +140,23 @@ Please assign complexity based on:
         recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
       }
       
-      return recipeData;
+
+      const validatedRecipe = {
+                name: String(recipeData.name || '').trim(),
+                description: String(recipeData.description || 'No description available').trim(),
+                imageUrl: String(recipeData.imageUrl || '').trim() || null,
+                prep_time: Math.max(0, Number(recipeData.prepTime) || 0),
+                cook_time: Math.max(0, Number(recipeData.cookTime) || 0),
+                servings: Math.max(1, Number(recipeData.servings) || 2),
+                ingredients: recipeData.ingredients, // Assuming ingredients are already validated
+                instructions: recipeData.instructions, // Assuming instructions are already validated
+                tags: recipeData.tags, // Assuming tags are already validated
+                nutrition: recipeData.nutrition, // Assuming nutrition is already validated
+                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
+                created_at: new Date()
+              };
+      
+      return validatedRecipe;
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
       throw new Error("Failed to parse recipe data from OpenAI response");
