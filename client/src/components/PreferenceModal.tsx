@@ -165,11 +165,6 @@ export default function PreferenceModal({
             return prev;
           }
 
-          // Update parent component
-          setTimeout(() => {
-            onUpdatePreferences(validated.data);
-          }, 0);
-
           return validated.data;
         } catch (error) {
           console.error('Error updating preferences:', {
@@ -318,19 +313,27 @@ export default function PreferenceModal({
               </Button>
             )}
           </div>
-          <Button onClick={handleNext} disabled={isGenerating}>
-            {isLastStep ? (
-              <>
-                <Wand2 className="mr-2 h-4 w-4" />
-                Generate Meal Plan
-              </>
-            ) : (
-              <>
-                Next
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => onUpdatePreferences(tempPreferences)}
+            >
+              Save Preferences
+            </Button>
+            <Button onClick={handleNext} disabled={isGenerating}>
+              {isLastStep ? (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Generate Meal Plan
+                </>
+              ) : (
+                <>
+                  Next
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
