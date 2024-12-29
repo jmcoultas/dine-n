@@ -22,7 +22,8 @@ export default function MealPlan() {
 
   // State declarations
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [preferences] = useState<{
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState<{
     dietary: PreferenceType[];
     allergies: AllergyType[];
     cuisine: CuisineType[];
