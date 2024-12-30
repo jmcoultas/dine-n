@@ -97,11 +97,19 @@ async function startServer() {
       serveStatic(app);
     }
 
-    // Start server on port 3000 instead of 5000
-    const PORT = 3000;
-    return new Promise((resolve) => {
-      server.listen(PORT, "0.0.0.0", () => {
-        log(`serving on port ${PORT}`);
+    // Start server
+    const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+    return new Promise<typeof server>((resolve, reject) => {
+      server.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          log(`Port ${PORT} is already in use. Please make sure no other server is running.`);
+        }
+        reject(error);
+      });
+
+      // Use void to fix the TypeScript error with the callback
+      void server.listen(PORT, () => {
+        log(`Server is running on port ${PORT}`);
         resolve(server);
       });
     });
