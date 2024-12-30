@@ -83,20 +83,19 @@ export default function MealPlan() {
         throw new Error("No recipes generated to save");
       }
 
-      const mealPlan = await createMealPlan({
+      const mealPlanData = {
         name: "Weekly Plan",
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
         userId: user?.id ?? 0,
         recipes: generatedRecipes.map((recipe, index) => ({
           recipeId: recipe.id,
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
           meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
         }))
-      });
+      };
 
-      return mealPlan;
+      const mealPlan = await createMealPlan(mealPlanData);
 
       const items = generatedRecipes.flatMap(recipe =>
         recipe.ingredients?.map(ingredient => ({
