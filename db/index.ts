@@ -9,18 +9,12 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Initialize database connection
-let db;
-try {
-  db = drizzle({
-    connection: process.env.DATABASE_URL,
-    schema,
-    ws: ws,
-  });
-} catch (error) {
-  console.error("Failed to initialize database connection:", error);
-  throw error;
-}
+// Initialize database connection with proper configuration
+const db = drizzle({
+  connection: process.env.DATABASE_URL,
+  schema,
+  ws: ws,
+});
 
 // Export the database instance
 export { db };
@@ -28,7 +22,7 @@ export { db };
 // Export a function to test the database connection
 export async function testConnection() {
   try {
-    const result = await db.execute(sql`SELECT 1`);
+    await db.execute(sql`SELECT 1`);
     return true;
   } catch (error) {
     console.error("Database connection test failed:", error);
