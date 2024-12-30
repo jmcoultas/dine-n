@@ -18,7 +18,7 @@ interface ProfileFormData {
 }
 
 export default function UserProfile() {
-  const { user, isLoading } = useUser();
+  const { user, isLoading, logout } = useUser();
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState<ProfileFormData>({
     name: '',
@@ -323,7 +323,6 @@ export default function UserProfile() {
           <Button
             variant="destructive"
             onClick={() => {
-              const { logout } = useUser();
               logout().then(() => {
                 toast({
                   title: "Success",
