@@ -323,6 +323,7 @@ export default function UserProfile() {
           <Button
             variant="destructive"
             onClick={() => {
+              const { logout } = useUser();
               logout().then(() => {
                 toast({
                   title: "Success",
