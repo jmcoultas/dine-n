@@ -91,6 +91,16 @@ export default function MealPlan() {
         userId: user?.id ?? 0,
       });
 
+      // Add the recipes array to match MealPlan type
+      return {
+        ...mealPlan,
+        recipes: generatedRecipes.map((recipe, index) => ({
+          recipeId: recipe.id,
+          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
+          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
+        }))
+      };
+
       const items = generatedRecipes.flatMap(recipe =>
         recipe.ingredients?.map(ingredient => ({
           ...ingredient,
