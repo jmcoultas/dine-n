@@ -63,74 +63,82 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/recipes/:id/favorite", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const recipeId = parseInt(req.params.id);
-      if (isNaN(recipeId)) {
-        return res.status(400).json({ error: "Invalid recipe ID" });
-      }
+app.post("/api/recipes/:id/favorite", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const recipeId = parseInt(req.params.id);
+    if (isNaN(recipeId)) {
+      return res.status(400).json({ error: "Invalid recipe ID" });
+    }
 
-      // If it's a temporary recipe (negative ID), we need to save it first
-      if (recipeId < 0) {
-        const recipeData = req.body.recipe;
-        if (!recipeData) {
-          return res.status(400).json({ error: "Recipe data is required for temporary recipes" });
-        }
-
-        // Transform and insert the recipe into the database
-        const transformedRecipe = {
-          name: recipeData.name,
-          description: recipeData.description,
-          image_url: recipeData.imageUrl,
-          prep_time: recipeData.prepTime,
-          cook_time: recipeData.cookTime,
-          servings: recipeData.servings,
-          ingredients: recipeData.ingredients,
-          instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
-          tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
-          nutrition: recipeData.nutrition,
-          complexity: recipeData.complexity,
-          created_at: new Date()
-        };
-
-        const [savedRecipe] = await db
-          .insert(recipes)
-          .values(transformedRecipe)
-          .returning();
-
-        // Add to user's favorites using the new permanent ID
-        await db.insert(userRecipes).values({
-          user_id: req.user!.id,
-          recipe_id: savedRecipe.id,
-        });
-
-        return res.json({
-          message: "Recipe saved and added to favorites",
-          permanentId: savedRecipe.id
-        });
-      }
-
-      // For existing recipes, just add to favorites
-      const [recipe] = await db
+    // If it's a temporary recipe (negative ID), we need to save it first
+    if (recipeId < 0) {
+      // Find the temporary recipe
+      const [temporaryRecipe] = await db
         .select()
-        .from(recipes)
-        .where(eq(recipes.id, recipeId));
+        .from(temporaryRecipes)
+        .where(eq(temporaryRecipes.userId, req.user!.id));
 
-      if (!recipe) {
-        return res.status(404).json({ error: "Recipe not found" });
+      if (!temporaryRecipe) {
+        return res.status(404).json({ error: "Temporary recipe not found" });
       }
 
+      // Transform and insert the recipe into the permanent recipes table
+      const [savedRecipe] = await db
+        .insert(recipes)
+        .values({
+          name: temporaryRecipe.name,
+          description: temporaryRecipe.description,
+          image_url: temporaryRecipe.image_url,
+          prep_time: temporaryRecipe.prep_time,
+          cook_time: temporaryRecipe.cook_time,
+          servings: temporaryRecipe.servings,
+          ingredients: temporaryRecipe.ingredients,
+          instructions: temporaryRecipe.instructions,
+          tags: temporaryRecipe.tags,
+          nutrition: temporaryRecipe.nutrition,
+          complexity: temporaryRecipe.complexity,
+          created_at: new Date()
+        })
+        .returning();
+
+      // Add to user's favorites using the new permanent ID
       await db.insert(userRecipes).values({
         user_id: req.user!.id,
-        recipe_id: recipeId,
+        recipe_id: savedRecipe.id,
       });
 
-      res.json({ message: "Recipe added to favorites" });
-    } catch (error: any) {
-      console.error("Error adding recipe to favorites:", error);
-      res.status(500).json({ error: "Failed to add recipe to favorites" });
+      // Delete the temporary recipe since it's now permanent
+      await db
+        .delete(temporaryRecipes)
+        .where(eq(temporaryRecipes.id, temporaryRecipe.id));
+
+      return res.json({
+        message: "Recipe saved and added to favorites",
+        permanentId: savedRecipe.id
+      });
     }
-  });
+
+    // For existing recipes, just add to favorites
+    const [recipe] = await db
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, recipeId));
+
+    if (!recipe) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    await db.insert(userRecipes).values({
+      user_id: req.user!.id,
+      recipe_id: recipeId,
+    });
+
+    res.json({ message: "Recipe added to favorites" });
+  } catch (error: any) {
+    console.error("Error adding recipe to favorites:", error);
+    res.status(500).json({ error: "Failed to add recipe to favorites" });
+  }
+});
 
   app.delete("/api/recipes/:id/favorite", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -570,17 +578,17 @@ export function registerRoutes(app: express.Express) {
             userId: req.user!.id,
             name: recipe.name,
             description: recipe.description || null,
-            imageUrl: recipe.imageUrl,
-            prepTime: recipe.prepTime || 0,
-            cookTime: recipe.cookTime || 0,
+            image_url: recipe.image_url || null,
+            prep_time: recipe.prep_time || 0,
+            cook_time: recipe.cook_time || 0,
             servings: recipe.servings || 2,
             ingredients: recipe.ingredients,
             instructions: recipe.instructions,
             tags: recipe.tags,
             nutrition: recipe.nutrition,
             complexity: recipe.complexity,
-            createdAt: new Date(),
-            expiresAt: expirationDate,
+            created_at: new Date(),
+            expires_at: expirationDate,
           })
           .returning();
 
