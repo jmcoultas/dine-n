@@ -72,30 +72,34 @@ export function registerRoutes(app: express.Express) {
 
       // If it's a temporary recipe (negative ID), we need to save it first
       if (recipeId < 0) {
-        const recipeData = req.body.recipe;
-        if (!recipeData) {
-          return res.status(400).json({ error: "Recipe data is required for temporary recipes" });
+        // Fetch the temporary recipe from the database
+        const [tempRecipe] = await db
+          .select()
+          .from(temporaryRecipes)
+          .where(eq(temporaryRecipes.id, Math.abs(recipeId)))
+          .limit(1);
+
+        if (!tempRecipe) {
+          return res.status(404).json({ error: "Temporary recipe not found" });
         }
 
-        // Transform and insert the recipe into the database
-        const transformedRecipe = {
-          name: recipeData.name,
-          description: recipeData.description,
-          image_url: recipeData.imageUrl,
-          prep_time: recipeData.prepTime,
-          cook_time: recipeData.cookTime,
-          servings: recipeData.servings,
-          ingredients: recipeData.ingredients,
-          instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
-          tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
-          nutrition: recipeData.nutrition,
-          complexity: recipeData.complexity,
-          created_at: new Date()
-        };
-
+        // Insert the temporary recipe into the permanent recipes table
         const [savedRecipe] = await db
           .insert(recipes)
-          .values(transformedRecipe)
+          .values({
+            name: tempRecipe.name,
+            description: tempRecipe.description,
+            imageUrl: tempRecipe.imageUrl,
+            prepTime: tempRecipe.prepTime,
+            cookTime: tempRecipe.cookTime,
+            servings: tempRecipe.servings,
+            ingredients: tempRecipe.ingredients,
+            instructions: tempRecipe.instructions,
+            tags: tempRecipe.tags,
+            nutrition: tempRecipe.nutrition,
+            complexity: tempRecipe.complexity,
+            created_at: new Date()
+          })
           .returning();
 
         // Add to user's favorites using the new permanent ID
@@ -104,13 +108,19 @@ export function registerRoutes(app: express.Express) {
           recipe_id: savedRecipe.id,
         });
 
+        // Delete the temporary recipe as it's now saved permanently
+        await db
+          .delete(temporaryRecipes)
+          .where(eq(temporaryRecipes.id, Math.abs(recipeId)));
+
         return res.json({
           message: "Recipe saved and added to favorites",
-          permanentId: savedRecipe.id
+          permanentId: savedRecipe.id,
+          recipe: savedRecipe
         });
       }
 
-      // For existing recipes, just add to favorites
+      // For existing permanent recipes, just add to favorites
       const [recipe] = await db
         .select()
         .from(recipes)
