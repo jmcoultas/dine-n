@@ -51,20 +51,20 @@ export const recipes = pgTable("recipes", {
 
 export const temporaryRecipes = pgTable("temporary_recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id", { mode: "camelCase" }).notNull().references(() => users.id),
+  userId: integer("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   description: text("description"),
-  imageUrl: text("image_url", { mode: "camelCase" }),
-  prepTime: integer("prep_time", { mode: "camelCase" }),
-  cookTime: integer("cook_time", { mode: "camelCase" }),
+  imageUrl: text("image_url"),
+  prepTime: integer("prep_time"),
+  cookTime: integer("cook_time"),
   servings: integer("servings"),
   ingredients: jsonb("ingredients").$type<z.infer<typeof RecipeIngredientSchema>[]>(),
   instructions: jsonb("instructions").$type<string[]>(),
   tags: jsonb("tags").$type<string[]>(),
   nutrition: jsonb("nutrition").$type<z.infer<typeof RecipeNutritionSchema>>(),
   complexity: integer("complexity").notNull(),
-  createdAt: timestamp("created_at", { mode: "camelCase" }).defaultNow().notNull(),
-  expiresAt: timestamp("expires_at", { mode: "camelCase" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
 });
 
 export const userRecipes = pgTable("user_recipes", {
