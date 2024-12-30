@@ -18,17 +18,14 @@ function log(message: string) {
 
 async function startServer() {
   try {
-    // Check database connection first
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is required");
     }
 
-    // Hide sensitive information from logs
     const dbUrlForLogs = process.env.DATABASE_URL.split("@")[1] || "database";
     log("Starting server with database URL: " + dbUrlForLogs);
 
     try {
-      // Import and verify database connection
       const { db } = await import("../db");
       await db.execute(sql`SELECT 1`);
       log("Database connection successful");
@@ -43,18 +40,18 @@ async function startServer() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
 
-    // CORS middleware for development
-    if (app.get("env") === "development") {
-      app.use((req, res, next) => {
-        res.header("Access-Control-Allow-Origin", "*");
-        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-        if (req.method === "OPTIONS") {
-          return res.sendStatus(200);
-        }
-        next();
-      });
-    }
+    // CORS middleware
+    app.use((req, res, next) => {
+      res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+      res.header("Access-Control-Allow-Credentials", "true");
+
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+      }
+      next();
+    });
 
     // Request logging middleware
     app.use((req, res, next) => {
@@ -90,7 +87,7 @@ async function startServer() {
     // Set up authentication before routes
     await setupAuth(app);
 
-    // Register API routes after auth setup
+    // Register API routes
     registerRoutes(app);
 
     const server = createServer(app);
@@ -110,34 +107,19 @@ async function startServer() {
       serveStatic(app);
     }
 
-    // Start server
-    const PORT = process.env.PORT || 5000;
-    return new Promise((resolve) => {
-      server.listen(PORT, "0.0.0.0", () => {
-        log(`Server is running on port ${PORT}`);
-        resolve(server);
-      });
+    const PORT = Number(process.env.PORT) || 5000;
+    server.listen(PORT, "0.0.0.0", () => {
+      log(`Server running on port ${PORT}`);
     });
+
+    return server;
   } catch (error) {
     console.error("Failed to start server:", error);
-    if (error instanceof Error) {
-      log(`Error: ${error.message}`);
-      if (error.stack) {
-        log(`Stack trace: ${error.stack}`);
-      }
-    }
     process.exit(1);
   }
 }
 
-// Start the server with error handling
 startServer().catch((error) => {
   console.error("Critical server error:", error);
-  if (error instanceof Error) {
-    log(`Critical Error: ${error.message}`);
-    if (error.stack) {
-      log(`Stack trace: ${error.stack}`);
-    }
-  }
   process.exit(1);
 });
