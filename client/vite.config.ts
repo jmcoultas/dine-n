@@ -5,7 +5,6 @@ import checker from 'vite-plugin-checker';
 import RuntimeErrorModalPlugin from '@replit/vite-plugin-runtime-error-modal';
 import ShadcnThemeJSONPlugin from '@replit/vite-plugin-shadcn-theme-json';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),

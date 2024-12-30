@@ -18,58 +18,54 @@ function log(message: string) {
 
 async function startServer() {
   try {
-    // Verify database connection first
+    log("Starting server initialization...");
+
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is required");
     }
 
-    const dbUrlForLogs = process.env.DATABASE_URL.split("@")[1] || "database";
-    log("Starting server with database URL: " + dbUrlForLogs);
-
-    // Initialize database connection
-    const { db } = await import("../db");
-    try {
-      await db.execute(sql`SELECT 1`);
-      log("Database connection successful");
-    } catch (error) {
-      log("Database connection failed");
-      console.error("Database error details:", error);
-      throw error;
-    }
-
     const app = express();
+    const server = createServer(app);
 
     // Basic middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
 
-    // CORS middleware - updated to be more permissive in development
+    // Development CORS settings - simplified
     app.use((req, res, next) => {
-      // Allow both localhost and 0.0.0.0
-      const allowedOrigins = ['http://localhost:5173', 'http://0.0.0.0:5173'];
-      const origin = req.headers.origin;
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+      res.header('Access-Control-Allow-Credentials', 'true');
 
-      if (origin && allowedOrigins.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
-      }
-
-      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-      res.header("Access-Control-Allow-Credentials", "true");
-
-      if (req.method === "OPTIONS") {
+      if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
       }
       next();
     });
 
+    log("Attempting database connection...");
+    // Initialize database connection
+    const { db, testConnection } = await import("../db");
+    try {
+      const isConnected = await testConnection();
+      if (!isConnected) {
+        throw new Error("Database connection test failed");
+      }
+      log("Database connection successful");
+    } catch (error) {
+      log("Database connection failed");
+      console.error("Database error:", error);
+      throw error;
+    }
+
+    log("Setting up authentication...");
     // Set up authentication before routes
     await setupAuth(app);
 
+    log("Registering routes...");
     // Register API routes
     registerRoutes(app);
-
-    const server = createServer(app);
 
     // Error handling middleware
     app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -81,8 +77,10 @@ async function startServer() {
 
     // Setup Vite or static serving
     if (app.get("env") === "development") {
+      log("Setting up Vite development server...");
       await setupVite(app, server);
     } else {
+      log("Setting up static file serving...");
       serveStatic(app);
     }
 
@@ -98,7 +96,18 @@ async function startServer() {
   }
 }
 
-// Start the server
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 startServer().catch((error) => {
   console.error("Critical server error:", error);
   process.exit(1);

@@ -10,6 +10,20 @@ export const PreferenceSchema = z.object({
   meatTypes: z.array(z.enum(["Chicken", "Beef", "Pork", "Fish", "Lamb", "Turkey", "None"]))
 });
 
+// Define recipe-related schemas
+export const RecipeIngredientSchema = z.object({
+  name: z.string(),
+  amount: z.number(),
+  unit: z.string()
+});
+
+export const RecipeNutritionSchema = z.object({
+  calories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fat: z.number()
+});
+
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   email: text("email").notNull().unique(),
@@ -17,7 +31,6 @@ export const users = pgTable("users", {
   password_hash: text("password_hash").notNull(),
   preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  isAdmin: boolean("is_admin").notNull().default(false),
 });
 
 export const recipes = pgTable("recipes", {
@@ -109,16 +122,3 @@ export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
 export type Preferences = z.infer<typeof PreferenceSchema>;
 export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;
-
-export const RecipeIngredientSchema = z.object({
-  name: z.string(),
-  amount: z.number(),
-  unit: z.string()
-});
-
-export const RecipeNutritionSchema = z.object({
-  calories: z.number(),
-  protein: z.number(),
-  carbs: z.number(),
-  fat: z.number()
-});

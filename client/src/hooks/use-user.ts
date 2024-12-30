@@ -16,7 +16,7 @@ type RequestResult = {
 async function handleRequest(
   url: string,
   method: string,
-  body?: InsertUser | Record<string, any>
+  body?: InsertUser
 ): Promise<RequestResult> {
   try {
     const response = await fetch(url, {
@@ -92,14 +92,6 @@ export function useUser() {
     },
   });
 
-  // Add mutation for admin meal plan override
-  const overrideMealPlanMutation = useMutation<RequestResult, Error, { mealPlanId: number }>({
-    mutationFn: (data) => handleRequest(`/api/admin/meal-plans/${data.mealPlanId}/override`, 'POST'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mealPlans'] });
-    },
-  });
-
   return {
     user,
     isLoading,
@@ -107,7 +99,5 @@ export function useUser() {
     login: loginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
     register: registerMutation.mutateAsync,
-    overrideMealPlan: overrideMealPlanMutation.mutateAsync,
-    isAdmin: user?.isAdmin ?? false,
   };
 }
