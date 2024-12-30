@@ -22,7 +22,7 @@ async function startServer() {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is required");
     }
-    
+
     // Hide sensitive information from logs
     const dbUrlForLogs = process.env.DATABASE_URL.split("@")[1] || "database";
     log("Starting server with database URL: " + dbUrlForLogs);
@@ -38,7 +38,7 @@ async function startServer() {
     }
 
     const app = express();
-    
+
     // Basic middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
@@ -76,10 +76,10 @@ async function startServer() {
 
     // Set up authentication before routes
     await setupAuth(app);
-    
+
     // Register API routes after auth setup
     registerRoutes(app);
-    
+
     const server = createServer(app);
 
     // Error handling middleware
@@ -97,8 +97,8 @@ async function startServer() {
       serveStatic(app);
     }
 
-    // Start server
-    const PORT = 5000;
+    // Start server on port 3000 instead of 5000
+    const PORT = 3000;
     return new Promise((resolve) => {
       server.listen(PORT, "0.0.0.0", () => {
         log(`serving on port ${PORT}`);

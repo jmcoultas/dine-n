@@ -5,12 +5,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Clock, Users, Heart } from "lucide-react";
+import { Clock, Users, Heart, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Recipe } from "@db/schema";
 
 interface RecipeCardProps {
   recipe: {
@@ -23,15 +22,15 @@ interface RecipeCardProps {
     servings?: number;
   };
   isFavorited?: boolean;
+  isTemporary?: boolean;
   onClick?: () => void;
 }
 
-export default function RecipeCard({ recipe, isFavorited = false, onClick }: RecipeCardProps) {
+export default function RecipeCard({ recipe, isFavorited = false, isTemporary = false, onClick }: RecipeCardProps) {
   const { toast } = useToast();
   const { user } = useUser();
   const queryClient = useQueryClient();
-  
-  // Add null checks for optional properties
+
   const imageUrl = recipe.imageUrl || '';
   const description = recipe.description ?? '';
   const prepTime = recipe.prepTime ?? 0;
@@ -43,29 +42,34 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
       if (!user) {
         throw new Error("Must be logged in to favorite recipes");
       }
-      
+
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: isTemporary ? JSON.stringify({ recipe }) : undefined
       });
-      
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to update favorite status");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update favorite status");
       }
-      
+
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
       queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
+
       toast({
-        title: isFavorited ? "Recipe removed from favorites" : "Recipe added to favorites",
-        description: isFavorited ? 
-          "The recipe has been removed from your collection" : 
-          "The recipe has been added to your collection",
+        title: isTemporary ? "Recipe saved to collection" : 
+               isFavorited ? "Recipe removed from favorites" : 
+               "Recipe added to favorites",
+        description: isTemporary ? "The recipe has been saved to your permanent collection" :
+                    isFavorited ? "The recipe has been removed from your collection" : 
+                    "The recipe has been added to your collection",
       });
     },
     onError: (error: Error) => {
@@ -99,11 +103,17 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
                 toggleFavorite.mutate();
               }}
             >
-              <Heart 
-                className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-500'}`}
-              />
+              {isTemporary ? (
+                <Save className="h-5 w-5 text-gray-500" />
+              ) : (
+                <Heart 
+                  className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-500'}`}
+                />
+              )}
               <span className="sr-only">
-                {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                {isTemporary ? 'Save recipe' : 
+                 isFavorited ? 'Remove from favorites' : 
+                 'Add to favorites'}
               </span>
             </Button>
           )}

@@ -70,7 +70,7 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "tsx watch --clear-screen=false server/index.ts"
-waitForPort = 5000
+waitForPort = 3000
 
 [[workflows.workflow]]
 name = "Client"
