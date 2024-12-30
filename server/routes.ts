@@ -4,6 +4,7 @@ import { generateRecipeRecommendation, generateIngredientSubstitution } from "./
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, type TemporaryRecipe, PreferenceSchema } from "@db/schema";
 import { db } from "../db";
 import { transformInstructionsForDB, transformInstructionsForClient } from "./utils/transformers";
+import adminRouter from './routes/admin';
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -14,6 +15,9 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 }
 
 export function registerRoutes(app: express.Express) {
+  // Register admin routes
+  app.use('/api/admin', adminRouter);
+
   // Public Routes
   // Recipes - Read only for public access
   app.get("/api/recipes", async (_req: Request, res: Response) => {
@@ -567,7 +571,7 @@ export function registerRoutes(app: express.Express) {
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
           .values({
-            userId: req.user!.id,
+            user_id: req.user!.id,
             name: recipe.name,
             description: recipe.description || null,
             imageUrl: recipe.imageUrl,
