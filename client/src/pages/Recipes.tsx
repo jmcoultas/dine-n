@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { fetchRecipes } from "@/lib/api";
 import { useUser } from "@/hooks/use-user";
 import RecipeCard from "@/components/RecipeCard";
 import { Input } from "@/components/ui/input";
@@ -8,15 +9,40 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
-import type { Recipe } from "@/types/recipe";
+
+interface RecipeNutrition {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface Recipe {
+  id: number;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  prepTime?: number;
+  cookTime?: number;
+  servings?: number;
+  ingredients?: Array<{
+    name: string;
+    amount: number;
+    unit: string;
+  }>;
+  instructions?: string[];
+  tags?: string[];
+  nutrition?: RecipeNutrition;
+  complexity: 1 | 2 | 3;
+}
 
 export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   const { user } = useUser();
-  const { data: recipes = [], isLoading, isError, error } = useQuery<Recipe[], Error>({
-    queryKey: ["recipes", "favorites", user?.id],
+  const { data: recipes = [], isLoading, isError, error } = useQuery({
+    queryKey: ["recipes", user?.id],
     queryFn: async () => {
       const response = await fetch('/api/recipes/favorites', {
         credentials: 'include'
@@ -27,7 +53,7 @@ export default function Recipes() {
       return response.json();
     },
     enabled: !!user,
-  });
+  }) as { data: Recipe[]; isLoading: boolean; isError: boolean; error: Error | null };
 
   if (isLoading) {
     return (
@@ -45,7 +71,7 @@ export default function Recipes() {
       <div className="flex items-center justify-center h-[50vh]">
         <div className="text-center space-y-4">
           <p className="text-lg text-red-500">Error loading recipes</p>
-          <p className="text-muted-foreground">{error?.message || 'Please try again later'}</p>
+          <p className="text-muted-foreground">{(error as Error)?.message || 'Please try again later'}</p>
         </div>
       </div>
     );
@@ -108,7 +134,7 @@ export default function Recipes() {
                     className="object-cover w-full h-full"
                   />
                 </div>
-
+                
                 <div className="space-y-2">
                   <div className="flex gap-2 flex-wrap">
                     {selectedRecipe.tags?.map((tag) => (
