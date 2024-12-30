@@ -1,4 +1,3 @@
-
 import { Link } from "wouter";
 import {
   NavigationMenu,
@@ -34,6 +33,13 @@ export default function Header() {
                 Meal Plan
               </Link>
             </NavigationMenuItem>
+            {user?.isAdmin && (
+              <NavigationMenuItem>
+                <Link href="/admin" className="block px-4 py-2 hover:bg-accent hover:text-accent-foreground">
+                  Admin Dashboard
+                </Link>
+              </NavigationMenuItem>
+            )}
           </NavigationMenuList>
         </NavigationMenu>
         {user && (

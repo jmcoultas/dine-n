@@ -13,17 +13,28 @@ import Recipes from "./pages/Recipes";
 import MealPlan from "./pages/MealPlan";
 import AuthPage from "./pages/AuthPage";
 import UserProfile from "./pages/UserProfile";
+import AdminDashboard from "./pages/AdminDashboard";
 import Header from "./components/Header";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function ProtectedRoute({ 
+  component: Component, 
+  requireAdmin = false 
+}: { 
+  component: React.ComponentType;
+  requireAdmin?: boolean;
+}) {
   const { user, isLoading } = useUser();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      setLocation("/auth");
+    if (!isLoading) {
+      if (!user) {
+        setLocation("/auth");
+      } else if (requireAdmin && !user.isAdmin) {
+        setLocation("/");
+      }
     }
-  }, [user, isLoading, setLocation]);
+  }, [user, isLoading, setLocation, requireAdmin]);
 
   if (isLoading) {
     return (
@@ -33,7 +44,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
-  if (!user) {
+  if (!user || (requireAdmin && !user.isAdmin)) {
     return null;
   }
 
@@ -66,6 +77,10 @@ function Router() {
           <Route 
             path="/profile" 
             component={() => <ProtectedRoute component={UserProfile} />} 
+          />
+          <Route 
+            path="/admin" 
+            component={() => <ProtectedRoute component={AdminDashboard} requireAdmin={true} />} 
           />
           <Route>404 Page Not Found</Route>
         </Switch>
