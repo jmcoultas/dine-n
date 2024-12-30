@@ -6,24 +6,6 @@ import { eq } from 'drizzle-orm';
 
 const router = Router();
 
-// Get all meal plans for admin view
-router.get('/meal-plans', isAdmin, async (req, res) => {
-  try {
-    const allMealPlans = await db
-      .select()
-      .from(mealPlans)
-      .orderBy(mealPlans.createdAt);
-
-    res.json(allMealPlans);
-  } catch (error) {
-    console.error('Error fetching meal plans:', error);
-    res.status(500).json({ 
-      error: 'Server Error', 
-      message: 'Failed to fetch meal plans' 
-    });
-  }
-});
-
 // Admin endpoint to override meal plan hold
 router.post('/meal-plans/:id/override', isAdmin, async (req, res) => {
   try {
@@ -68,33 +50,6 @@ router.post('/meal-plans/:id/override', isAdmin, async (req, res) => {
     res.status(500).json({ 
       error: 'Server Error', 
       message: 'Failed to override meal plan' 
-    });
-  }
-});
-
-// Update meal plan order
-router.post('/meal-plans/reorder', isAdmin, async (req, res) => {
-  try {
-    const { orderedIds } = req.body;
-
-    if (!Array.isArray(orderedIds)) {
-      return res.status(400).json({
-        error: 'Invalid Request',
-        message: 'Invalid order data'
-      });
-    }
-
-    // For now, we'll just acknowledge the reorder
-    // In a production app, you might want to store the order
-    res.json({
-      message: 'Meal plan order updated successfully',
-      order: orderedIds
-    });
-  } catch (error) {
-    console.error('Error reordering meal plans:', error);
-    res.status(500).json({
-      error: 'Server Error',
-      message: 'Failed to reorder meal plans'
     });
   }
 });

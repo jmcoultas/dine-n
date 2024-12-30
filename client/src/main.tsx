@@ -13,28 +13,17 @@ import Recipes from "./pages/Recipes";
 import MealPlan from "./pages/MealPlan";
 import AuthPage from "./pages/AuthPage";
 import UserProfile from "./pages/UserProfile";
-import AdminDashboard from "./pages/AdminDashboard";
 import Header from "./components/Header";
 
-function ProtectedRoute({ 
-  component: Component, 
-  requireAdmin = false 
-}: { 
-  component: React.ComponentType;
-  requireAdmin?: boolean;
-}) {
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useUser();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!user) {
-        setLocation("/auth");
-      } else if (requireAdmin && !user.isAdmin) {
-        setLocation("/");
-      }
+    if (!isLoading && !user) {
+      setLocation("/auth");
     }
-  }, [user, isLoading, setLocation, requireAdmin]);
+  }, [user, isLoading, setLocation]);
 
   if (isLoading) {
     return (
@@ -44,7 +33,7 @@ function ProtectedRoute({
     );
   }
 
-  if (!user || (requireAdmin && !user.isAdmin)) {
+  if (!user) {
     return null;
   }
 
@@ -77,10 +66,6 @@ function Router() {
           <Route 
             path="/profile" 
             component={() => <ProtectedRoute component={UserProfile} />} 
-          />
-          <Route 
-            path="/admin" 
-            component={() => <ProtectedRoute component={AdminDashboard} requireAdmin={true} />} 
           />
           <Route>404 Page Not Found</Route>
         </Switch>
