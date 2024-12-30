@@ -566,7 +566,7 @@ export function registerRoutes(app: express.Express) {
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
           .values({
-            user_Id: req.user!.id,
+            userId: req.user!.id,
             name: recipe.name,
             description: recipe.description || null,
             imageUrl: recipe.imageUrl,
