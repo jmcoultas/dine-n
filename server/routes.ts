@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { eq, and, gt } from "drizzle-orm";
-import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
-import { recipes, users, userRecipes, temporaryRecipes, type Recipe, type TemporaryRecipe, PreferenceSchema } from "../db/schema";
+import { eq } from "drizzle-orm";
+import { recipes, users, userRecipes, temporaryRecipes } from "../db/schema";
 import { db } from "../db";
 
 // Middleware to check if user is authenticated
@@ -146,10 +145,8 @@ export function registerRoutes(app: express.Express) {
       await db
         .delete(userRecipes)
         .where(
-          and(
-            eq(userRecipes.user_id, req.user!.id),
-            eq(userRecipes.recipe_id, recipeId)
-          )
+          eq(userRecipes.user_id, req.user!.id),
+          eq(userRecipes.recipe_id, recipeId)
         );
 
       res.json({ message: "Recipe removed from favorites" });
@@ -232,10 +229,8 @@ export function registerRoutes(app: express.Express) {
         .select()
         .from(temporaryRecipes)
         .where(
-          and(
-            eq(temporaryRecipes.user_id, req.user!.id),
-            gt(temporaryRecipes.expires_at, now)
-          )
+          eq(temporaryRecipes.user_id, req.user!.id),
+          
         );
 
       res.json(activeRecipes);

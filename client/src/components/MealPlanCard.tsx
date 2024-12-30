@@ -2,11 +2,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { ChefHat, Heart } from "lucide-react";
+import { ChefHat, Heart, Save } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { SaveRecipeRequest, SaveRecipeResponse } from "@/types/recipe";
 
 type ComplexityLevel = 1 | 2 | 3;
 
@@ -65,22 +66,21 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       if (!user) {
         throw new Error("Must be logged in to favorite recipes");
       }
-      
+
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         },
-        // For generated recipes (negative IDs), we need to send the full recipe data
         body: JSON.stringify(recipe.id < 0 ? { recipe } : {})
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || "Failed to favorite recipe");
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -99,12 +99,53 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     },
   });
 
-  // Ensure type safety for complexity
-  const complexity: ComplexityLevel = isValidComplexity(recipe.complexity) 
-    ? recipe.complexity 
+  // Add save recipe mutation
+  const saveRecipe = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        throw new Error("Must be logged in to save recipes");
+      }
+
+      const response = await fetch('/api/recipes/save-temporary', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ temporaryRecipeId: Math.abs(recipe.id) })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to save recipe");
+      }
+
+      return response.json() as Promise<SaveRecipeResponse>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      queryClient.invalidateQueries({ queryKey: ['temporary-recipes'] });
+      toast({
+        title: "Recipe saved",
+        description: "The recipe has been saved to your collection",
+      });
+      if (onRemove) {
+        onRemove();
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const complexity: ComplexityLevel = isValidComplexity(recipe.complexity)
+    ? recipe.complexity
     : 1;
 
-  // Add strict null checking for optional properties
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
   const totalTime = prepTime + cookTime;
@@ -112,7 +153,6 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const imageUrl = recipe.imageUrl ?? '';
   const description = recipe.description ?? '';
 
-  // Add strict null checking for nutrition
   const nutrition = {
     calories: recipe.nutrition?.calories ?? 0,
     protein: recipe.nutrition?.protein ?? 0,
@@ -120,14 +160,13 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     fat: recipe.nutrition?.fat ?? 0,
   } as const;
 
-  // Ensure arrays are defined with proper typing
   const ingredients = recipe.ingredients ?? [];
   const instructions = recipe.instructions ?? [];
   const tags = recipe.tags ?? [];
 
   return (
     <>
-      <Card 
+      <Card
         className="overflow-hidden transition-shadow hover:shadow-md cursor-pointer"
         onClick={() => setShowDetails(true)}
       >
@@ -149,18 +188,35 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
             </span>
             <div className="flex gap-2">
               {user && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="bg-white/80 hover:bg-white/90"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFavorite.mutate();
-                  }}
-                >
-                  <Heart className="h-5 w-5 text-gray-500 hover:text-red-500 transition-colors" />
-                  <span className="sr-only">Add to favorites</span>
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="bg-white/80 hover:bg-white/90"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite.mutate();
+                    }}
+                  >
+                    <Heart className="h-5 w-5 text-gray-500 hover:text-red-500 transition-colors" />
+                    <span className="sr-only">Add to favorites</span>
+                  </Button>
+                  {recipe.id < 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="bg-white/80 hover:bg-white/90"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveRecipe.mutate();
+                      }}
+                      disabled={saveRecipe.isPending}
+                    >
+                      <Save className="h-5 w-5 text-gray-500 hover:text-green-500 transition-colors" />
+                      <span className="sr-only">Save recipe</span>
+                    </Button>
+                  )}
+                </>
               )}
               {onRemove && (
                 <button
@@ -201,7 +257,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
           <DialogHeader>
             <DialogTitle>{recipe.name}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="aspect-video relative rounded-lg overflow-hidden">
               <img
