@@ -1,6 +1,6 @@
 import passport from "passport";
 import { IVerifyOptions, Strategy as LocalStrategy } from "passport-local";
-import { type Express } from "express";
+import { type Express, type Response, type NextFunction } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -32,9 +32,21 @@ const crypto = {
 // extend express user object with our schema
 declare global {
   namespace Express {
-    interface User extends SelectUser { }
+    interface User extends SelectUser {}
   }
 }
+
+export const isAdmin = (req: Express.Request, res: Response, next: NextFunction) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Unauthorized", message: "You must be logged in" });
+  }
+
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ error: "Forbidden", message: "Admin access required" });
+  }
+
+  next();
+};
 
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
@@ -60,36 +72,40 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy({
-      usernameField: 'email',
-      passwordField: 'password'
-    }, async (email, password, done) => {
-      try {
-        const [user] = await db
-          .select({
-            id: users.id,
-            email: users.email,
-            name: users.name,
-            password_hash: users.password_hash,
-            preferences: users.preferences,
-            createdAt: users.createdAt,
-          })
-          .from(users)
-          .where(eq(users.email, email.toLowerCase()))
-          .limit(1);
+    new LocalStrategy(
+      {
+        usernameField: 'email',
+        passwordField: 'password'
+      },
+      async (email, password, done) => {
+        try {
+          const [user] = await db
+            .select({
+              id: users.id,
+              email: users.email,
+              name: users.name,
+              password_hash: users.password_hash,
+              preferences: users.preferences,
+              createdAt: users.createdAt,
+              isAdmin: users.isAdmin,
+            })
+            .from(users)
+            .where(eq(users.email, email.toLowerCase()))
+            .limit(1);
 
-        if (!user) {
-          return done(null, false, { message: "Incorrect email address." });
+          if (!user) {
+            return done(null, false, { message: "Incorrect email address." });
+          }
+          const isMatch = await crypto.compare(password, user.password_hash);
+          if (!isMatch) {
+            return done(null, false, { message: "Incorrect password." });
+          }
+          return done(null, user);
+        } catch (err) {
+          return done(err);
         }
-        const isMatch = await crypto.compare(password, user.password_hash);
-        if (!isMatch) {
-          return done(null, false, { message: "Incorrect password." });
-        }
-        return done(null, user);
-      } catch (err) {
-        return done(err);
       }
-    })
+    )
   );
 
   passport.serializeUser((user, done) => {
@@ -112,10 +128,10 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const { email, password, name } = req.body;
-      
+
       // Basic input validation
       if (!email?.trim() || !password?.trim()) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Validation Error",
           message: "Email and password are required",
           field: !email?.trim() ? "email" : "password",
@@ -125,7 +141,7 @@ export function setupAuth(app: Express) {
 
       const normalizedEmail = email.toLowerCase().trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      
+
       if (!emailRegex.test(normalizedEmail)) {
         return res.status(400).json({
           error: "Validation Error",
@@ -179,7 +195,8 @@ export function setupAuth(app: Express) {
         .values({
           email: normalizedEmail,
           password_hash: hashedPassword,
-          name: name?.trim() || normalizedEmail.split('@')[0]
+          name: name?.trim() || normalizedEmail.split('@')[0],
+          isAdmin: false, // Default to non-admin
         })
         .returning();
 
@@ -199,7 +216,7 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       console.error("Registration error:", error);
-      
+
       if ((error as any)?.code === '23505') {
         return res.status(400).json({
           error: "Registration Error",
@@ -208,7 +225,7 @@ export function setupAuth(app: Express) {
           type: "DUPLICATE_EMAIL"
         });
       }
-      
+
       res.status(500).json({
         error: "Server Error",
         message: "An error occurred during registration. Please try again.",
@@ -222,7 +239,7 @@ export function setupAuth(app: Express) {
       email: z.string().email(),
       password: z.string().min(1)
     });
-    
+
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
       return res
@@ -246,7 +263,7 @@ export function setupAuth(app: Express) {
 
         return res.json({
           message: "Login successful",
-          user: { id: user.id, email: user.email },
+          user: { id: user.id, email: user.email, isAdmin: user.isAdmin },
         });
       });
     };
@@ -265,7 +282,8 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", (req, res) => {
     if (req.isAuthenticated()) {
-      return res.json(req.user);
+      const { password_hash, ...userWithoutPassword } = req.user;
+      return res.json(userWithoutPassword);
     }
 
     res.status(401).send("Not logged in");

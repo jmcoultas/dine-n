@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   password_hash: text("password_hash").notNull(),
   preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  isAdmin: boolean("is_admin").notNull().default(false),
 });
 
 export const recipes = pgTable("recipes", {
