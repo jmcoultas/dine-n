@@ -209,11 +209,12 @@ export default function PreferenceModal({
     });
   };
 
+  if (isGenerating) {
+    return <LoadingAnimation message="Cooking up your personalized meal plan..." />;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {isGenerating && (
-        <LoadingAnimation message="Cooking up your personalized meal plan..." />
-      )}
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         {currentStep === -1 ? (
           // Quick view mode
