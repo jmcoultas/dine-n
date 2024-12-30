@@ -54,9 +54,12 @@ export default function MealPlan() {
     };
   });
 
-  const { data: temporaryRecipes, isLoading } = useQuery<Recipe[]>({
+  const { data: temporaryRecipes, isLoading } = useQuery({
     queryKey: ['temporaryRecipes'],
-    queryFn: getTemporaryRecipes,
+    queryFn: async () => {
+      const response = await getTemporaryRecipes();
+      return response as Recipe[];
+    },
     refetchInterval: 60000, // Refetch every minute to update expiration status
   });
 
