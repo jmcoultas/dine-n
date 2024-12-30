@@ -10,10 +10,18 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Recipe } from "@/lib/types";
+import type { Recipe } from "@db/schema";
 
 interface RecipeCardProps {
-  recipe: Recipe;
+  recipe: {
+    id: number;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    prepTime?: number;
+    cookTime?: number;
+    servings?: number;
+  };
   isFavorited?: boolean;
   onClick?: () => void;
 }
@@ -22,12 +30,12 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
   const { toast } = useToast();
   const { user } = useUser();
   const queryClient = useQueryClient();
-
+  
   // Add null checks for optional properties
-  const imageUrl = recipe.image_url || '';
+  const imageUrl = recipe.imageUrl || '';
   const description = recipe.description ?? '';
-  const prepTime = recipe.prep_time ?? 0;
-  const cookTime = recipe.cook_time ?? 0;
+  const prepTime = recipe.prepTime ?? 0;
+  const cookTime = recipe.cookTime ?? 0;
   const servings = recipe.servings ?? 2;
 
   const toggleFavorite = useMutation({
@@ -35,33 +43,24 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
       if (!user) {
         throw new Error("Must be logged in to favorite recipes");
       }
-
+      
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
-        },
-        body: recipe.id < 0 ? JSON.stringify({ recipe }) : undefined
+        }
       });
-
+      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || "Failed to update favorite status");
       }
-
-      const result = await response.json();
-      // If this was a temporary recipe that got saved permanently, update the recipe ID
-      if (result.permanentId) {
-        recipe.id = result.permanentId;
-      }
-      return result;
+      
+      return response.json();
     },
-    onSuccess: (data) => {
-      // Invalidate both temporary and favorite recipes queries
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
-      queryClient.invalidateQueries({ queryKey: ['recipes', 'temporary'] });
-
       toast({
         title: isFavorited ? "Recipe removed from favorites" : "Recipe added to favorites",
         description: isFavorited ? 
