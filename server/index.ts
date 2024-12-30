@@ -18,6 +18,7 @@ function log(message: string) {
 
 async function startServer() {
   try {
+    // Verify database connection first
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is required");
     }
@@ -25,12 +26,14 @@ async function startServer() {
     const dbUrlForLogs = process.env.DATABASE_URL.split("@")[1] || "database";
     log("Starting server with database URL: " + dbUrlForLogs);
 
+    // Initialize database connection
+    const { db } = await import("../db");
     try {
-      const { db } = await import("../db");
       await db.execute(sql`SELECT 1`);
       log("Database connection successful");
     } catch (error) {
       log("Database connection failed");
+      console.error("Database error details:", error);
       throw error;
     }
 
@@ -40,9 +43,16 @@ async function startServer() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
 
-    // CORS middleware
+    // CORS middleware - updated to be more permissive in development
     app.use((req, res, next) => {
-      res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+      // Allow both localhost and 0.0.0.0
+      const allowedOrigins = ['http://localhost:5173', 'http://0.0.0.0:5173'];
+      const origin = req.headers.origin;
+
+      if (origin && allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+      }
+
       res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
       res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
@@ -50,37 +60,6 @@ async function startServer() {
       if (req.method === "OPTIONS") {
         return res.sendStatus(200);
       }
-      next();
-    });
-
-    // Request logging middleware
-    app.use((req, res, next) => {
-      const start = Date.now();
-      const path = req.path;
-      let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-      const originalResJson = res.json;
-      res.json = function (bodyJson, ...args) {
-        capturedJsonResponse = bodyJson;
-        return originalResJson.apply(res, [bodyJson, ...args]);
-      };
-
-      res.on("finish", () => {
-        const duration = Date.now() - start;
-        if (path.startsWith("/api")) {
-          let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-          if (capturedJsonResponse) {
-            logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-          }
-
-          if (logLine.length > 80) {
-            logLine = logLine.slice(0, 79) + "…";
-          }
-
-          log(logLine);
-        }
-      });
-
       next();
     });
 
@@ -119,6 +98,7 @@ async function startServer() {
   }
 }
 
+// Start the server
 startServer().catch((error) => {
   console.error("Critical server error:", error);
   process.exit(1);

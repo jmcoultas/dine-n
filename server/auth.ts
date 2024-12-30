@@ -38,13 +38,20 @@ declare global {
   }
 }
 
+// Enhanced admin middleware with proper error handling
 export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: "Unauthorized", message: "You must be logged in" });
+    return res.status(401).json({ 
+      error: "Unauthorized", 
+      message: "You must be logged in to access this resource" 
+    });
   }
 
   if (!req.user?.isAdmin) {
-    return res.status(403).json({ error: "Forbidden", message: "Admin access required" });
+    return res.status(403).json({ 
+      error: "Forbidden", 
+      message: "This action requires administrator privileges" 
+    });
   }
 
   next();
@@ -56,7 +63,11 @@ export function setupAuth(app: Express) {
     secret: process.env.REPL_ID || "porygon-supremacy",
     resave: false,
     saveUninitialized: false,
-    cookie: {},
+    cookie: {
+      secure: app.get("env") === "production",
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    },
     store: new MemoryStore({
       checkPeriod: 86400000, // prune expired entries every 24h
     }),
@@ -64,9 +75,6 @@ export function setupAuth(app: Express) {
 
   if (app.get("env") === "production") {
     app.set("trust proxy", 1);
-    sessionSettings.cookie = {
-      secure: true,
-    };
   }
 
   app.use(session(sessionSettings));
@@ -87,18 +95,21 @@ export function setupAuth(app: Express) {
             password_hash: users.password_hash,
             preferences: users.preferences,
             createdAt: users.createdAt,
+            isAdmin: users.isAdmin,
           })
           .from(users)
           .where(eq(users.email, email.toLowerCase()))
           .limit(1);
 
         if (!user) {
-          return done(null, false, { message: "Incorrect email address." });
+          return done(null, false, { message: "Invalid email or password" });
         }
+
         const isMatch = await crypto.compare(password, user.password_hash);
         if (!isMatch) {
-          return done(null, false, { message: "Incorrect password." });
+          return done(null, false, { message: "Invalid email or password" });
         }
+
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -206,7 +217,8 @@ export function setupAuth(app: Express) {
           email: normalizedEmail,
           password_hash: hashedPassword,
           name: name?.trim() || normalizedEmail.split('@')[0],
-          isAdmin: false // Added isAdmin field
+          isAdmin: false,
+          preferences: null,
         })
         .returning();
 
@@ -220,22 +232,13 @@ export function setupAuth(app: Express) {
           user: {
             id: newUser.id,
             email: newUser.email,
-            name: newUser.name
+            name: newUser.name,
+            isAdmin: newUser.isAdmin
           }
         });
       });
     } catch (error) {
       console.error("Registration error:", error);
-
-      if ((error as any)?.code === '23505') {
-        return res.status(400).json({
-          error: "Registration Error",
-          message: "This email address is already registered",
-          field: "email",
-          type: "DUPLICATE_EMAIL"
-        });
-      }
-
       res.status(500).json({
         error: "Server Error",
         message: "An error occurred during registration. Please try again.",
@@ -245,25 +248,16 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    const loginSchema = z.object({
-      email: z.string().email(),
-      password: z.string().min(1)
-    });
-
-    const result = loginSchema.safeParse(req.body);
-    if (!result.success) {
-      return res
-        .status(400)
-        .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
-    }
-
-    const cb = (err: any, user: Express.User, info: IVerifyOptions) => {
+    passport.authenticate("local", (err: any, user: Express.User | false, info: IVerifyOptions) => {
       if (err) {
         return next(err);
       }
 
       if (!user) {
-        return res.status(400).send(info.message ?? "Login failed");
+        return res.status(401).json({
+          error: "Authentication Failed",
+          message: info.message || "Invalid credentials"
+        });
       }
 
       req.logIn(user, (err) => {
@@ -273,17 +267,24 @@ export function setupAuth(app: Express) {
 
         return res.json({
           message: "Login successful",
-          user: { id: user.id, email: user.email },
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            isAdmin: user.isAdmin
+          }
         });
       });
-    };
-    passport.authenticate("local", cb)(req, res, next);
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res) => {
     req.logout((err) => {
       if (err) {
-        return res.status(500).send("Logout failed");
+        return res.status(500).json({
+          error: "Logout Failed",
+          message: "An error occurred during logout"
+        });
       }
 
       res.json({ message: "Logout successful" });
@@ -291,10 +292,19 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
-    if (req.isAuthenticated()) {
-      return res.json(req.user);
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({
+        error: "Not Authenticated",
+        message: "You must be logged in to access this resource"
+      });
     }
 
-    res.status(401).send("Not logged in");
+    res.json({
+      id: req.user.id,
+      email: req.user.email,
+      name: req.user.name,
+      isAdmin: req.user.isAdmin,
+      preferences: req.user.preferences
+    });
   });
 }
