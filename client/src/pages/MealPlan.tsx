@@ -74,7 +74,7 @@ export default function MealPlan() {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
 
-  const saveMutation = useMutation({
+  const saveMutation = useMutation<MealPlan, Error, void>({
     mutationFn: async () => {
       if (!generatedRecipes.length) {
         throw new Error("No recipes generated to save");
