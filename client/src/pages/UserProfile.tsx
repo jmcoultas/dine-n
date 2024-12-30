@@ -311,6 +311,30 @@ export default function UserProfile() {
         preferences={preferences}
         onUpdatePreferences={handlePreferencesSave}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Account</CardTitle>
+          <CardDescription>
+            Manage your account settings
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              logout().then(() => {
+                toast({
+                  title: "Success",
+                  description: "You have been logged out",
+                });
+              });
+            }}
+          >
+            Log Out
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
