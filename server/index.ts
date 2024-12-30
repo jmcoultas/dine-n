@@ -22,7 +22,7 @@ async function startServer() {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is required");
     }
-    
+
     // Hide sensitive information from logs
     const dbUrlForLogs = process.env.DATABASE_URL.split("@")[1] || "database";
     log("Starting server with database URL: " + dbUrlForLogs);
@@ -38,10 +38,23 @@ async function startServer() {
     }
 
     const app = express();
-    
+
     // Basic middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
+
+    // CORS middleware for development
+    if (app.get("env") === "development") {
+      app.use((req, res, next) => {
+        res.header("Access-Control-Allow-Origin", "*");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+        if (req.method === "OPTIONS") {
+          return res.sendStatus(200);
+        }
+        next();
+      });
+    }
 
     // Request logging middleware
     app.use((req, res, next) => {
@@ -76,10 +89,10 @@ async function startServer() {
 
     // Set up authentication before routes
     await setupAuth(app);
-    
+
     // Register API routes after auth setup
     registerRoutes(app);
-    
+
     const server = createServer(app);
 
     // Error handling middleware
@@ -98,10 +111,10 @@ async function startServer() {
     }
 
     // Start server
-    const PORT = 5000;
+    const PORT = process.env.PORT || 5000;
     return new Promise((resolve) => {
       server.listen(PORT, "0.0.0.0", () => {
-        log(`serving on port ${PORT}`);
+        log(`Server is running on port ${PORT}`);
         resolve(server);
       });
     });
