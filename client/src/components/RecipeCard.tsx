@@ -49,7 +49,8 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(recipe)
       });
       
       if (!response.ok) {
