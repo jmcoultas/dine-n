@@ -77,7 +77,9 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         complexity: recipe.complexity || 1
       } : {};
       
-      const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
+      // For temporary recipes, we need to use the negative ID
+      const recipeId = recipe.id < 0 ? recipe.id : Math.abs(recipe.id);
+      const response = await fetch(`/api/recipes/${recipeId}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
         credentials: 'include',
         headers: {
