@@ -24,10 +24,11 @@ interface MealPlanRecipe {
 
 interface MealPlan {
   id: number;
-  user_id: number;
+  userId: number;
   name: string;
-  start_date: Date;
-  end_date: Date;
+  startDate: Date;
+  endDate: Date;
+  recipes: MealPlanRecipe[];
 }
 
 export default function MealPlan() {
@@ -107,9 +108,14 @@ export default function MealPlan() {
 
       const mealPlanData = {
         name: "Weekly Plan",
-        start_date: selectedDate,
-        end_date: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        user_id: user?.id ?? 0
+        startDate: selectedDate,
+        endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+        userId: user?.id ?? 0,
+        recipes: generatedRecipes.map((recipe, index) => ({
+          recipeId: recipe.id,
+          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
+          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
+        }))
       };
 
       const mealPlan = await createMealPlan(mealPlanData);
