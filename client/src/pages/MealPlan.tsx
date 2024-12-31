@@ -111,7 +111,6 @@ export default function MealPlan() {
         startDate: selectedDate,
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         userId: user?.id ?? 0,
-        createdAt: new Date(),
         recipes: generatedRecipes.map((recipe, index) => ({
           recipeId: recipe.id,
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
