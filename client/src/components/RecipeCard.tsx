@@ -57,6 +57,25 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
       if (!user) {
         throw new Error("Must be logged in to favorite recipes");
       }
+
+      const payload = recipe.id < 0 ? {
+        name: recipe.name,
+        description: recipe.description,
+        image_url: recipe.imageUrl,
+        prep_time: recipe.prepTime,
+        cook_time: recipe.cookTime,
+        servings: recipe.servings,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        tags: recipe.tags,
+        nutrition: recipe.nutrition || {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0
+        },
+        complexity: recipe.complexity || 1
+      } : {};
       
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
@@ -64,24 +83,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: recipe.name,
-          description: recipe.description || null,
-          imageUrl: recipe.imageUrl || null,
-          prepTime: recipe.prepTime || 0,
-          cookTime: recipe.cookTime || 0,
-          servings: recipe.servings || 2,
-          ingredients: recipe.ingredients || [],
-          instructions: recipe.instructions || [],
-          tags: recipe.tags || [],
-          nutrition: recipe.nutrition || {
-            calories: 0,
-            protein: 0,
-            carbs: 0,
-            fat: 0
-          },
-          complexity: recipe.complexity || 1
-        })
+        body: JSON.stringify(payload)
       });
       
       if (!response.ok) {
