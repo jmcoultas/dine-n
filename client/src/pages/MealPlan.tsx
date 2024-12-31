@@ -101,7 +101,7 @@ export default function MealPlan() {
   };
 
   const saveMutation = useMutation<MealPlan, Error, void, unknown>({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<MealPlan> => {
       if (!generatedRecipes.length) {
         throw new Error("No recipes generated to save");
       }
@@ -136,7 +136,14 @@ export default function MealPlan() {
         });
       }
 
-      return mealPlan;
+      return {
+        ...mealPlan,
+        recipes: generatedRecipes.map((recipe, index) => ({
+          recipeId: recipe.id,
+          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
+          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
+        }))
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mealPlans"] });
