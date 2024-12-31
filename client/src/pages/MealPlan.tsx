@@ -103,7 +103,7 @@ export default function MealPlan() {
     }
   };
 
-  const saveMutation = useMutation<MealPlan, Error, void>({
+  const saveMutation = useMutation<MealPlan, Error, void, unknown>({
     mutationFn: async () => {
       if (!generatedRecipes.length) {
         throw new Error("No recipes generated to save");
