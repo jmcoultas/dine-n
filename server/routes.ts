@@ -70,7 +70,7 @@ export function registerRoutes(app: express.Express) {
       }
 
       // If it's a temporary recipe (negative ID), we need to save it first
-      if (recipeId < 0) {
+      if (recipeId >= 100000 && recipeId < 200000) {
         // First, fetch the temporary recipe using absolute value of ID
         const tempRecipe = await db
           .select()

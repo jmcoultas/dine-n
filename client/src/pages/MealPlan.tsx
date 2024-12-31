@@ -112,7 +112,7 @@ export default function MealPlan() {
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         userId: user?.id ?? 0,
         recipes: generatedRecipes.map((recipe, index) => ({
-          recipeId: recipe.id < 0 ? recipe.id : Math.abs(recipe.id), // Ensure we pass negative IDs for temporary recipes
+          recipeId: recipe.id, // Ensure we pass negative IDs for temporary recipes
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
           meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
         }))
