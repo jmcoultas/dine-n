@@ -86,9 +86,9 @@ export function registerRoutes(app: express.Express) {
         const transformedRecipe = {
           name: tempRecipe[0].name,
           description: tempRecipe[0].description,
-          image_url: tempRecipe[0].imageUrl,
-          prep_time: tempRecipe[0].prepTime,
-          cook_time: tempRecipe[0].cookTime,
+          imageUrl: tempRecipe[0].imageUrl,
+          prepTime: tempRecipe[0].prepTime,
+          cookTime: tempRecipe[0].cookTime,
           servings: tempRecipe[0].servings,
           ingredients: tempRecipe[0].ingredients,
           instructions: tempRecipe[0].instructions,
