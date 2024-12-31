@@ -21,6 +21,20 @@ interface RecipeCardProps {
     prepTime?: number;
     cookTime?: number;
     servings?: number;
+    ingredients?: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+    }>;
+    instructions?: string[];
+    tags?: string[];
+    nutrition?: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    complexity?: 1 | 2 | 3;
   };
   isFavorited?: boolean;
   onClick?: () => void;
@@ -50,7 +64,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         headers: {
           'Content-Type': 'application/json'
         },
-        body: recipe.id < 0 ? JSON.stringify(recipe) : JSON.stringify({})
+        body: JSON.stringify(recipe.id < 0 ? recipe : {})
       });
       
       if (!response.ok) {
