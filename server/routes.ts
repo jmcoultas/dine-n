@@ -567,17 +567,17 @@ export function registerRoutes(app: express.Express) {
           .insert(temporaryRecipes)
           .values({
             userId: req.user!.id,
-            name: recipe.name || '',
-            description: recipe.description || null,
-            imageUrl: recipe.imageUrl || null,
-            prepTime: recipe.prep_time || 0,
-            cookTime: recipe.cook_time || 0,
-            servings: recipe.servings || 2,
-            ingredients: recipe.ingredients || [],
-            instructions: recipe.instructions || [],
-            tags: recipe.tags || [],
+            name: String(recipe.name || ''),
+            description: recipe.description?.toString() || null,
+            imageUrl: recipe.imageUrl?.toString() || null,
+            prepTime: Number(recipe.prepTime) || 0,
+            cookTime: Number(recipe.cookTime) || 0,
+            servings: Number(recipe.servings) || 2,
+            ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+            instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+            tags: Array.isArray(recipe.tags) ? recipe.tags : [],
             nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-            complexity: recipe.complexity || 1,
+            complexity: Number(recipe.complexity) || 1,
             createdAt: new Date(),
             expiresAt: expirationDate
           })
