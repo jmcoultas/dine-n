@@ -98,10 +98,16 @@ export function registerRoutes(app: express.Express) {
           created_at: new Date()
         };
 
+        // First, insert into permanent recipes table
         const [savedRecipe] = await db
           .insert(recipes)
           .values(transformedRecipe)
           .returning();
+
+        // Then, delete from temporary recipes
+        await db
+          .delete(temporaryRecipes)
+          .where(eq(temporaryRecipes.id, Math.abs(recipeId)));
 
         // Add to user's favorites using the new permanent ID
         await db.insert(userRecipes).values({
