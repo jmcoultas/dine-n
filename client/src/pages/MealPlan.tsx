@@ -82,10 +82,7 @@ export default function MealPlan() {
   const handleGenerateMealPlan = async () => {
     try {
       setIsGenerating(true);
-      const result = await generateMealPlan({
-        preferences,
-        days: 2 // Generates 6 meals (2 days × 3 meals)
-      });
+      const result = await generateMealPlan(preferences, 2); // Generates 6 meals (2 days × 3 meals)
       await refetch();
       toast({
         title: "Success",
