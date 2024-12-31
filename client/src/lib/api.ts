@@ -1,20 +1,10 @@
+
 import type { Recipe, MealPlan, GroceryList } from "@db/schema";
 
 const API_BASE = "/api";
 
 export async function fetchRecipes(): Promise<Recipe[]> {
   const response = await fetch(`${API_BASE}/recipes`);
-  return response.json();
-}
-
-export async function createMealPlan(mealPlan: Omit<MealPlan, "id">): Promise<MealPlan> {
-  const response = await fetch(`${API_BASE}/meal-plans`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(mealPlan),
-  });
   return response.json();
 }
 
@@ -42,10 +32,6 @@ export async function getTemporaryRecipes(): Promise<Recipe[]> {
 }
 
 export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<GenerateMealPlanResponse> {
-  // Log the exact data being sent
-  console.log('Raw preferences received:', preferences);
-
-  // Only filter out falsy values but keep empty arrays
   const cleanPreferences = {
     dietary: Array.isArray(preferences.dietary) ? preferences.dietary.filter(Boolean) : [],
     allergies: Array.isArray(preferences.allergies) ? preferences.allergies.filter(Boolean) : [],
@@ -53,32 +39,47 @@ export async function generateMealPlan(preferences: MealPlanPreferences, days: n
     meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes.filter(Boolean) : []
   };
 
-  try {
-    const response = await fetch(`${API_BASE}/generate-meal-plan`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        preferences: cleanPreferences,
-        days
-      }),
-    });
+  const response = await fetch(`${API_BASE}/generate-meal-plan`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      preferences: cleanPreferences,
+      days
+    }),
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Failed to generate meal plan");
-    }
-
-    return response.json();
-  } catch (error: any) {
-    throw new Error(error.message || "Failed to generate meal plan");
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to generate meal plan");
   }
+
+  return response.json();
+}
+
+export async function createMealPlan(mealPlan: Partial<MealPlan>): Promise<MealPlan> {
+  const response = await fetch(`${API_BASE}/meal-plans`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(mealPlan),
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to create meal plan");
+  }
+  
+  return response.json();
 }
 
 export async function getGroceryList(mealPlanId: number): Promise<GroceryList> {
-  const response = await fetch(`${API_BASE}/grocery-lists/${mealPlanId}`);
+  const response = await fetch(`${API_BASE}/grocery-lists/${mealPlanId}`, {
+    credentials: "include",
+  });
   return response.json();
 }
 
@@ -88,11 +89,11 @@ export async function createGroceryList(groceryList: Omit<GroceryList, "id">): P
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(groceryList),
   });
   return response.json();
 }
-
 
 interface SubstitutionResponse {
   substitutions: string[];
