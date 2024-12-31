@@ -136,13 +136,19 @@ export default function MealPlan() {
         });
       }
 
+      const recipes = generatedRecipes.map((recipe, index) => ({
+        recipeId: recipe.id,
+        day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
+        meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner" as MealType
+      }));
+
       return {
-        ...mealPlan,
-        recipes: generatedRecipes.map((recipe, index) => ({
-          recipeId: recipe.id,
-          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
-        }))
+        id: mealPlan.id,
+        userId: mealPlan.userId,
+        name: mealPlan.name,
+        startDate: mealPlan.startDate,
+        endDate: mealPlan.endDate,
+        recipes: recipes
       };
     },
     onSuccess: () => {
