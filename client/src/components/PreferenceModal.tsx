@@ -215,10 +215,7 @@ export default function PreferenceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent aria-describedby="preference-modal-description">
-        <div id="preference-modal-description" className="sr-only">
-          Set your meal preferences and generate a personalized meal plan
-        </div>
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         {currentStep === -1 ? (
           // Quick view mode
           <>

@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
-import type { Recipe, MealType, MealPlan } from "@/lib/types";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,7 +12,9 @@ import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
-import type { Recipe, MealType } from "@/lib/types";
+import type { Recipe } from "@/lib/types";
+
+type MealType = "breakfast" | "lunch" | "dinner";
 
 interface MealPlanRecipe {
   recipeId: number;
@@ -54,9 +55,12 @@ export default function MealPlan() {
     };
   });
 
-  const { data: temporaryRecipes = [], isLoading, refetch } = useQuery({
+  const { data: temporaryRecipes, isLoading, refetch } = useQuery({
     queryKey: ['temporaryRecipes'],
-    queryFn: getTemporaryRecipes,
+    queryFn: async () => {
+      const response = await getTemporaryRecipes();
+      return response as Recipe[];
+    },
     refetchInterval: 60000,
   });
 
@@ -80,7 +84,7 @@ export default function MealPlan() {
       setIsGenerating(true);
       const result = await generateMealPlan({
         preferences,
-        days: 2
+        days: 2 // Generates 6 meals (2 days × 3 meals)
       });
       await refetch();
       toast({
@@ -99,7 +103,7 @@ export default function MealPlan() {
     }
   };
 
-  const saveMutation = useMutation({
+  const saveMutation = useMutation<MealPlan, Error, void>({
     mutationFn: async () => {
       if (!generatedRecipes.length) {
         throw new Error("No recipes generated to save");
@@ -113,7 +117,7 @@ export default function MealPlan() {
         recipes: generatedRecipes.map((recipe, index) => ({
           recipeId: recipe.id,
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-          meal: ["breakfast", "lunch", "dinner"][index % 3] as MealType
+          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
         }))
       };
 
@@ -250,14 +254,14 @@ export default function MealPlan() {
                     {Array.from({ length: 6 }).map((_, index) => {
                       const recipe = generatedRecipes[index];
                       const currentDay = new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000);
-                      const mealType = ["breakfast", "lunch", "dinner"][index % 3] as MealType;
+                      const mealType = index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner";
 
                       return recipe ? (
                         <MealPlanCard
                           key={recipe.id}
                           recipe={recipe}
                           day={currentDay}
-                          meal={mealType}
+                          meal={mealType as MealType}
                           onRemove={() => {
                             const newRecipes = [...generatedRecipes];
                             const removedRecipe = newRecipes[index];
