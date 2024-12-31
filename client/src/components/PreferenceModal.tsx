@@ -244,22 +244,24 @@ export default function PreferenceModal({
             </div>
 
             <DialogFooter className="flex flex-col sm:flex-row justify-end gap-2 mt-6">
-              <Button
-                variant="outline"
-                onClick={handleEditPreferences}
-                className="w-full sm:w-auto"
-              >
-                <Settings2 className="mr-2 h-4 w-4" />
-                Modify Preferences
-              </Button>
-              <Button
-                onClick={onGenerate}
-                disabled={isGenerating}
-                className="w-full sm:w-auto"
-              >
-                <Wand2 className="mr-2 h-4 w-4" />
-                Generate Meal Plan
-              </Button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                <Button
+                  variant="outline"
+                  onClick={handleEditPreferences}
+                  className="text-sm"
+                >
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Modify Preferences
+                </Button>
+                <Button
+                  onClick={onGenerate}
+                  disabled={isGenerating}
+                  className="text-sm"
+                >
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Generate Meal Plan
+                </Button>
+              </div>
             </DialogFooter>
           </>
         ) : (
