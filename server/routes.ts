@@ -566,20 +566,10 @@ export function registerRoutes(app: express.Express) {
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
           .values({
+            ...recipe,
             userId: req.user!.id,
-            name: recipe.name,
-            description: recipe.description || null,
-            imageUrl: recipe.imageUrl,
-            prepTime: recipe.prepTime || 0,
-            cookTime: recipe.cookTime || 0,
-            servings: recipe.servings || 2,
-            ingredients: recipe.ingredients,
-            instructions: recipe.instructions,
-            tags: recipe.tags,
-            nutrition: recipe.nutrition,
-            complexity: recipe.complexity,
             createdAt: new Date(),
-            expiresAt: expirationDate,
+            expiresAt: expirationDate
           })
           .returning();
 
