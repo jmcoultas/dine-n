@@ -71,24 +71,30 @@ export function registerRoutes(app: express.Express) {
 
       // If it's a temporary recipe (negative ID), we need to save it first
       if (recipeId < 0) {
-        const recipeData = req.body.recipe;
-        if (!recipeData) {
-          return res.status(400).json({ error: "Recipe data is required for temporary recipes" });
+        // First, fetch the temporary recipe
+        const tempRecipe = await db
+          .select()
+          .from(temporaryRecipes)
+          .where(eq(temporaryRecipes.id, -recipeId))
+          .limit(1);
+
+        if (!tempRecipe || tempRecipe.length === 0) {
+          return res.status(404).json({ error: "Temporary recipe not found" });
         }
 
         // Transform and insert the recipe into the database
         const transformedRecipe = {
-          name: recipeData.name,
-          description: recipeData.description,
-          image_url: recipeData.imageUrl,
-          prep_time: recipeData.prepTime,
-          cook_time: recipeData.cookTime,
-          servings: recipeData.servings,
-          ingredients: recipeData.ingredients,
-          instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
-          tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
-          nutrition: recipeData.nutrition,
-          complexity: recipeData.complexity,
+          name: tempRecipe[0].name,
+          description: tempRecipe[0].description,
+          image_url: tempRecipe[0].imageUrl,
+          prep_time: tempRecipe[0].prepTime,
+          cook_time: tempRecipe[0].cookTime,
+          servings: tempRecipe[0].servings,
+          ingredients: tempRecipe[0].ingredients,
+          instructions: tempRecipe[0].instructions,
+          tags: tempRecipe[0].tags,
+          nutrition: tempRecipe[0].nutrition,
+          complexity: tempRecipe[0].complexity,
           created_at: new Date()
         };
 
