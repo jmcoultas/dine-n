@@ -50,7 +50,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(recipe)
+        body: JSON.stringify(recipe.id < 0 ? { recipe } : {})
       });
       
       if (!response.ok) {
