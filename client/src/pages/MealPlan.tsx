@@ -105,6 +105,7 @@ export default function MealPlan() {
       if (!generatedRecipes.length) {
         throw new Error("No recipes generated to save");
       }
+      console.log("Creating meal plan...");
 
       const mealPlanData = {
         name: "Weekly Plan",
