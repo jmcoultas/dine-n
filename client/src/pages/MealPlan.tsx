@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
@@ -10,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
-import { createMealPlan, createGroceryList, getTemporaryRecipes } from "@/lib/api";
+import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 
 type MealType = "breakfast" | "lunch" | "dinner";
@@ -31,7 +32,6 @@ interface MealPlan {
 }
 
 export default function MealPlan() {
-  // Type definitions
   type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
   type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
   type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
@@ -39,6 +39,7 @@ export default function MealPlan() {
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [preferences, setPreferences] = useState<{
     dietary: PreferenceType[];
     allergies: AllergyType[];
@@ -54,28 +55,53 @@ export default function MealPlan() {
     };
   });
 
-  const { data: temporaryRecipes, isLoading } = useQuery({
+  const { data: temporaryRecipes, isLoading, refetch } = useQuery({
     queryKey: ['temporaryRecipes'],
     queryFn: async () => {
       const response = await getTemporaryRecipes();
       return response as Recipe[];
     },
-    refetchInterval: 60000, // Refetch every minute to update expiration status
+    refetchInterval: 60000,
   });
 
   const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useUser();
 
-  // Update recipes when temporary recipes are fetched
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
       setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe => recipe !== null));
     }
   }, [temporaryRecipes]);
 
-  // Save preferences to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
+
+  const handleGenerateMealPlan = async () => {
+    try {
+      setIsGenerating(true);
+      const result = await generateMealPlan({
+        preferences,
+        days: 2 // Generates 6 meals (2 days × 3 meals)
+      });
+      await refetch();
+      toast({
+        title: "Success",
+        description: "Meal plan generated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate meal plan",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+      setShowPreferences(false);
+    }
+  };
 
   const saveMutation = useMutation<MealPlan, Error, void>({
     mutationFn: async () => {
@@ -124,10 +150,6 @@ export default function MealPlan() {
     },
   });
 
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { user } = useUser();
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4">
@@ -168,6 +190,13 @@ export default function MealPlan() {
                 <p className="text-sm text-muted-foreground">No preferences set</p>
               )}
             </div>
+            <Button 
+              onClick={() => setShowPreferences(true)}
+              className="mt-4"
+              variant="outline"
+            >
+              Update Preferences & Generate
+            </Button>
           </div>
         </div>
       </div>
@@ -177,8 +206,9 @@ export default function MealPlan() {
         onOpenChange={setShowPreferences}
         preferences={preferences}
         onUpdatePreferences={setPreferences}
-        isGenerating={isLoading}
-        onGenerate={() => {}}
+        isGenerating={isGenerating}
+        onGenerate={handleGenerateMealPlan}
+        description="Set your meal preferences and generate a personalized meal plan"
       />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
@@ -201,10 +231,10 @@ export default function MealPlan() {
 
           <TabsContent value="meals" className="mt-6">
             <div className="grid gap-6">
-              {isLoading ? (
+              {isLoading || isGenerating ? (
                 <div className="text-center py-12">
                   <span className="loading loading-spinner"></span>
-                  Loading meal plan...
+                  {isGenerating ? 'Generating meal plan...' : 'Loading meal plan...'}
                 </div>
               ) : generatedRecipes.length > 0 ? (
                 <>
@@ -256,7 +286,11 @@ export default function MealPlan() {
                       );
                     })}
                   </div>
-                  <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                  <Button 
+                    onClick={() => saveMutation.mutate()} 
+                    disabled={saveMutation.isPending}
+                    className="mt-4"
+                  >
                     Save Meal Plan
                   </Button>
                 </>
