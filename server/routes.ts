@@ -244,7 +244,7 @@ export function registerRoutes(app: express.Express) {
                 )
           )
         );
-      
+
       console.log('Found recipes:', activeRecipes.length);
       res.json(activeRecipes);
     } catch (error: any) {
@@ -369,86 +369,9 @@ export function registerRoutes(app: express.Express) {
             }
 
             if (!usedRecipeNames.has(recipeData.name)) {
-              // Validate and clean recipe data before insertion
-              type JsonObject = { [key: string]: any };
-
-              const validatedIngredients = Array.isArray(recipeData.ingredients)
-                ? recipeData.ingredients
-                    .filter((ing): ing is JsonObject =>
-                      ing !== null &&
-                      typeof ing === 'object' &&
-                      !Array.isArray(ing)
-                    )
-                    .map(ing => ({
-                      name: String(ing?.name || '').trim(),
-                      amount: Number(ing?.amount) || 0,
-                      unit: String(ing?.unit || '').trim()
-                    }))
-                : [];
-
-              console.log('Validated ingredients:', JSON.stringify(validatedIngredients, null, 2));
-
-              const validatedInstructions = Array.isArray(recipeData.instructions)
-                ? recipeData.instructions
-                    .filter(instruction => instruction && typeof instruction === 'string')
-                    .map(instruction => String(instruction).trim())
-                : [];
-              console.log('Validated instructions:', JSON.stringify(validatedInstructions, null, 2));
-
-              const validatedTags = Array.isArray(recipeData.tags)
-                ? recipeData.tags
-                    .filter(tag => tag && typeof tag === 'string')
-                    .map(tag => String(tag).trim())
-                : [];
-              console.log('Validated tags:', JSON.stringify(validatedTags, null, 2));
-
-              const validatedNutrition = (() => {
-                interface NutritionInput {
-                  calories?: number | string;
-                  protein?: number | string;
-                  carbs?: number | string;
-                  fat?: number | string;
-                }
-
-                const nutrition = recipeData.nutrition as NutritionInput;
-                if (nutrition && typeof nutrition === 'object') {
-                  const calories = Number(nutrition.calories);
-                  const protein = Number(nutrition.protein);
-                  const carbs = Number(nutrition.carbs);
-                  const fat = Number(nutrition.fat);
-
-                  if (!isNaN(calories) && !isNaN(protein) &&
-                    !isNaN(carbs) && !isNaN(fat)) {
-                    return {
-                      calories: Math.max(0, calories),
-                      protein: Math.max(0, protein),
-                      carbs: Math.max(0, carbs),
-                      fat: Math.max(0, fat)
-                    };
-                  }
-                }
-                return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-              })();
-              console.log('Validated nutrition:', JSON.stringify(validatedNutrition, null, 2));
-
-              const recipeToInsert = {
-                name: String(recipeData.name || '').trim(),
-                description: String(recipeData.description || 'No description available').trim(),
-                image_url: String(recipeData.imageUrl || '').trim() || null,
-                prep_time: Math.max(0, Number(recipeData.prepTime) || 0),
-                cook_time: Math.max(0, Number(recipeData.cookTime) || 0),
-                servings: Math.max(1, Number(recipeData.servings) || 2),
-                ingredients: validatedIngredients,
-                instructions: validatedInstructions,
-                tags: validatedTags,
-                nutrition: validatedNutrition,
-                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
-                created_at: new Date()
-              };
-
-              // Use the already validated recipe data
+              // Use the validated recipe data from earlier
               const generatedRecipe: Partial<Recipe> = {
-                ...recipeToInsert,
+                ...recipeData,
                 id: -(suggestedRecipes.length + 1), // Using negative IDs to distinguish from DB records
               };
 
