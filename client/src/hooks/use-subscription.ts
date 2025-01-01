@@ -12,6 +12,10 @@ interface SubscriptionStatus {
   endDate?: Date;
 }
 
+interface CheckoutSessionResponse {
+  sessionId: string;
+}
+
 export function useSubscription() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -30,7 +34,12 @@ export function useSubscription() {
   });
 
   // Create checkout session mutation
-  const { mutate: createCheckoutSession } = useMutation({
+  const createCheckoutSessionMutation = useMutation<
+    CheckoutSessionResponse,
+    Error,
+    void,
+    unknown
+  >({
     mutationFn: async () => {
       setIsLoading(true);
       try {
@@ -42,31 +51,36 @@ export function useSubscription() {
           throw new Error('Failed to create checkout session');
         }
 
-        const { sessionId } = await response.json();
-        const stripe = await stripePromise;
-
-        if (!stripe) {
-          throw new Error('Stripe failed to load');
-        }
-
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-          throw error;
-        }
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to start subscription process",
-          variant: "destructive",
-        });
+        return response.json();
       } finally {
         setIsLoading(false);
       }
     },
+    onSuccess: async (data) => {
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error('Stripe failed to load');
+      }
+      const { error } = await stripe.redirectToCheckout({ sessionId: data.sessionId });
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start subscription process",
+        variant: "destructive",
+      });
+    }
   });
 
   // Cancel subscription mutation
-  const { mutate: cancelSubscription } = useMutation({
+  const cancelSubscriptionMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch('/api/subscription/cancel', {
         method: 'POST',
@@ -97,7 +111,7 @@ export function useSubscription() {
   return {
     subscription,
     isLoading: isLoading || isLoadingStatus,
-    createCheckoutSession,
-    cancelSubscription,
+    createCheckoutSession: createCheckoutSessionMutation.mutateAsync,
+    cancelSubscription: cancelSubscriptionMutation.mutateAsync,
   };
 }

@@ -8,7 +8,7 @@ import { db } from "../db";
 
 const app = express();
 const server = createServer(app);
-const PORT = Number(process.env.PORT) || 5000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Basic middleware
 app.use(express.json());
@@ -16,7 +16,11 @@ app.use(express.urlencoded({ extended: false }));
 
 // Development CORS settings
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
+  const clientUrl = process.env.NODE_ENV === 'production'
+    ? process.env.CLIENT_URL
+    : 'http://localhost:5173';
+
+  res.header('Access-Control-Allow-Origin', clientUrl);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -28,8 +32,10 @@ app.use((req, res, next) => {
 });
 
 // Test database connection first
-db.execute(sql`SELECT 1`)
-  .then(() => {
+async function startServer() {
+  try {
+    // Test database connection
+    await db.execute(sql`SELECT 1`);
     console.log("[express] Database connection successful");
 
     // Setup authentication
@@ -40,9 +46,7 @@ db.execute(sql`SELECT 1`)
 
     // Setup Vite in development mode
     if (process.env.NODE_ENV !== 'production') {
-      setupVite(app, server).catch(err => {
-        console.error("[express] Vite setup error:", err);
-      });
+      await setupVite(app, server);
     } else {
       serveStatic(app);
     }
@@ -53,20 +57,38 @@ db.execute(sql`SELECT 1`)
       res.status(500).json({ error: "Server Error", message: err.message });
     });
 
-    // Start server
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`[express] Server running on port ${PORT}`);
-    });
+    // Start HTTP server with retry mechanism
+    const startHttpServer = () => {
+      server.listen(PORT, "0.0.0.0", () => {
+        console.log(`[express] Server running on port ${PORT}`);
+      });
 
-    server.on('error', (error) => {
-      console.error("[express] Server error:", error);
-      process.exit(1);
-    });
-  })
-  .catch(err => {
-    console.error("[express] Database connection failed:", err);
+      server.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          console.error(`[express] Port ${PORT} is already in use. Retrying...`);
+          setTimeout(() => {
+            server.close();
+            startHttpServer();
+          }, 1000);
+        } else {
+          console.error("[express] Server error:", error);
+          process.exit(1);
+        }
+      });
+    };
+
+    startHttpServer();
+  } catch (err) {
+    console.error("[express] Startup error:", err);
     process.exit(1);
-  });
+  }
+}
+
+// Start server with proper error handling
+startServer().catch(err => {
+  console.error("[express] Fatal error during startup:", err);
+  process.exit(1);
+});
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

@@ -1,8 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSubscription } from "@/hooks/use-subscription";
+import { loadStripe } from "@stripe/stripe-js";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+
+// Initialize Stripe
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY!);
 
 export function SubscriptionManager() {
   const { subscription, isLoading, createCheckoutSession, cancelSubscription } = useSubscription();
@@ -10,8 +14,22 @@ export function SubscriptionManager() {
 
   const handleUpgrade = async () => {
     try {
-      await createCheckoutSession();
+      const session = await createCheckoutSession();
+      const stripe = await stripePromise;
+
+      if (!stripe) {
+        throw new Error("Failed to load Stripe");
+      }
+
+      const { error } = await stripe.redirectToCheckout({
+        sessionId: session.sessionId,
+      });
+
+      if (error) {
+        throw error;
+      }
     } catch (error) {
+      console.error('Stripe checkout error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to start subscription process",
@@ -24,6 +42,7 @@ export function SubscriptionManager() {
     try {
       await cancelSubscription();
     } catch (error) {
+      console.error('Cancel subscription error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to cancel subscription",
