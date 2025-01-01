@@ -32,6 +32,8 @@ export function useSubscription() {
       }
       return response.json() as Promise<SubscriptionStatus>;
     },
+    // Reduce staleTime to ensure we get fresh data after subscription changes
+    staleTime: 0,
   });
 
   // Create checkout session mutation

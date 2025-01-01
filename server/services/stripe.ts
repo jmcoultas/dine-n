@@ -89,11 +89,24 @@ export const stripeService = {
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
+      console.log('Received webhook event:', {
+        type: event.type,
+        id: event.id,
+        timestamp: new Date().toISOString()
+      });
+
       switch (event.type) {
         case 'customer.subscription.created':
         case 'customer.subscription.updated': {
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
+
+          console.log('Processing subscription update:', {
+            subscriptionId: subscription.id,
+            customerId,
+            status: subscription.status,
+            currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+          });
 
           const [customer] = await db
             .select()
@@ -102,6 +115,12 @@ export const stripeService = {
             .limit(1);
 
           if (customer) {
+            console.log('Updating user subscription:', {
+              userId: customer.id,
+              subscriptionId: subscription.id,
+              newStatus: subscription.status === 'active' ? 'active' : 'inactive'
+            });
+
             await db
               .update(users)
               .set({
@@ -111,6 +130,8 @@ export const stripeService = {
                 subscription_end_date: new Date(subscription.current_period_end * 1000),
               })
               .where(eq(users.id, customer.id));
+          } else {
+            console.warn('Customer not found for Stripe customerId:', customerId);
           }
           break;
         }
@@ -119,6 +140,11 @@ export const stripeService = {
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
 
+          console.log('Processing subscription deletion:', {
+            subscriptionId: subscription.id,
+            customerId
+          });
+
           const [customer] = await db
             .select()
             .from(users)
@@ -126,6 +152,11 @@ export const stripeService = {
             .limit(1);
 
           if (customer) {
+            console.log('Updating user subscription to cancelled:', {
+              userId: customer.id,
+              subscriptionId: subscription.id
+            });
+
             await db
               .update(users)
               .set({
@@ -134,6 +165,8 @@ export const stripeService = {
                 subscription_end_date: new Date(),
               })
               .where(eq(users.id, customer.id));
+          } else {
+            console.warn('Customer not found for Stripe customerId:', customerId);
           }
           break;
         }
