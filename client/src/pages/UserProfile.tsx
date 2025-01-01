@@ -11,6 +11,7 @@ import { useTheme } from "@/hooks/use-theme";
 import PreferenceModal from "@/components/PreferenceModal";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
+import { SubscriptionManager } from "@/components/SubscriptionManager";
 
 interface ProfileFormData {
   name: string;
@@ -199,6 +200,7 @@ export default function UserProfile() {
 
   return (
     <div className="container max-w-2xl mx-auto py-8 space-y-6">
+      {/* Profile Settings Card */}
       <Card>
         <CardHeader>
           <CardTitle>Profile Settings</CardTitle>
@@ -245,6 +247,10 @@ export default function UserProfile() {
         </form>
       </Card>
 
+      {/* Subscription Management Section */}
+      <SubscriptionManager />
+
+      {/* Meal Preferences Card */}
       <Card>
         <CardHeader>
           <CardTitle>Meal Preferences</CardTitle>

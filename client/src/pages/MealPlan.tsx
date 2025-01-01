@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
@@ -18,17 +18,17 @@ import type { ChefPreferences } from "@/lib/types";
 type MealType = "breakfast" | "lunch" | "dinner";
 
 interface MealPlanRecipe {
-  recipeId: number;
+  recipe_id: number;
   day: string;
   meal: MealType;
 }
 
 interface MealPlan {
   id: number;
-  userId: number;
+  user_id: number;
   name: string;
-  startDate: Date;
-  endDate: Date;
+  start_date: Date;
+  end_date: Date;
   recipes: MealPlanRecipe[];
 }
 
@@ -107,11 +107,11 @@ export default function MealPlan() {
 
       const mealPlanData = {
         name: "Weekly Plan",
-        startDate: selectedDate,
-        endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        userId: user?.id ?? 0,
+        start_date: selectedDate,
+        end_date: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+        user_id: user?.id ?? 0,
         recipes: generatedRecipes.map((recipe, index) => ({
-          recipeId: recipe.id,
+          recipe_id: recipe.id,
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
           meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
         }))
@@ -128,25 +128,25 @@ export default function MealPlan() {
 
       if (items.length > 0) {
         await createGroceryList({
-          userId: mealPlan.userId,
-          mealPlanId: mealPlan.id,
+          user_id: mealPlan.user_id,
+          meal_plan_id: mealPlan.id,
           items,
           created: new Date(),
         });
       }
 
       const recipes = generatedRecipes.map((recipe, index) => ({
-        recipeId: recipe.id,
+        recipe_id: recipe.id,
         day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
         meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner" as MealType
       }));
 
       return {
         id: mealPlan.id,
-        userId: mealPlan.userId,
+        user_id: mealPlan.user_id,
         name: mealPlan.name,
-        startDate: mealPlan.startDate,
-        endDate: mealPlan.endDate,
+        start_date: mealPlan.start_date,
+        end_date: mealPlan.end_date,
         recipes: recipes
       };
     },
@@ -159,7 +159,6 @@ export default function MealPlan() {
     },
   });
 
-  // Helper function to type check preference arrays
   const isPreferenceArray = (value: unknown): value is string[] => {
     return Array.isArray(value);
   };

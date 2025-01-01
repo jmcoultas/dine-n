@@ -70,7 +70,6 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd client && npm run dev"
-waitForPort = 5173
 
 [[workflows.workflow]]
 name = "Server"
@@ -85,4 +84,3 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "tsx watch --clear-screen=false server/index.ts"
-waitForPort = 5000

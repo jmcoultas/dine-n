@@ -53,6 +53,21 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  app.get("/api/subscription/status", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+
+      res.json({
+        isActive: user.subscription_status === 'active',
+        tier: user.subscription_tier,
+        endDate: user.subscription_end_date,
+      });
+    } catch (error: any) {
+      console.error("Error fetching subscription status:", error);
+      res.status(500).json({ error: "Failed to fetch subscription status" });
+    }
+  });
+
   // Public Routes
   app.get("/api/recipes", async (_req: Request, res: Response) => {
     try {
@@ -379,7 +394,7 @@ export function registerRoutes(app: express.Express) {
       }
 
       const groceryList = await db.query.groceryLists.findFirst({
-        where: eq(groceryLists.mealPlanId, parsedMealPlanId),
+        where: eq(groceryLists.meal_plan_id, parsedMealPlanId),
       });
 
       res.json(groceryList);
@@ -408,8 +423,8 @@ export function registerRoutes(app: express.Express) {
       const [newGroceryList] = await db
         .insert(groceryLists)
         .values({
-          userId: req.user!.id,
-          mealPlanId: meal_plan_id,
+          user_id: req.user!.id,
+          meal_plan_id,
           items,
           created: new Date(),
         })
