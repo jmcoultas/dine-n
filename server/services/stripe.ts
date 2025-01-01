@@ -11,10 +11,7 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-12-18.acacia',
 });
 
-const baseUrl = process.env.CLIENT_URL || 
-    (process.env.REPL_SLUG && process.env.REPL_OWNER 
-      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-      : 'http://localhost:5173');
+const baseUrl = process.env.CLIENT_URL || 'https://dine-n-johncoultas.replit.app';
 
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
