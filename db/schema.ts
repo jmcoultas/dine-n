@@ -50,7 +50,9 @@ export const recipes = pgTable("recipes", {
 });
 
 export const temporaryRecipes = pgTable("temporary_recipes", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1 }),userId: integer("user_id").notNull().references(() => users.id),
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1 }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  favorited: boolean("favorited").notNull().default(false),
   name: text("name").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),

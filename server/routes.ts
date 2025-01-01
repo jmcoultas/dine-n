@@ -69,55 +69,26 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      // If it's a temporary recipe (negative ID), we need to save it first
       if (recipeId >= 100000 && recipeId < 200000) {
-        // First, fetch the temporary recipe using absolute value of ID
-        const tempRecipe = await db
-          .select()
-          .from(temporaryRecipes)
-          .where(eq(temporaryRecipes.id, Math.abs(recipeId)))
-          .limit(1);
+        // Update temporary recipe favorite status
+        const [updatedRecipe] = await db
+          .update(temporaryRecipes)
+          .set({ favorited: true })
+          .where(
+            and(
+              eq(temporaryRecipes.id, recipeId),
+              eq(temporaryRecipes.userId, req.user!.id)
+            )
+          )
+          .returning();
 
-        if (!tempRecipe || tempRecipe.length === 0) {
+        if (!updatedRecipe) {
           return res.status(404).json({ error: "Temporary recipe not found" });
         }
 
-        // Transform and insert the recipe into the database
-        const transformedRecipe = {
-          name: tempRecipe[0].name,
-          description: tempRecipe[0].description,
-          image_url: tempRecipe[0].imageUrl,
-          prep_time: tempRecipe[0].prepTime,
-          cook_time: tempRecipe[0].cookTime,
-          servings: tempRecipe[0].servings,
-          ingredients: tempRecipe[0].ingredients,
-          instructions: tempRecipe[0].instructions,
-          tags: tempRecipe[0].tags,
-          nutrition: tempRecipe[0].nutrition,
-          complexity: tempRecipe[0].complexity,
-          created_at: new Date()
-        };
-
-        // First, insert into permanent recipes table
-        const [savedRecipe] = await db
-          .insert(recipes)
-          .values(transformedRecipe)
-          .returning();
-
-        // Then, delete from temporary recipes
-        await db
-          .delete(temporaryRecipes)
-          .where(eq(temporaryRecipes.id, Math.abs(recipeId)));
-
-        // Add to user's favorites using the new permanent ID
-        await db.insert(userRecipes).values({
-          user_id: req.user!.id,
-          recipe_id: savedRecipe.id,
-        });
-
-        return res.json({
-          message: "Recipe saved and added to favorites",
-          permanentId: savedRecipe.id
+        return res.json({ 
+          message: "Recipe marked as favorite",
+          recipe: updatedRecipe
         });
       }
 
@@ -279,7 +250,10 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.userId, req.user!.id),
-            gt(temporaryRecipes.expiresAt, now)
+            or(
+              gt(temporaryRecipes.expiresAt, now),
+              eq(temporaryRecipes.favorited, true)
+            )
           )
         );
 
