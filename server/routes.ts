@@ -69,45 +69,25 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      // Handle temporary recipes (negative IDs)
-      if (recipeId < 0) {
-        const [updatedRecipe] = await db
-          .update(temporaryRecipes)
-          .set({ favorited: true })
-          .where(
-            and(
-              eq(temporaryRecipes.id, Math.abs(recipeId)),
-              eq(temporaryRecipes.userId, req.user!.id)
-            )
+      const [updatedRecipe] = await db
+        .update(temporaryRecipes)
+        .set({ favorited: true })
+        .where(
+          and(
+            eq(temporaryRecipes.id, recipeId),
+            eq(temporaryRecipes.userId, req.user!.id)
           )
-          .returning();
+        )
+        .returning();
 
-        if (!updatedRecipe) {
-          return res.status(404).json({ error: "Temporary recipe not found" });
-        }
-
-        return res.json({ 
-          message: "Recipe marked as favorite",
-          recipe: updatedRecipe
-        });
-      }
-
-      // For existing recipes, just add to favorites
-      const [recipe] = await db
-        .select()
-        .from(recipes)
-        .where(eq(recipes.id, recipeId));
-
-      if (!recipe) {
+      if (!updatedRecipe) {
         return res.status(404).json({ error: "Recipe not found" });
       }
 
-      await db.insert(userRecipes).values({
-        user_id: req.user!.id,
-        recipe_id: recipeId,
+      return res.json({ 
+        message: "Recipe marked as favorite",
+        recipe: updatedRecipe
       });
-
-      res.json({ message: "Recipe added to favorites" });
     } catch (error: any) {
       console.error("Error adding recipe to favorites:", error);
       res.status(500).json({ error: "Failed to add recipe to favorites" });

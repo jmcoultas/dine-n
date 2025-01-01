@@ -58,14 +58,9 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         throw new Error("Must be logged in to favorite recipes");
       }
 
-      // For temporary recipes (negative IDs), we need different handling
-      const isTemporary = recipe.id < 0;
-
-      // We don't need to send the entire recipe data anymore
+      // Simple payload for favoriting
       const payload = {};
-      
-      // For temporary recipes, we need to use the negative ID
-      const recipeId = recipe.id < 0 ? recipe.id : Math.abs(recipe.id);
+      const recipeId = recipe.id;
       const response = await fetch(`/api/recipes/${recipeId}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
         credentials: 'include',
