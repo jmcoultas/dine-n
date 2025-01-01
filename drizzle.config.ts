@@ -10,7 +10,7 @@ export default defineConfig({
   out: "./migrations",
   schema: "./db/schema.ts",
   driver: 'pg',
-  dialect: 'pg',
+  dialect: 'postgresql',
   dbCredentials: {
     connectionString: dbUrl,
   },
