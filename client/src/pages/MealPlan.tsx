@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
+import { useSubscription } from "@/hooks/use-subscription";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
+import { SubscriptionManager } from "@/components/SubscriptionManager";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
@@ -36,6 +38,9 @@ export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showSubscriptionRequired, setShowSubscriptionRequired] = useState(false);
+  const { subscription } = useSubscription();
+
   const [preferences, setPreferences] = useState<Preferences>(() => {
     const savedPreferences = localStorage.getItem('mealPlanPreferences');
     return savedPreferences ? JSON.parse(savedPreferences) : {
@@ -54,6 +59,10 @@ export default function MealPlan() {
         credentials: 'include'
       });
       if (!response.ok) {
+        if (response.status === 403) {
+          setShowSubscriptionRequired(true);
+          return [];
+        }
         throw new Error('Failed to fetch recipes');
       }
       return response.json() as Promise<Recipe[]>;
@@ -79,6 +88,11 @@ export default function MealPlan() {
   }, [preferences]);
 
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
+    if (subscription?.tier !== 'premium') {
+      setShowSubscriptionRequired(true);
+      return;
+    }
+
     try {
       setIsGenerating(true);
       const result = await generateMealPlan(preferences, 2, chefPreferences);
@@ -88,11 +102,15 @@ export default function MealPlan() {
         description: "Meal plan generated successfully",
       });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate meal plan",
-        variant: "destructive",
-      });
+      if (error instanceof Error && error.message.includes('subscription')) {
+        setShowSubscriptionRequired(true);
+      } else {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to generate meal plan",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsGenerating(false);
       setShowPreferences(false);
@@ -101,6 +119,10 @@ export default function MealPlan() {
 
   const saveMutation = useMutation<MealPlan, Error, void, unknown>({
     mutationFn: async (): Promise<MealPlan> => {
+      if (subscription?.tier !== 'premium') {
+        throw new Error("Premium subscription required to save meal plans");
+      }
+
       if (!generatedRecipes.length) {
         throw new Error("No recipes generated to save");
       }
@@ -135,19 +157,17 @@ export default function MealPlan() {
         });
       }
 
-      const recipes = generatedRecipes.map((recipe, index) => ({
-        recipe_id: recipe.id,
-        day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-        meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner" as MealType
-      }));
-
       return {
         id: mealPlan.id,
         user_id: mealPlan.user_id,
         name: mealPlan.name,
         start_date: mealPlan.start_date,
         end_date: mealPlan.end_date,
-        recipes: recipes
+        recipes: generatedRecipes.map((recipe, index) => ({
+          recipe_id: recipe.id,
+          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
+          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner" as MealType
+        }))
       };
     },
     onSuccess: () => {
@@ -157,11 +177,32 @@ export default function MealPlan() {
         description: "Meal plan saved with grocery list.",
       });
     },
+    onError: (error) => {
+      if (error.message.includes('subscription')) {
+        setShowSubscriptionRequired(true);
+      } else {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    }
   });
 
-  const isPreferenceArray = (value: unknown): value is string[] => {
-    return Array.isArray(value);
-  };
+  if (showSubscriptionRequired) {
+    return (
+      <div className="space-y-8">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-4xl font-bold mb-4">Premium Feature</h1>
+          <p className="text-muted-foreground mb-8">
+            Unlock unlimited meal plan generation and saving with a premium subscription
+          </p>
+          <SubscriptionManager />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -175,7 +216,7 @@ export default function MealPlan() {
             <div className="bg-secondary/20 rounded-lg p-4">
               <h3 className="text-sm font-semibold mb-2">Current Preferences</h3>
               {Object.entries(preferences).some(([key, values]) =>
-                key !== 'chefPreferences' && isPreferenceArray(values) && values.length > 0
+                key !== 'chefPreferences' && Array.isArray(values) && values.length > 0
               ) ? (
                 <div className="space-y-3">
                   {Object.entries(preferences).map(([key, values]) =>
@@ -329,3 +370,7 @@ export default function MealPlan() {
     </div>
   );
 }
+
+const isPreferenceArray = (value: unknown): value is string[] => {
+  return Array.isArray(value);
+};

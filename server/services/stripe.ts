@@ -7,12 +7,16 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing Stripe secret key');
 }
 
+if (!process.env.STRIPE_PREMIUM_PRICE_ID) {
+  throw new Error('Missing Stripe premium price ID');
+}
+
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-12-18.acacia',
 });
 
 export const SUBSCRIPTION_PRICES = {
-  PREMIUM: process.env.STRIPE_PREMIUM_PRICE_ID || 'price_placeholder',
+  PREMIUM: process.env.STRIPE_PREMIUM_PRICE_ID,
 };
 
 export const stripeService = {
@@ -39,21 +43,26 @@ export const stripeService = {
     }
   },
 
-  async createSubscription(customerId: string, priceId: string) {
-    try {
-      const subscription = await stripe.subscriptions.create({
-        customer: customerId,
-        items: [{ price: priceId }],
-        payment_behavior: 'default_incomplete',
-        payment_settings: { save_default_payment_method: 'on_subscription' },
-        expand: ['latest_invoice.payment_intent'],
-      });
+  async createCheckoutSession(customerId: string) {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [
+        {
+          price: SUBSCRIPTION_PRICES.PREMIUM,
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/subscription/canceled`,
+      subscription_data: {
+        metadata: {
+          tier: 'premium'
+        }
+      }
+    });
 
-      return subscription;
-    } catch (error) {
-      console.error('Error creating subscription:', error);
-      throw error;
-    }
+    return session;
   },
 
   async cancelSubscription(subscriptionId: string) {
@@ -65,29 +74,16 @@ export const stripeService = {
     }
   },
 
-  async createCheckoutSession(customerId: string, priceId: string) {
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.CLIENT_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/subscription/canceled`,
-    });
-
-    return session;
-  },
-
-  async handleWebhook(payload: string | Buffer, signature: string) {
+  async handleWebhook(payload: string, signature: string) {
     try {
+      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        throw new Error('Missing Stripe webhook secret');
+      }
+
       const event = stripe.webhooks.constructEvent(
-        payload.toString(),
+        payload,
         signature,
-        process.env.STRIPE_WEBHOOK_SECRET || ''
+        process.env.STRIPE_WEBHOOK_SECRET
       );
 
       switch (event.type) {
@@ -115,6 +111,7 @@ export const stripeService = {
           }
           break;
         }
+
         case 'customer.subscription.deleted': {
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
