@@ -76,7 +76,9 @@ export default function MealPlan() {
 
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
-      setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe => recipe !== null));
+      setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe => 
+        recipe !== null && typeof recipe === 'object' && 'id' in recipe
+      ));
     }
   }, [temporaryRecipes]);
 
