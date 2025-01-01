@@ -1,4 +1,3 @@
-
 import { defineConfig } from "drizzle-kit";
 
 const dbUrl = process.env.DATABASE_URL;
@@ -9,7 +8,7 @@ export default defineConfig({
   dbCredentials: {
     connectionString: dbUrl!,
   },
-  driver: 'pg',
+  dialect: "postgresql",
   strict: true,
   verbose: true,
 });

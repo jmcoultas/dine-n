@@ -2,6 +2,10 @@ import { pgTable, integer, text, timestamp, jsonb, boolean } from "drizzle-orm/p
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define subscription-related types
+export const SubscriptionTierEnum = z.enum(["free", "premium"]);
+export const SubscriptionStatusEnum = z.enum(["active", "inactive", "cancelled"]);
+
 // Define preference types
 export const ChefPreferencesSchema = z.object({
   difficulty: z.enum(["Easy", "Moderate", "Advanced"]),
@@ -37,6 +41,12 @@ export const users = pgTable("users", {
   name: text("name"),
   password_hash: text("password_hash").notNull(),
   preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
+  // Add subscription-related columns
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status").$type<z.infer<typeof SubscriptionStatusEnum>>().default('inactive'),
+  subscriptionTier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
+  subscriptionEndDate: timestamp("subscription_end_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -130,3 +140,5 @@ export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
 export type Preferences = z.infer<typeof PreferenceSchema>;
 export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;
+export type SubscriptionTier = z.infer<typeof SubscriptionTierEnum>;
+export type SubscriptionStatus = z.infer<typeof SubscriptionStatusEnum>;

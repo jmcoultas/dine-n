@@ -3,6 +3,8 @@ import { eq, and, gt, or } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, type TemporaryRecipe, PreferenceSchema } from "@db/schema";
 import { db } from "../db";
+import { requireActiveSubscription } from "./middleware/subscription";
+import { stripeService, SUBSCRIPTION_PRICES } from "./services/stripe";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -13,8 +15,57 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 }
 
 export function registerRoutes(app: express.Express) {
+  // Subscription Routes
+  app.post("/api/subscription/create-checkout", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+
+      if (!user.stripeCustomerId) {
+        const customer = await stripeService.createCustomer(user.email, user.id);
+        user.stripeCustomerId = customer.id;
+      }
+
+      const session = await stripeService.createCheckoutSession(
+        user.stripeCustomerId,
+        SUBSCRIPTION_PRICES.PREMIUM
+      );
+
+      res.json({ sessionId: session.id });
+    } catch (error: any) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/subscription/cancel", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ error: "No active subscription found" });
+      }
+
+      await stripeService.cancelSubscription(user.stripeSubscriptionId);
+      res.json({ message: "Subscription cancelled successfully" });
+    } catch (error: any) {
+      console.error("Error cancelling subscription:", error);
+      res.status(500).json({ error: "Failed to cancel subscription" });
+    }
+  });
+
+  app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    const sig = req.headers['stripe-signature'] as string;
+
+    try {
+      await stripeService.handleWebhook(req.body, sig);
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error('Webhook Error:', error.message);
+      res.status(400).send(`Webhook Error: ${error.message}`);
+    }
+  });
+
   // Public Routes
-  // Recipes - Read only for public access
   app.get("/api/recipes", async (_req: Request, res: Response) => {
     try {
       const allRecipes = await db.query.recipes.findMany();
@@ -76,7 +127,7 @@ export function registerRoutes(app: express.Express) {
         return res.status(404).json({ error: "Recipe not found" });
       }
 
-      return res.json({ 
+      return res.json({
         message: "Recipe marked as favorite",
         recipe: updatedRecipe
       });
@@ -108,7 +159,7 @@ export function registerRoutes(app: express.Express) {
         return res.status(404).json({ error: "Recipe not found" });
       }
 
-      return res.json({ 
+      return res.json({
         message: "Recipe removed from favorites",
         recipe: updatedRecipe
       });
@@ -118,152 +169,9 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  // Protected Routes
-  // Meal Plans - Protected Routes
-  app.get("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
+  // Protected Routes requiring subscription
+  app.post("/api/generate-meal-plan", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
-      const userMealPlans = await db.query.mealPlans.findMany({
-        where: eq(mealPlans.userId, req.user!.id),
-      });
-      res.json(userMealPlans);
-    } catch (error: any) {
-      console.error("Error fetching meal plans:", error);
-      res.status(500).json({ error: "Failed to fetch meal plans" });
-    }
-  });
-
-  app.post("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { name, startDate, endDate } = req.body;
-
-      const [newMealPlan] = await db
-        .insert(mealPlans)
-        .values({
-          name,
-          userId: req.user!.id,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-        })
-        .returning();
-
-      res.json(newMealPlan);
-    } catch (error: any) {
-      console.error("Error creating meal plan:", error);
-      res.status(500).json({ error: "Failed to create meal plan" });
-    }
-  });
-
-  // Grocery Lists - Protected Routes
-  app.get("/api/grocery-lists/:mealPlanId", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { mealPlanId } = req.params;
-      const parsedMealPlanId = parseInt(mealPlanId);
-
-      if (isNaN(parsedMealPlanId)) {
-        return res.status(400).json({ error: "Invalid meal plan ID" });
-      }
-
-      // First verify meal plan ownership
-      const mealPlan = await db.query.mealPlans.findFirst({
-        where: eq(mealPlans.id, parsedMealPlanId),
-      });
-
-      if (!mealPlan) {
-        return res.status(404).json({ error: "Meal plan not found" });
-      }
-
-      if (mealPlan.userId !== req.user!.id) {
-        return res.status(403).json({ error: "Not authorized to access this meal plan" });
-      }
-
-      const groceryList = await db.query.groceryLists.findFirst({
-        where: eq(groceryLists.mealPlanId, parsedMealPlanId),
-      });
-
-      res.json(groceryList);
-    } catch (error: any) {
-      console.error("Error fetching grocery list:", error);
-      res.status(500).json({ error: "Failed to fetch grocery list" });
-    }
-  });
-
-  app.post("/api/grocery-lists", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { mealPlanId, items } = req.body;
-
-      // Verify meal plan ownership
-      const mealPlan = await db.query.mealPlans.findFirst({
-        where: eq(mealPlans.id, mealPlanId),
-      });
-
-      if (!mealPlan) {
-        return res.status(404).json({ error: "Meal plan not found" });
-      }
-
-      if (mealPlan.userId !== req.user!.id) {
-        return res.status(403).json({ error: "Not authorized to create grocery list for this meal plan" });
-      }
-
-      const [newGroceryList] = await db
-        .insert(groceryLists)
-        .values({
-          userId: req.user!.id,
-          mealPlanId,
-          items,
-          created: new Date(),
-        })
-        .returning();
-
-      res.json(newGroceryList);
-    } catch (error: any) {
-      console.error("Error creating grocery list:", error);
-      res.status(500).json({ error: "Failed to create grocery list" });
-    }
-  });
-
-  // AI Meal Plan Generation - Protected Route
-  app.get("/api/temporary-recipes", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      console.log('Fetching temporary recipes for user:', req.user?.id);
-      const now = new Date();
-      // For meal plan page - only show non-expired recipes
-      const { source } = req.query;
-      const isFromMealPlan = source === 'mealplan';
-
-      const activeRecipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(
-          and(
-            eq(temporaryRecipes.userId, req.user!.id),
-            isFromMealPlan
-              ? gt(temporaryRecipes.expiresAt, now) // Only non-expired for meal plan
-              : or( // For recipes page - show favorited or non-expired
-                  eq(temporaryRecipes.favorited, true),
-                  gt(temporaryRecipes.expiresAt, now)
-                )
-          )
-        );
-
-      console.log('Found recipes:', activeRecipes.length);
-      res.json(activeRecipes);
-    } catch (error: any) {
-      console.error("Error fetching temporary recipes:", error);
-      console.error("Error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ 
-        error: "Failed to fetch temporary recipes",
-        details: error.message 
-      });
-    }
-  });
-
-  app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      // Check for existing active temporary recipes
       const now = new Date();
       const existingRecipes = await db
         .select()
@@ -426,8 +334,151 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  // Meal Plans - Protected Routes
+  app.get("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userMealPlans = await db.query.mealPlans.findMany({
+        where: eq(mealPlans.userId, req.user!.id),
+      });
+      res.json(userMealPlans);
+    } catch (error: any) {
+      console.error("Error fetching meal plans:", error);
+      res.status(500).json({ error: "Failed to fetch meal plans" });
+    }
+  });
+
+  app.post("/api/meal-plans", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+    try {
+      const { name, startDate, endDate } = req.body;
+
+      const [newMealPlan] = await db
+        .insert(mealPlans)
+        .values({
+          name,
+          userId: req.user!.id,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+        })
+        .returning();
+
+      res.json(newMealPlan);
+    } catch (error: any) {
+      console.error("Error creating meal plan:", error);
+      res.status(500).json({ error: "Failed to create meal plan" });
+    }
+  });
+
+  // Grocery Lists - Protected Routes
+  app.get("/api/grocery-lists/:mealPlanId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { mealPlanId } = req.params;
+      const parsedMealPlanId = parseInt(mealPlanId);
+
+      if (isNaN(parsedMealPlanId)) {
+        return res.status(400).json({ error: "Invalid meal plan ID" });
+      }
+
+      // First verify meal plan ownership
+      const mealPlan = await db.query.mealPlans.findFirst({
+        where: eq(mealPlans.id, parsedMealPlanId),
+      });
+
+      if (!mealPlan) {
+        return res.status(404).json({ error: "Meal plan not found" });
+      }
+
+      if (mealPlan.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized to access this meal plan" });
+      }
+
+      const groceryList = await db.query.groceryLists.findFirst({
+        where: eq(groceryLists.mealPlanId, parsedMealPlanId),
+      });
+
+      res.json(groceryList);
+    } catch (error: any) {
+      console.error("Error fetching grocery list:", error);
+      res.status(500).json({ error: "Failed to fetch grocery list" });
+    }
+  });
+
+  app.post("/api/grocery-lists", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+    try {
+      const { mealPlanId, items } = req.body;
+
+      // Verify meal plan ownership
+      const mealPlan = await db.query.mealPlans.findFirst({
+        where: eq(mealPlans.id, mealPlanId),
+      });
+
+      if (!mealPlan) {
+        return res.status(404).json({ error: "Meal plan not found" });
+      }
+
+      if (mealPlan.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized to create grocery list for this meal plan" });
+      }
+
+      const [newGroceryList] = await db
+        .insert(groceryLists)
+        .values({
+          userId: req.user!.id,
+          mealPlanId,
+          items,
+          created: new Date(),
+        })
+        .returning();
+
+      res.json(newGroceryList);
+    } catch (error: any) {
+      console.error("Error creating grocery list:", error);
+      res.status(500).json({ error: "Failed to create grocery list" });
+    }
+  });
+
+  // AI Meal Plan Generation - Protected Route
+  app.get("/api/temporary-recipes", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      console.log('Fetching temporary recipes for user:', req.user?.id);
+      const now = new Date();
+      // For meal plan page - only show non-expired recipes
+      const { source } = req.query;
+      const isFromMealPlan = source === 'mealplan';
+
+      const activeRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.userId, req.user!.id),
+            isFromMealPlan
+              ? gt(temporaryRecipes.expiresAt, now) // Only non-expired for meal plan
+              : or( // For recipes page - show favorited or non-expired
+                  eq(temporaryRecipes.favorited, true),
+                  gt(temporaryRecipes.expiresAt, now)
+                )
+          )
+        );
+
+      console.log('Found recipes:', activeRecipes.length);
+      res.json(activeRecipes);
+    } catch (error: any) {
+      console.error("Error fetching temporary recipes:", error);
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({
+        error: "Failed to fetch temporary recipes",
+        details: error.message
+      });
+    }
+  });
+
+
   // Ingredient Substitution endpoint
-  app.post("/api/substitute-ingredient", isAuthenticated, async (req: Request, res: Response) => {
+  app.post("/api/substitute-ingredient", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
       const { ingredient, dietary, allergies } = req.body;
 
