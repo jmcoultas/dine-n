@@ -118,7 +118,11 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
               }}
             >
               <Heart 
-                className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-500'}`}
+                className={`h-5 w-5 transition-colors ${
+                  isFavorited 
+                    ? 'fill-red-500 text-red-500 scale-110' 
+                    : 'text-gray-500 hover:text-red-400'
+                }`}
               />
               <span className="sr-only">
                 {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
