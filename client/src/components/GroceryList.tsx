@@ -161,14 +161,12 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_id="5333" 
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
-          data-recipe-ingredients={JSON.stringify(Object.values(aggregatedItems)
-            .filter(item => !checkedItems.has(item.name))
-            .map(item => ({
-              "@type": "Ingredient",
-              name: normalizeIngredientName(item.name),
-              amount: item.amount,
-              unitOfMeasure: item.unit
-            })))}
+          data-recipe-ingredients={JSON.stringify({
+            "@type": "Recipe",
+            recipeIngredient: Object.values(aggregatedItems)
+              .filter(item => !checkedItems.has(item.name))
+              .map(item => `${item.amount} ${item.unit} ${normalizeIngredientName(item.name)}`)
+          })}
           className="inline-flex h-10 items-center"
         />
       </div>
