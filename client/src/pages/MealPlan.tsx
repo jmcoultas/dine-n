@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
 import { useSubscription } from "@/hooks/use-subscription";
 import { Calendar } from "@/components/ui/calendar";
@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { SubscriptionManager } from "@/components/SubscriptionManager";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
@@ -40,6 +39,7 @@ export default function MealPlan() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [featureContext, setFeatureContext] = useState<string>(""); 
   const { subscription } = useSubscription();
 
   const [preferences, setPreferences] = useState<Preferences>(() => {
@@ -61,6 +61,7 @@ export default function MealPlan() {
       });
       if (!response.ok) {
         if (response.status === 403) {
+          setFeatureContext("Meal plan viewing");
           setShowSubscriptionModal(true);
           return [];
         }
@@ -90,6 +91,7 @@ export default function MealPlan() {
 
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
     if (subscription?.tier !== 'premium') {
+      setFeatureContext("Meal plan generation");
       setShowSubscriptionModal(true);
       return;
     }
@@ -104,6 +106,7 @@ export default function MealPlan() {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('subscription')) {
+        setFeatureContext("Meal plan generation");
         setShowSubscriptionModal(true);
       } else {
         toast({
@@ -119,9 +122,11 @@ export default function MealPlan() {
   };
 
   const saveMutation = useMutation<MealPlan, Error, void, unknown>({
-    mutationFn: async (): Promise<MealPlan> => {
+    mutationFn: async () => {
       if (subscription?.tier !== 'premium') {
-        throw new Error("Premium subscription required to save meal plans");
+        setFeatureContext("Meal plan saving");
+        setShowSubscriptionModal(true);
+        throw new Error("Premium subscription required");
       }
 
       if (!generatedRecipes.length) {
@@ -180,6 +185,7 @@ export default function MealPlan() {
     },
     onError: (error) => {
       if (error.message.includes('subscription')) {
+        setFeatureContext("Meal plan saving");
         setShowSubscriptionModal(true);
       } else {
         toast({
@@ -196,7 +202,7 @@ export default function MealPlan() {
       <SubscriptionModal 
         open={showSubscriptionModal}
         onOpenChange={setShowSubscriptionModal}
-        feature="Meal plan generation"
+        feature={featureContext}
       />
 
       <div className="flex flex-col gap-4">
