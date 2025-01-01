@@ -26,7 +26,10 @@ export function registerRoutes(app: express.Express) {
       }
 
       const session = await stripeService.createCheckoutSession(user.stripe_customer_id);
-      res.json({ sessionId: session.id });
+      res.json({ 
+        sessionId: session.id,
+        url: session.url // Include the checkout session URL in the response
+      });
     } catch (error: any) {
       console.error("Error creating checkout session:", error);
       res.status(500).json({ error: "Failed to create checkout session" });

@@ -14,6 +14,7 @@ interface SubscriptionStatus {
 
 interface CheckoutSessionResponse {
   sessionId: string;
+  url: string; // Added URL to the response type
 }
 
 export function useSubscription() {
@@ -51,23 +52,18 @@ export function useSubscription() {
           throw new Error('Failed to create checkout session');
         }
 
-        return response.json();
+        const data = await response.json();
+        return data;
       } finally {
         setIsLoading(false);
       }
     },
     onSuccess: async (data) => {
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error('Stripe failed to load');
-      }
-      const { error } = await stripe.redirectToCheckout({ sessionId: data.sessionId });
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
+      // Instead of using Stripe's redirectToCheckout, use the URL from the session
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL provided');
       }
     },
     onError: (error) => {

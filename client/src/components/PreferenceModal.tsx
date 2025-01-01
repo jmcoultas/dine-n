@@ -290,20 +290,29 @@ export default function PreferenceModal({
             </DialogHeader>
 
             <div className="mt-6 space-y-6">
-              {(Object.entries(preferences) as [PreferenceField, string[]][]).map(([key, values]) => (
-                <div key={key} className="space-y-2">
-                  <h4 className="font-medium capitalize">
-                    {key.replace(/([A-Z])/g, ' $1').trim()}
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {values.length > 0 ? values.map((item) => (
-                      <Badge key={item} variant="secondary">{item}</Badge>
-                    )) : (
-                      <span className="text-sm text-muted-foreground">None selected</span>
-                    )}
+              {Object.entries(preferences).map(([key, values]) => {
+                // Skip non-array preferences like chefPreferences
+                if (key === 'chefPreferences' || !isPreferenceArray(values)) {
+                  return null;
+                }
+
+                return (
+                  <div key={key} className="space-y-2">
+                    <h4 className="font-medium capitalize">
+                      {key.replace(/([A-Z])/g, ' $1').trim()}
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {values.length > 0 ? (
+                        values.map((item) => (
+                          <Badge key={item} variant="secondary">{item}</Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">None selected</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <DialogFooter className="flex flex-col sm:flex-row justify-end gap-2 mt-6">
