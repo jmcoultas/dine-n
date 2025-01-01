@@ -21,7 +21,6 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
 
   try {
     // Log detailed parameters at entry point
-    // Ensure all arrays exist and remove any undefined/null values
     const cleanParams = {
       dietary: Array.isArray(params.dietary) ? params.dietary.filter(Boolean) : [],
       allergies: Array.isArray(params.allergies) ? params.allergies.filter(Boolean) : [],
@@ -32,21 +31,14 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
     };
 
     console.log('Generating recipe with cleaned params:', JSON.stringify(cleanParams, null, 2));
-    
+
     const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
       ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`
       : "";
-    
-    console.log('User preferences being applied:', JSON.stringify({
-      dietary: params.dietary,
-      allergies: params.allergies,
-      cuisine: params.cuisine,
-      meatTypes: params.meatTypes
-    }, null, 2));
-      
+
     const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}. Do not include recipes with Tofu unless the user chose Vegetarian or Vegan.
 ${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : "No specific dietary restrictions"}
-${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}. Do not include any ingredients that could contain these allergens.` : "No allergies to consider"}
+${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}` : "No allergies to consider"}
 ${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : "No specific cuisine preference"}
 ${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : "No specific meat preference"}
 ${excludeNamesStr}
@@ -55,24 +47,15 @@ You must respond with a valid recipe in this exact JSON format:
 {
   "name": "Recipe Name",
   "description": "Brief description",
-  "prepTime": minutes (number),
-  "cookTime": minutes (number),
+  "prep_time": minutes (number),
+  "cook_time": minutes (number),
   "servings": number,
   "ingredients": [{ "name": "ingredient", "amount": number, "unit": "unit" }],
   "instructions": ["step 1", "step 2"],
   "tags": ["tag1", "tag2"],
   "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number },
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
-}
-
-The response must be valid JSON and include all fields. Generate appropriate values for each field.
-
-Please assign complexity based on:
-- Easy (1): < 5 ingredients, < 4 steps, < 30 min total time
-- Medium (2): 5-8 ingredients, 4-6 steps, 30-60 min total time
-- Hard (3): > 8 ingredients, > 6 steps, > 60 min total time`;
-
-    console.log('Generated prompt:', prompt);
+}`;
 
     const completion = await openai.chat.completions.create({
       messages: [
@@ -92,11 +75,9 @@ Please assign complexity based on:
     });
 
     if (!completion.choices?.[0]?.message?.content) {
-      throw new Error("Invalid response format from OpenAI API");
+      throw new Error("Invalid response from OpenAI API");
     }
 
-    console.log('OpenAI API response:', completion.choices[0].message);
-    
     const content = completion.choices[0].message.content;
     if (!content) {
       throw new Error("Empty response from OpenAI API");
@@ -104,8 +85,7 @@ Please assign complexity based on:
 
     try {
       const recipeData = JSON.parse(content) as Partial<Recipe>;
-      console.log('Parsed recipe data:', JSON.stringify(recipeData, null, 2));
-      
+
       // Start image generation as soon as we have the name
       const imagePromise = recipeData.name ? 
         openai.images.generate({
@@ -124,38 +104,32 @@ Please assign complexity based on:
 
       // Wait for image generation
       try {
-        console.log('Generating image for recipe:', recipeData.name);
         const imageResponse = await imagePromise;
 
         if (imageResponse && imageResponse.data && imageResponse.data[0]?.url) {
-          console.log('Successfully generated image for recipe:', recipeData.name);
-          recipeData.imageUrl = imageResponse.data[0].url;
+          recipeData.image_url = imageResponse.data[0].url;
         } else {
-          console.warn('No image URL in DALL-E response, falling back to placeholder');
-          recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+          recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
         }
       } catch (imageError) {
         console.error('Error generating image with DALL-E:', imageError);
-        // Fallback to Unsplash if DALL-E fails
-        recipeData.imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+        recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
       }
-      
 
-      const validatedRecipe = {
-                name: String(recipeData.name || '').trim(),
-                description: String(recipeData.description || 'No description available').trim(),
-                imageUrl: String(recipeData.imageUrl || '').trim() || null,
-                prep_time: Math.max(0, Number(recipeData.prepTime) || 0),
-                cook_time: Math.max(0, Number(recipeData.cookTime) || 0),
-                servings: Math.max(1, Number(recipeData.servings) || 2),
-                ingredients: recipeData.ingredients, // Assuming ingredients are already validated
-                instructions: recipeData.instructions, // Assuming instructions are already validated
-                tags: recipeData.tags, // Assuming tags are already validated
-                nutrition: recipeData.nutrition, // Assuming nutrition is already validated
-                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
-                created_at: new Date()
-              };
-      
+      const validatedRecipe: Partial<Recipe> = {
+        name: String(recipeData.name || '').trim(),
+        description: String(recipeData.description || 'No description available').trim(),
+        image_url: String(recipeData.image_url || '').trim() || null,
+        prep_time: Math.max(0, Number(recipeData.prep_time) || 0),
+        cook_time: Math.max(0, Number(recipeData.cook_time) || 0),
+        servings: Math.max(1, Number(recipeData.servings) || 2),
+        ingredients: recipeData.ingredients,
+        instructions: recipeData.instructions,
+        tags: recipeData.tags,
+        nutrition: recipeData.nutrition,
+        complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
+      };
+
       return validatedRecipe;
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
@@ -163,8 +137,7 @@ Please assign complexity based on:
     }
   } catch (error: any) {
     console.error("OpenAI API Error:", error);
-    
-    // Handle API errors with specific messages
+
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       throw new Error("Failed to connect to OpenAI API");
     }
@@ -177,10 +150,10 @@ Please assign complexity based on:
       throw new Error("OpenAI API rate limit exceeded");
     }
 
-    // For any other errors, throw with a generic message
     throw new Error("Failed to generate recipe recommendation");
   }
 }
+
 interface SubstitutionRequest {
   ingredient: string;
   dietary?: string[];

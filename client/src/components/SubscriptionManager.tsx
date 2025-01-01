@@ -2,9 +2,35 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSubscription } from "@/hooks/use-subscription";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 export function SubscriptionManager() {
   const { subscription, isLoading, createCheckoutSession, cancelSubscription } = useSubscription();
+  const { toast } = useToast();
+
+  const handleUpgrade = async () => {
+    try {
+      await createCheckoutSession();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start subscription process",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await cancelSubscription();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to cancel subscription",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -56,14 +82,14 @@ export function SubscriptionManager() {
         {subscription?.tier === 'premium' ? (
           <Button 
             variant="outline" 
-            onClick={() => cancelSubscription()}
+            onClick={handleCancel}
             className="w-full"
           >
             Cancel Subscription
           </Button>
         ) : (
           <Button 
-            onClick={() => createCheckoutSession()} 
+            onClick={handleUpgrade}
             className="w-full"
           >
             Upgrade to Premium

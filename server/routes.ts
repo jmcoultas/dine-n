@@ -53,15 +53,36 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  app.post("/api/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    const signature = req.headers['stripe-signature'];
+
+    if (!signature) {
+      return res.status(400).send('Missing stripe signature');
+    }
+
+    try {
+      const payload = req.body.toString();
+      await stripeService.handleWebhook(payload, signature);
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Error handling webhook:', error);
+      return res.status(400).send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   app.get("/api/subscription/status", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
 
-      res.json({
+      const subscriptionData = {
         isActive: user.subscription_status === 'active',
         tier: user.subscription_tier,
         endDate: user.subscription_end_date,
-      });
+        customerId: user.stripe_customer_id,
+        subscriptionId: user.stripe_subscription_id
+      };
+
+      res.json(subscriptionData);
     } catch (error: any) {
       console.error("Error fetching subscription status:", error);
       res.status(500).json({ error: "Failed to fetch subscription status" });
@@ -92,7 +113,7 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.user_id, req.user.id),
+            eq(temporaryRecipes.userId, req.user.id),
             eq(temporaryRecipes.favorited, true)
           )
         );
@@ -121,7 +142,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.user_id, req.user!.id)
+            eq(temporaryRecipes.userId, req.user!.id)
           )
         )
         .returning();
@@ -153,7 +174,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.user_id, req.user!.id)
+            eq(temporaryRecipes.userId, req.user!.id)
           )
         )
         .returning();
@@ -181,8 +202,8 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.user_id, req.user!.id),
-            gt(temporaryRecipes.expires_at, now)
+            eq(temporaryRecipes.userId, req.user!.id),
+            gt(temporaryRecipes.expiresAt, now)
           )
         );
 
@@ -450,12 +471,12 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.user_id, req.user!.id),
+            eq(temporaryRecipes.userId, req.user!.id),
             isFromMealPlan
-              ? gt(temporaryRecipes.expires_at, now)
+              ? gt(temporaryRecipes.expiresAt, now)
               : or(
                   eq(temporaryRecipes.favorited, true),
-                  gt(temporaryRecipes.expires_at, now)
+                  gt(temporaryRecipes.expiresAt, now)
                 )
           )
         );

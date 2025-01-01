@@ -82,11 +82,11 @@ export const stripeService = {
     return session;
   },
 
-  async handleWebhook(payload: any, sig: string) {
+  async handleWebhook(payload: string | Buffer, signature: string) {
     try {
       const event = stripe.webhooks.constructEvent(
-        payload,
-        sig,
+        payload.toString(),
+        signature,
         process.env.STRIPE_WEBHOOK_SECRET || ''
       );
 
