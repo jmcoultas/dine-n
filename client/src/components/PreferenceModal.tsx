@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type MouseEvent } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,22 +19,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Settings2, Wand2 } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import { PreferenceSchema } from "@db/schema";
-import type { Preferences } from "@db/schema";
-import type { MouseEvent } from "react";
+import { PreferenceSchema, type Preferences } from "@db/schema";
+import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 
 type PreferenceField = keyof Preferences;
 
-type ChefPreferences = {
-  difficulty: string;
-  mealType: string;
-  cookTime: string;
-};
-
 const CHEF_PREFERENCES = {
-  difficulty: ['Easy', 'Moderate', 'Advanced'],
-  mealType: ['Breakfast', 'Lunch', 'Dinner', 'Any'],
-  cookTime: ['15 minutes or less', '15-30 minutes', '30-60 minutes', '60+ minutes']
+  difficulty: ChefPreferencesSchema.shape.difficulty.options,
+  mealType: ChefPreferencesSchema.shape.mealType.options,
+  cookTime: ChefPreferencesSchema.shape.cookTime.options
 } as const;
 
 const STEPS = [
@@ -317,7 +310,9 @@ export default function PreferenceModal({
                       <label className="text-sm font-medium">Difficulty Level</label>
                       <Select
                         value={chefPreferences.difficulty}
-                        onValueChange={(value) => setChefPreferences(prev => ({ ...prev, difficulty: value }))}
+                        onValueChange={(value: typeof CHEF_PREFERENCES.difficulty[number]) =>
+                          setChefPreferences(prev => ({ ...prev, difficulty: value }))
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -336,7 +331,9 @@ export default function PreferenceModal({
                       <label className="text-sm font-medium">Meal Type</label>
                       <Select
                         value={chefPreferences.mealType}
-                        onValueChange={(value) => setChefPreferences(prev => ({ ...prev, mealType: value }))}
+                        onValueChange={(value: typeof CHEF_PREFERENCES.mealType[number]) =>
+                          setChefPreferences(prev => ({ ...prev, mealType: value }))
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -355,7 +352,9 @@ export default function PreferenceModal({
                       <label className="text-sm font-medium">Cooking Time</label>
                       <Select
                         value={chefPreferences.cookTime}
-                        onValueChange={(value) => setChefPreferences(prev => ({ ...prev, cookTime: value }))}
+                        onValueChange={(value: typeof CHEF_PREFERENCES.cookTime[number]) =>
+                          setChefPreferences(prev => ({ ...prev, cookTime: value }))
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />

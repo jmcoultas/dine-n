@@ -1,4 +1,3 @@
-
 import type { Recipe, MealPlan, GroceryList } from "@db/schema";
 
 const API_BASE = "/api";
@@ -13,6 +12,12 @@ interface MealPlanPreferences {
   allergies: string[];
   cuisine: string[];
   meatTypes: string[];
+}
+
+interface ChefPreferences {
+  difficulty: string;
+  mealType: string;
+  cookTime: string;
 }
 
 interface GenerateMealPlanResponse {
@@ -31,7 +36,11 @@ export async function getTemporaryRecipes(): Promise<Recipe[]> {
   return Array.isArray(data) ? data : [];
 }
 
-export async function generateMealPlan(preferences: MealPlanPreferences, days: number): Promise<GenerateMealPlanResponse> {
+export async function generateMealPlan(
+  preferences: MealPlanPreferences,
+  days: number,
+  chefPreferences?: ChefPreferences
+): Promise<GenerateMealPlanResponse> {
   const cleanPreferences = {
     dietary: Array.isArray(preferences.dietary) ? preferences.dietary.filter(Boolean) : [],
     allergies: Array.isArray(preferences.allergies) ? preferences.allergies.filter(Boolean) : [],
@@ -47,7 +56,8 @@ export async function generateMealPlan(preferences: MealPlanPreferences, days: n
     credentials: "include",
     body: JSON.stringify({
       preferences: cleanPreferences,
-      days
+      days,
+      chefPreferences
     }),
   });
 
@@ -68,11 +78,11 @@ export async function createMealPlan(mealPlan: Partial<MealPlan>): Promise<MealP
     credentials: "include",
     body: JSON.stringify(mealPlan),
   });
-  
+
   if (!response.ok) {
     throw new Error("Failed to create meal plan");
   }
-  
+
   return response.json();
 }
 

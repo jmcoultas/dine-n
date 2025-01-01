@@ -13,6 +13,7 @@ import GroceryList from "@/components/GroceryList";
 import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import type { Preferences } from "@db/schema";
+import type { ChefPreferences } from "@/lib/types";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -31,18 +32,7 @@ interface MealPlan {
   recipes: MealPlanRecipe[];
 }
 
-interface ChefPreferences {
-  difficulty: string;
-  mealType: string;
-  cookTime: string;
-}
-
 export default function MealPlan() {
-  type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean" | "Protein Heavy";
-  type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
-  type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
-  type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
-
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -90,7 +80,7 @@ export default function MealPlan() {
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
     try {
       setIsGenerating(true);
-      const result = await generateMealPlan(preferences, 2, chefPreferences); // Pass chefPreferences to the API
+      const result = await generateMealPlan(preferences, 2, chefPreferences);
       await refetch();
       toast({
         title: "Success",
@@ -120,7 +110,7 @@ export default function MealPlan() {
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         userId: user?.id ?? 0,
         recipes: generatedRecipes.map((recipe, index) => ({
-          recipeId: recipe.id, // Ensure we pass negative IDs for temporary recipes
+          recipeId: recipe.id, 
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
           meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
         }))
@@ -226,7 +216,6 @@ export default function MealPlan() {
         onUpdatePreferences={setPreferences}
         isGenerating={isGenerating}
         onGenerate={handleGenerateMealPlan}
-        description="Set your meal preferences and generate a personalized meal plan"
       />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">

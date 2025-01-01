@@ -22,6 +22,8 @@ export const RecipeSchema = z.object({
     fat: z.number()
   }).nullable().default({ calories: 0, protein: 0, carbs: 0, fat: 0 }),
   complexity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  userId: z.number().optional(),
+  favorited: z.boolean().optional(),
   created_at: z.coerce.date(),
   expiresAt: z.coerce.date().optional()
 });
@@ -34,3 +36,11 @@ export const RecipeResponseSchema = z.object({
 });
 
 export type RecipeResponse = z.infer<typeof RecipeResponseSchema>;
+
+export const ChefPreferencesSchema = z.object({
+  difficulty: z.enum(['Easy', 'Moderate', 'Advanced']),
+  mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Any']),
+  cookTime: z.enum(['15 minutes or less', '15-30 minutes', '30-60 minutes', '60+ minutes'])
+});
+
+export type ChefPreferences = z.infer<typeof ChefPreferencesSchema>;
