@@ -1,8 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, isNull } from "drizzle-orm";
-import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
-import { recipes, mealPlans, groceryLists, users, type Recipe, PreferenceSchema } from "@db/schema";
+import { generateRecipeRecommendation } from "./utils/ai";
+import { recipes, type Recipe, RecipeIngredientSchema, RecipeNutritionSchema, PreferenceSchema } from "@db/schema";
 import { db } from "../db";
+import { z } from "zod";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -12,9 +13,25 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ error: "Not authenticated" });
 }
 
+// Define type-safe schema for recipe data validation
+const RecipeDataSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  image_url: z.string().optional(),
+  prep_time: z.number().optional(),
+  cook_time: z.number().optional(),
+  servings: z.number().optional(),
+  ingredients: z.array(RecipeIngredientSchema).optional(),
+  instructions: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  nutrition: RecipeNutritionSchema.optional(),
+  complexity: z.number().min(1).max(3).optional(),
+});
+
+type RecipeData = z.infer<typeof RecipeDataSchema>;
+
 export function registerRoutes(app: express.Express) {
   // Public Routes
-  // Recipes - Read only for public access (only favorited recipes)
   app.get("/api/recipes", async (_req: Request, res: Response) => {
     try {
       const publicRecipes = await db
@@ -40,7 +57,7 @@ export function registerRoutes(app: express.Express) {
         .from(recipes)
         .where(
           and(
-            eq(recipes.userId, req.user.id),
+            eq(recipes.user_id, req.user.id),
             eq(recipes.is_favorited, true)
           )
         );
@@ -71,7 +88,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(recipes.id, recipeId),
-            eq(recipes.userId, req.user!.id)
+            eq(recipes.user_id, req.user!.id)
           )
         )
         .returning();
@@ -97,7 +114,7 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      // Set expiration date for unfavorited temporary recipes
+      // Set expiration date for unfavorited recipes
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 2);
 
@@ -110,7 +127,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(recipes.id, recipeId),
-            eq(recipes.userId, req.user!.id)
+            eq(recipes.user_id, req.user!.id)
           )
         )
         .returning();
@@ -129,7 +146,7 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  // Get user's recipes (both temporary and favorited)
+  // Get user's recipes (both favorited and temporary)
   app.get("/api/user/recipes", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const now = new Date();
@@ -138,7 +155,7 @@ export function registerRoutes(app: express.Express) {
         .from(recipes)
         .where(
           and(
-            eq(recipes.userId, req.user!.id),
+            eq(recipes.user_id, req.user!.id),
             or(
               eq(recipes.is_favorited, true),
               gt(recipes.expires_at!, now),
@@ -157,114 +174,11 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  // Meal Plans - Protected Routes
-  app.get("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const userMealPlans = await db.query.mealPlans.findMany({
-        where: eq(mealPlans.userId, req.user!.id),
-      });
-      res.json(userMealPlans);
-    } catch (error: any) {
-      console.error("Error fetching meal plans:", error);
-      res.status(500).json({ error: "Failed to fetch meal plans" });
-    }
-  });
-
-  app.post("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { name, startDate, endDate } = req.body;
-
-      const [newMealPlan] = await db
-        .insert(mealPlans)
-        .values({
-          name,
-          userId: req.user!.id,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-        })
-        .returning();
-
-      res.json(newMealPlan);
-    } catch (error: any) {
-      console.error("Error creating meal plan:", error);
-      res.status(500).json({ error: "Failed to create meal plan" });
-    }
-  });
-
-  // Grocery Lists - Protected Routes
-  app.get("/api/grocery-lists/:mealPlanId", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { mealPlanId } = req.params;
-      const parsedMealPlanId = parseInt(mealPlanId);
-
-      if (isNaN(parsedMealPlanId)) {
-        return res.status(400).json({ error: "Invalid meal plan ID" });
-      }
-
-      // First verify meal plan ownership
-      const mealPlan = await db.query.mealPlans.findFirst({
-        where: eq(mealPlans.id, parsedMealPlanId),
-      });
-
-      if (!mealPlan) {
-        return res.status(404).json({ error: "Meal plan not found" });
-      }
-
-      if (mealPlan.userId !== req.user!.id) {
-        return res.status(403).json({ error: "Not authorized to access this meal plan" });
-      }
-
-      const groceryList = await db.query.groceryLists.findFirst({
-        where: eq(groceryLists.mealPlanId, parsedMealPlanId),
-      });
-
-      res.json(groceryList);
-    } catch (error: any) {
-      console.error("Error fetching grocery list:", error);
-      res.status(500).json({ error: "Failed to fetch grocery list" });
-    }
-  });
-
-  app.post("/api/grocery-lists", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { mealPlanId, items } = req.body;
-
-      // Verify meal plan ownership
-      const mealPlan = await db.query.mealPlans.findFirst({
-        where: eq(mealPlans.id, mealPlanId),
-      });
-
-      if (!mealPlan) {
-        return res.status(404).json({ error: "Meal plan not found" });
-      }
-
-      if (mealPlan.userId !== req.user!.id) {
-        return res.status(403).json({ error: "Not authorized to create grocery list for this meal plan" });
-      }
-
-      const [newGroceryList] = await db
-        .insert(groceryLists)
-        .values({
-          userId: req.user!.id,
-          mealPlanId,
-          items,
-          created: new Date(),
-        })
-        .returning();
-
-      res.json(newGroceryList);
-    } catch (error: any) {
-      console.error("Error creating grocery list:", error);
-      res.status(500).json({ error: "Failed to create grocery list" });
-    }
-  });
-
-  // AI Meal Plan Generation - Protected Route
+  // AI Recipe Generation
   app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { preferences, days } = req.body;
 
-      // Validate input parameters
       if (!preferences || !days) {
         return res.status(400).json({
           error: "Bad Request",
@@ -272,251 +186,66 @@ export function registerRoutes(app: express.Express) {
         });
       }
 
-      // Log received parameters
-      console.log('Received parameters:', JSON.stringify({
-        preferences,
-        days,
-        user: req.user?.id
-      }, null, 2));
-
-      console.log('Starting meal plan generation with preferences:', JSON.stringify({
-        dietary: preferences.dietary,
-        allergies: preferences.allergies,
-        cuisine: preferences.cuisine,
-        meatTypes: preferences.meatTypes,
-        days
-      }, null, 2));
-
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
-      const suggestedRecipes = [];
+      const suggestedRecipes: Partial<Recipe>[] = [];
       const usedRecipeNames = new Set<string>();
 
-      // Ensure all preference arrays exist and are properly formatted
-      const normalizedPreferences = {
-        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
-        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
-        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
-        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : []
-      };
-
-      console.log('Starting meal plan generation with normalized preferences:', JSON.stringify({
-        dietary: normalizedPreferences.dietary,
-        allergies: normalizedPreferences.allergies,
-        cuisine: normalizedPreferences.cuisine,
-        meatTypes: normalizedPreferences.meatTypes,
-        days
-      }, null, 2));
-
-      // Generate exactly one recipe per meal type per day
+      // Generate recipes for each meal
       for (let day = 0; day < days; day++) {
         for (const mealType of mealTypes) {
-          console.log(`Generating recipe for day ${day + 1}, meal ${mealType}`);
           try {
-            const existingNames = Array.from(usedRecipeNames);
-            console.log(`Generating recipe for ${mealType} with preferences:`, {
-              dietary: preferences.dietary,
-              allergies: preferences.allergies,
-              cuisine: preferences.cuisine,
-              meatTypes: preferences.meatTypes,
-              excludeNames: existingNames
+            const rawRecipeData = await generateRecipeRecommendation({
+              dietary: preferences.dietary?.filter(Boolean) || [],
+              allergies: preferences.allergies?.filter(Boolean) || [],
+              cuisine: preferences.cuisine?.filter(Boolean) || [],
+              meatTypes: preferences.meatTypes?.filter(Boolean) || [],
+              mealType,
+              excludeNames: Array.from(usedRecipeNames)
             });
 
-            console.log(`Generating recipe for ${mealType} with preferences:`, {
-              dietary: preferences.dietary,
-              allergies: preferences.allergies,
-              cuisine: preferences.cuisine,
-              meatTypes: preferences.meatTypes,
-              excludeNames: existingNames
-            });
-
-            const recipeData = await generateRecipeRecommendation({
-              dietary: preferences.dietary.filter(Boolean),
-              allergies: preferences.allergies.filter(Boolean),
-              cuisine: preferences.cuisine.filter(Boolean),
-              meatTypes: preferences.meatTypes.filter(Boolean),
-              mealType: mealType,
-              excludeNames: existingNames,
-            });
-
-            if (!recipeData || typeof recipeData !== 'object') {
-              console.error('Invalid recipe data received:', recipeData);
-              throw new Error('Invalid recipe data received from API');
+            // Validate recipe data
+            const recipeDataResult = RecipeDataSchema.safeParse(rawRecipeData);
+            if (!recipeDataResult.success) {
+              console.error('Invalid recipe data:', recipeDataResult.error);
+              continue;
             }
 
-            if (!recipeData || !recipeData.name) {
-              console.error('Invalid recipe data received:', recipeData);
-              throw new Error('Invalid recipe data received from API');
+            const recipeData = recipeDataResult.data;
+
+            if (usedRecipeNames.has(recipeData.name)) {
+              continue;
             }
 
-            if (!usedRecipeNames.has(recipeData.name)) {
-              // Validate and clean recipe data before insertion
-              type JsonObject = { [key: string]: any };
+            const recipeToInsert = {
+              user_id: req.user!.id,
+              is_favorited: false,
+              name: recipeData.name,
+              description: recipeData.description || null,
+              image_url: recipeData.image_url || null,
+              prep_time: recipeData.prep_time || 0,
+              cook_time: recipeData.cook_time || 0,
+              servings: recipeData.servings || 2,
+              ingredients: recipeData.ingredients || [],
+              instructions: recipeData.instructions || [],
+              tags: recipeData.tags || [],
+              nutrition: recipeData.nutrition || {
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0
+              },
+              complexity: recipeData.complexity || 1,
+              created_at: new Date(),
+              expires_at: null
+            };
 
-              const validatedIngredients = Array.isArray(recipeData.ingredients)
-                ? recipeData.ingredients
-                    .filter((ing): ing is JsonObject =>
-                      ing !== null &&
-                      typeof ing === 'object' &&
-                      !Array.isArray(ing)
-                    )
-                    .map(ing => ({
-                      name: String(ing?.name || '').trim(),
-                      amount: Number(ing?.amount) || 0,
-                      unit: String(ing?.unit || '').trim()
-                    }))
-                : [];
+            const generatedRecipe: Partial<Recipe> = {
+              ...recipeToInsert,
+              id: -(suggestedRecipes.length + 1),
+            };
 
-              console.log('Validated ingredients:', JSON.stringify(validatedIngredients, null, 2));
-
-              const validatedInstructions = Array.isArray(recipeData.instructions)
-                ? recipeData.instructions
-                    .filter(instruction => instruction && typeof instruction === 'string')
-                    .map(instruction => String(instruction).trim())
-                : [];
-              console.log('Validated instructions:', JSON.stringify(validatedInstructions, null, 2));
-
-              const validatedTags = Array.isArray(recipeData.tags)
-                ? recipeData.tags
-                    .filter(tag => tag && typeof tag === 'string')
-                    .map(tag => String(tag).trim())
-                : [];
-              console.log('Validated tags:', JSON.stringify(validatedTags, null, 2));
-
-              const validatedNutrition = (() => {
-                interface NutritionInput {
-                  calories?: number | string;
-                  protein?: number | string;
-                  carbs?: number | string;
-                  fat?: number | string;
-                }
-
-                const nutrition = recipeData.nutrition as NutritionInput;
-                if (nutrition && typeof nutrition === 'object') {
-                  const calories = Number(nutrition.calories);
-                  const protein = Number(nutrition.protein);
-                  const carbs = Number(nutrition.carbs);
-                  const fat = Number(nutrition.fat);
-
-                  if (!isNaN(calories) && !isNaN(protein) &&
-                    !isNaN(carbs) && !isNaN(fat)) {
-                    return {
-                      calories: Math.max(0, calories),
-                      protein: Math.max(0, protein),
-                      carbs: Math.max(0, carbs),
-                      fat: Math.max(0, fat)
-                    };
-                  }
-                }
-                return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-              })();
-              console.log('Validated nutrition:', JSON.stringify(validatedNutrition, null, 2));
-
-              const recipeToInsert = {
-                name: String(recipeData.name || '').trim(),
-                description: String(recipeData.description || 'No description available').trim(),
-                image_url: String(recipeData.imageUrl || '').trim() || null,
-                prep_time: Math.max(0, Number(recipeData.prepTime) || 0),
-                cook_time: Math.max(0, Number(recipeData.cookTime) || 0),
-                servings: Math.max(1, Number(recipeData.servings) || 2),
-                ingredients: validatedIngredients,
-                instructions: validatedInstructions,
-                tags: validatedTags,
-                nutrition: validatedNutrition,
-                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
-                created_at: new Date(),
-                userId: req.user!.id,
-                is_favorited: false,
-                expires_at: null //Initially not expiring
-              };
-
-              // Format and validate recipe data for database insertion
-              const validatedRecipe = {
-                name: recipeData.name,
-                description: recipeData.description || 'No description available',
-                imageUrl: recipeData.imageUrl || null,
-                prepTime: recipeData.prepTime || 0,
-                cookTime: recipeData.cookTime || 0,
-                servings: recipeData.servings || 2,
-                ingredients: Array.isArray(recipeData.ingredients)
-                  ? recipeData.ingredients.map(ing => {
-                    try {
-                      const ingredient = ing as { name?: string; amount?: number; unit?: string };
-                      return {
-                        name: String(ingredient?.name || '').trim(),
-                        amount: Number(ingredient?.amount || 0),
-                        unit: String(ingredient?.unit || '').trim()
-                      };
-                    } catch (e) {
-                      console.error('Error processing ingredient:', ing, e);
-                      return null;
-                    }
-                  }).filter(Boolean)
-                  : [],
-                instructions: Array.isArray(recipeData.instructions)
-                  ? recipeData.instructions
-                    .filter(instruction => instruction && typeof instruction === 'string')
-                    .map(instruction => String(instruction).trim())
-                  : [],
-                tags: Array.isArray(recipeData.tags)
-                  ? recipeData.tags
-                    .filter(tag => tag && typeof tag === 'string')
-                    .map(tag => String(tag).trim())
-                  : [],
-                nutrition: (() => {
-                  try {
-                    if (typeof recipeData.nutrition === 'object' && recipeData.nutrition) {
-                      const calories = Number((recipeData.nutrition as any)?.calories);
-                      const protein = Number((recipeData.nutrition as any)?.protein);
-                      const carbs = Number((recipeData.nutrition as any)?.carbs);
-                      const fat = Number((recipeData.nutrition as any)?.fat);
-
-                      if (!isNaN(calories) && !isNaN(protein) && !isNaN(carbs) && !isNaN(fat)) {
-                        return {
-                          calories: Math.max(0, calories),
-                          protein: Math.max(0, protein),
-                          carbs: Math.max(0, carbs),
-                          fat: Math.max(0, fat)
-                        };
-                      }
-                    }
-                  } catch (e) {
-                    console.error('Error processing nutrition data:', e);
-                  }
-                  return {
-                    calories: 0,
-                    protein: 0,
-                    carbs: 0,
-                    fat: 0
-                  };
-                })(),
-                complexity: Math.max(1, Math.min(3, Number(recipeData.complexity || 1))),
-                created_at: new Date(),
-                userId: req.user!.id,
-                is_favorited: false,
-                expires_at: null
-              };
-
-              // Validate all arrays are properly formatted
-              if (!Array.isArray(validatedRecipe.ingredients) ||
-                !Array.isArray(validatedRecipe.instructions) ||
-                !Array.isArray(validatedRecipe.tags)) {
-                throw new Error('Invalid array format in recipe data');
-              }
-
-              // Log the validated data before insertion
-              console.log('Validated recipe data:', JSON.stringify(validatedRecipe, null, 2));
-
-              // Instead of saving to database, just add the validated recipe to our suggestions
-              const generatedRecipe: Partial<Recipe> = {
-                ...validatedRecipe,
-                // Generate a temporary ID for frontend reference
-                id: -(suggestedRecipes.length + 1), // Using negative IDs to distinguish from DB records
-              };
-
-              console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
-              usedRecipeNames.add(recipeData.name);
-              suggestedRecipes.push(generatedRecipe);
-            }
+            usedRecipeNames.add(recipeData.name);
+            suggestedRecipes.push(generatedRecipe);
           } catch (error) {
             console.error(`Failed to generate recipe for day ${day + 1}, meal ${mealType}:`, error);
             continue;
@@ -524,40 +253,41 @@ export function registerRoutes(app: express.Express) {
         }
       }
 
-      // Instead of returning directly, save to temporary_recipes table
+      // Save generated recipes to database
       const expirationDate = new Date();
-      expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
+      expirationDate.setDate(expirationDate.getDate() + 2);
 
-      const savedRecipes: Partial<Recipe>[] = [];
-      for (const recipe of suggestedRecipes) {
-        if (!recipe) continue;
-
-        const [savedRecipe] = await db
-          .insert(recipes)
-          .values({
-            user_id: req.user!.id,
-            is_favorited: false,
-            name: String(recipe.name || ''),
-            description: recipe.description?.toString() || null,
-            image_url: recipe.imageUrl?.toString() || null,
-            prep_time: Number(recipe.prepTime) || 0,
-            cook_time: Number(recipe.cookTime) || 0,
-            servings: Number(recipe.servings) || 2,
-            ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-            instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
-            tags: Array.isArray(recipe.tags) ? recipe.tags : [],
-            nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-            complexity: Number(recipe.complexity) || 1,
-            created_at: new Date(),
-            expires_at: expirationDate
-          })
-          .returning();
-
-        savedRecipes.push(savedRecipe);
-      }
+      const savedRecipes = await Promise.all(
+        suggestedRecipes.map(recipe =>
+          db.insert(recipes)
+            .values({
+              user_id: req.user!.id,
+              is_favorited: false,
+              name: recipe.name!,
+              description: recipe.description,
+              image_url: recipe.image_url,
+              prep_time: recipe.prep_time || 0,
+              cook_time: recipe.cook_time || 0,
+              servings: recipe.servings || 2,
+              ingredients: recipe.ingredients || [],
+              instructions: recipe.instructions || [],
+              tags: recipe.tags || [],
+              nutrition: recipe.nutrition || {
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0
+              },
+              complexity: recipe.complexity || 1,
+              created_at: new Date(),
+              expires_at: expirationDate
+            })
+            .returning()
+        )
+      );
 
       res.json({
-        recipes: savedRecipes,
+        recipes: savedRecipes.map(([recipe]) => recipe),
         status: savedRecipes.length === days * mealTypes.length ? 'success' : 'partial'
       });
     } catch (error: any) {
@@ -565,40 +295,6 @@ export function registerRoutes(app: express.Express) {
       res.status(500).json({
         error: "Failed to generate meal plan",
         details: error.message
-      });
-    }
-  });
-
-  // Ingredient Substitution endpoint
-  app.post("/api/substitute-ingredient", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { ingredient, dietary, allergies } = req.body;
-
-      if (!ingredient) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Missing required parameter: ingredient"
-        });
-      }
-
-      console.log('Generating substitutions for:', {
-        ingredient,
-        dietary: dietary || [],
-        allergies: allergies || []
-      });
-
-      const substitutions = await generateIngredientSubstitution({
-        ingredient,
-        dietary: Array.isArray(dietary) ? dietary : [],
-        allergies: Array.isArray(allergies) ? allergies : []
-      });
-
-      res.json(substitutions);
-    } catch (error: any) {
-      console.error("Error generating substitutions:", error);
-      res.status(500).json({
-        error: "Failed to generate substitutions",
-        message: error.message
       });
     }
   });
