@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
@@ -13,6 +12,7 @@ import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
+import type { Preferences } from "@db/schema";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -31,8 +31,14 @@ interface MealPlan {
   recipes: MealPlanRecipe[];
 }
 
+interface ChefPreferences {
+  difficulty: string;
+  mealType: string;
+  cookTime: string;
+}
+
 export default function MealPlan() {
-  type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean";
+  type PreferenceType = "No Preference" | "Vegetarian" | "Vegan" | "Gluten-Free" | "Keto" | "Paleo" | "Mediterranean" | "Protein Heavy";
   type AllergyType = "Dairy" | "Eggs" | "Tree Nuts" | "Peanuts" | "Shellfish" | "Wheat" | "Soy";
   type CuisineType = "Italian" | "Mexican" | "Chinese" | "Japanese" | "Indian" | "Thai" | "Mediterranean" | "American" | "French";
   type MeatType = "Chicken" | "Beef" | "Pork" | "Fish" | "Lamb" | "Turkey" | "None";
@@ -40,12 +46,7 @@ export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [preferences, setPreferences] = useState<{
-    dietary: PreferenceType[];
-    allergies: AllergyType[];
-    cuisine: CuisineType[];
-    meatTypes: MeatType[];
-  }>(() => {
+  const [preferences, setPreferences] = useState<Preferences>(() => {
     const savedPreferences = localStorage.getItem('mealPlanPreferences');
     return savedPreferences ? JSON.parse(savedPreferences) : {
       dietary: [],
@@ -86,10 +87,10 @@ export default function MealPlan() {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
 
-  const handleGenerateMealPlan = async () => {
+  const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
     try {
       setIsGenerating(true);
-      const result = await generateMealPlan(preferences, 2); // Generates 6 meals (2 days × 3 meals)
+      const result = await generateMealPlan(preferences, 2, chefPreferences); // Pass chefPreferences to the API
       await refetch();
       toast({
         title: "Success",

@@ -14,14 +14,28 @@ import {
   SelectContent,
   SelectTrigger,
   SelectValue,
+  SelectItem,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Settings2, Wand2 } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
+import type { MouseEvent } from "react";
 
 type PreferenceField = keyof Preferences;
+
+type ChefPreferences = {
+  difficulty: string;
+  mealType: string;
+  cookTime: string;
+};
+
+const CHEF_PREFERENCES = {
+  difficulty: ['Easy', 'Moderate', 'Advanced'],
+  mealType: ['Breakfast', 'Lunch', 'Dinner', 'Any'],
+  cookTime: ['15 minutes or less', '15-30 minutes', '30-60 minutes', '60+ minutes']
+} as const;
 
 const STEPS = [
   {
@@ -49,7 +63,13 @@ const STEPS = [
     options: PreferenceSchema.shape.meatTypes.element.options
   },
   {
-    title: "Almost Done!",
+    title: "Chef Preferences",
+    description: "Let's customize your meal plan. Choose your cooking preferences for this meal plan.",
+    field: null,
+    options: [] as const
+  },
+  {
+    title: "Review & Generate",
     description: "Review your preferences below. You can always change these later.",
     field: null,
     options: [] as const
@@ -62,7 +82,7 @@ interface PreferenceModalProps {
   preferences: Preferences;
   onUpdatePreferences: (preferences: Preferences) => void;
   isGenerating?: boolean;
-  onGenerate?: () => void;
+  onGenerate?: (chefPreferences: ChefPreferences) => void;
 }
 
 export default function PreferenceModal({
@@ -74,13 +94,17 @@ export default function PreferenceModal({
   onGenerate,
 }: PreferenceModalProps) {
   const { toast } = useToast();
-  const [currentStep, setCurrentStep] = useState(-1); // -1 represents the quick view
+  const [currentStep, setCurrentStep] = useState(-1);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
+  const [chefPreferences, setChefPreferences] = useState<ChefPreferences>({
+    difficulty: 'Moderate',
+    mealType: 'Any',
+    cookTime: '30-60 minutes'
+  });
   const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
     setTempPreferences(preferences);
-    // If user has existing preferences, start in quick view mode
     setCurrentStep(Object.values(preferences).some(arr => arr.length > 0) ? -1 : 0);
     setIsEditMode(false);
   }, [preferences, open]);
@@ -109,7 +133,7 @@ export default function PreferenceModal({
           throw new Error('Failed to update preferences');
         }
 
-        onGenerate?.();
+        onGenerate?.(chefPreferences);
       } catch (error) {
         toast({
           title: "Error",
@@ -209,6 +233,11 @@ export default function PreferenceModal({
     });
   };
 
+  const handleGenerateClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    onGenerate?.(chefPreferences);
+  };
+
   if (isGenerating) {
     return <LoadingAnimation message="Cooking up your personalized meal plan..." />;
   }
@@ -217,7 +246,6 @@ export default function PreferenceModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         {currentStep === -1 ? (
-          // Quick view mode
           <>
             <DialogHeader>
               <DialogTitle>Your Meal Preferences</DialogTitle>
@@ -254,7 +282,7 @@ export default function PreferenceModal({
                   Modify Preferences
                 </Button>
                 <Button
-                  onClick={onGenerate}
+                  onClick={handleGenerateClick}
                   disabled={isGenerating}
                   className="text-sm"
                 >
@@ -265,16 +293,14 @@ export default function PreferenceModal({
             </DialogFooter>
           </>
         ) : (
-          // Step-by-step edit mode
           <>
             <DialogHeader>
               <DialogTitle>{currentStepConfig?.title}</DialogTitle>
               <DialogDescription>{currentStepConfig?.description}</DialogDescription>
             </DialogHeader>
 
-            {/* Progress indicator */}
             <div className="w-full bg-secondary h-2 rounded-full mt-4">
-              <div 
+              <div
                 className="bg-primary h-full rounded-full transition-all duration-300"
                 style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
               />
@@ -284,22 +310,104 @@ export default function PreferenceModal({
             </div>
 
             <div className="mt-6 space-y-4">
-              {isLastStep ? (
+              {currentStep === STEPS.length - 2 ? (
                 <div className="space-y-6">
-                  {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
-                    <div key={key} className="space-y-2">
-                      <h4 className="font-medium capitalize">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {values.length > 0 ? values.map((item) => (
-                          <Badge key={item} variant="secondary">{item}</Badge>
-                        )) : (
-                          <span className="text-sm text-muted-foreground">None selected</span>
-                        )}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Difficulty Level</label>
+                      <Select
+                        value={chefPreferences.difficulty}
+                        onValueChange={(value) => setChefPreferences(prev => ({ ...prev, difficulty: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHEF_PREFERENCES.difficulty.map((level) => (
+                            <SelectItem key={level} value={level}>
+                              {level}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Meal Type</label>
+                      <Select
+                        value={chefPreferences.mealType}
+                        onValueChange={(value) => setChefPreferences(prev => ({ ...prev, mealType: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHEF_PREFERENCES.mealType.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Cooking Time</label>
+                      <Select
+                        value={chefPreferences.cookTime}
+                        onValueChange={(value) => setChefPreferences(prev => ({ ...prev, cookTime: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHEF_PREFERENCES.cookTime.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ) : isLastStep ? (
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <h3 className="font-medium">Dietary Preferences</h3>
+                    {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
+                      <div key={key} className="space-y-2">
+                        <h4 className="text-sm font-medium capitalize">
+                          {key.replace(/([A-Z])/g, ' $1').trim()}
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {values.length > 0 ? values.map((item) => (
+                            <Badge key={item} variant="secondary">{item}</Badge>
+                          )) : (
+                            <span className="text-sm text-muted-foreground">None selected</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="border-t pt-4 mt-4">
+                      <h3 className="font-medium mb-4">Chef Preferences</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm">Difficulty:</span>
+                          <span className="text-sm font-medium">{chefPreferences.difficulty}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm">Meal Type:</span>
+                          <span className="text-sm font-medium">{chefPreferences.mealType}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm">Cooking Time:</span>
+                          <span className="text-sm font-medium">{chefPreferences.cookTime}</span>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
               ) : (
                 <>
@@ -368,8 +476,8 @@ export default function PreferenceModal({
             <DialogFooter className="flex flex-col-reverse sm:flex-row justify-between gap-2 mt-6">
               <div className="w-full sm:w-auto">
                 {(!isFirstStep || hasExistingPreferences) && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={handleBack}
                     className="w-full sm:w-auto"
                   >
@@ -380,16 +488,16 @@ export default function PreferenceModal({
               </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 {isLastStep && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => onUpdatePreferences(tempPreferences)}
                     className="w-full sm:w-auto"
                   >
                     Save Preferences
                   </Button>
                 )}
-                <Button 
-                  onClick={handleNext} 
+                <Button
+                  onClick={handleNext}
                   disabled={isGenerating}
                   className="w-full sm:w-auto"
                 >
