@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { eq, and, gt, or } from "drizzle-orm";
+import { eq, and, gt, or, isNull } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
-import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, type TemporaryRecipe, PreferenceSchema } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, type Recipe, PreferenceSchema } from "@db/schema";
 import { db } from "../db";
 
 // Middleware to check if user is authenticated
@@ -14,11 +14,14 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 
 export function registerRoutes(app: express.Express) {
   // Public Routes
-  // Recipes - Read only for public access
+  // Recipes - Read only for public access (only favorited recipes)
   app.get("/api/recipes", async (_req: Request, res: Response) => {
     try {
-      const allRecipes = await db.query.recipes.findMany();
-      res.json(allRecipes);
+      const publicRecipes = await db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.is_favorited, true));
+      res.json(publicRecipes);
     } catch (error: any) {
       console.error("Error fetching recipes:", error);
       res.status(500).json({ error: "Failed to fetch recipes" });
@@ -33,26 +36,16 @@ export function registerRoutes(app: express.Express) {
       }
 
       const userFavorites = await db
-        .select({
-          id: recipes.id,
-          name: recipes.name,
-          description: recipes.description,
-          imageUrl: recipes.imageUrl,
-          prepTime: recipes.prepTime,
-          cookTime: recipes.cookTime,
-          servings: recipes.servings,
-          ingredients: recipes.ingredients,
-          instructions: recipes.instructions,
-          tags: recipes.tags,
-          nutrition: recipes.nutrition,
-          complexity: recipes.complexity,
-        })
-        .from(userRecipes)
-        .innerJoin(recipes, eq(recipes.id, userRecipes.recipe_id))
-        .where(eq(userRecipes.user_id, req.user.id));
+        .select()
+        .from(recipes)
+        .where(
+          and(
+            eq(recipes.userId, req.user.id),
+            eq(recipes.is_favorited, true)
+          )
+        );
 
-      res.setHeader('Content-Type', 'application/json');
-      return res.json(userFavorites);
+      res.json(userFavorites);
     } catch (error: any) {
       console.error("Error fetching favorite recipes:", error);
       return res.status(500).json({
@@ -69,48 +62,31 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      if (recipeId >= 100000 && recipeId < 200000) {
-        // Update temporary recipe favorite status
-        const [updatedRecipe] = await db
-          .update(temporaryRecipes)
-          .set({ favorited: true })
-          .where(
-            and(
-              eq(temporaryRecipes.id, recipeId),
-              eq(temporaryRecipes.userId, req.user!.id)
-            )
+      const [updatedRecipe] = await db
+        .update(recipes)
+        .set({
+          is_favorited: true,
+          expires_at: null // Remove expiration when favorited
+        })
+        .where(
+          and(
+            eq(recipes.id, recipeId),
+            eq(recipes.userId, req.user!.id)
           )
-          .returning();
+        )
+        .returning();
 
-        if (!updatedRecipe) {
-          return res.status(404).json({ error: "Temporary recipe not found" });
-        }
-
-        return res.json({ 
-          message: "Recipe marked as favorite",
-          recipe: updatedRecipe
-        });
-      }
-
-      // For existing recipes, just add to favorites
-      const [recipe] = await db
-        .select()
-        .from(recipes)
-        .where(eq(recipes.id, recipeId));
-
-      if (!recipe) {
+      if (!updatedRecipe) {
         return res.status(404).json({ error: "Recipe not found" });
       }
 
-      await db.insert(userRecipes).values({
-        user_id: req.user!.id,
-        recipe_id: recipeId,
+      return res.json({
+        message: "Recipe marked as favorite",
+        recipe: updatedRecipe
       });
-
-      res.json({ message: "Recipe added to favorites" });
     } catch (error: any) {
-      console.error("Error adding recipe to favorites:", error);
-      res.status(500).json({ error: "Failed to add recipe to favorites" });
+      console.error("Error marking recipe as favorite:", error);
+      res.status(500).json({ error: "Failed to mark recipe as favorite" });
     }
   });
 
@@ -121,23 +97,66 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      await db
-        .delete(userRecipes)
+      // Set expiration date for unfavorited temporary recipes
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 2);
+
+      const [updatedRecipe] = await db
+        .update(recipes)
+        .set({
+          is_favorited: false,
+          expires_at: expirationDate
+        })
         .where(
           and(
-            eq(userRecipes.user_id, req.user!.id),
-            eq(userRecipes.recipe_id, recipeId)
+            eq(recipes.id, recipeId),
+            eq(recipes.userId, req.user!.id)
           )
-        );
+        )
+        .returning();
 
-      res.json({ message: "Recipe removed from favorites" });
+      if (!updatedRecipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      res.json({
+        message: "Recipe unfavorited",
+        recipe: updatedRecipe
+      });
     } catch (error: any) {
-      console.error("Error removing recipe from favorites:", error);
-      res.status(500).json({ error: "Failed to remove recipe from favorites" });
+      console.error("Error unfavoriting recipe:", error);
+      res.status(500).json({ error: "Failed to unfavorite recipe" });
     }
   });
 
-  // Protected Routes
+  // Get user's recipes (both temporary and favorited)
+  app.get("/api/user/recipes", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const userRecipes = await db
+        .select()
+        .from(recipes)
+        .where(
+          and(
+            eq(recipes.userId, req.user!.id),
+            or(
+              eq(recipes.is_favorited, true),
+              gt(recipes.expires_at!, now),
+              isNull(recipes.expires_at)
+            )
+          )
+        );
+
+      res.json(userRecipes);
+    } catch (error: any) {
+      console.error("Error fetching user recipes:", error);
+      res.status(500).json({
+        error: "Failed to fetch user recipes",
+        details: error.message
+      });
+    }
+  });
+
   // Meal Plans - Protected Routes
   app.get("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -241,60 +260,8 @@ export function registerRoutes(app: express.Express) {
   });
 
   // AI Meal Plan Generation - Protected Route
-  app.get("/api/temporary-recipes", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      console.log('Fetching temporary recipes for user:', req.user?.id);
-      const now = new Date();
-      const activeRecipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(
-          and(
-            eq(temporaryRecipes.userId, req.user!.id),
-            or(
-              gt(temporaryRecipes.expiresAt, now),
-              eq(temporaryRecipes.favorited, true)
-            )
-          )
-        );
-      
-      console.log('Found recipes:', activeRecipes.length);
-      res.json(activeRecipes);
-    } catch (error: any) {
-      console.error("Error fetching temporary recipes:", error);
-      console.error("Error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ 
-        error: "Failed to fetch temporary recipes",
-        details: error.message 
-      });
-    }
-  });
-
   app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      // Check for existing active temporary recipes
-      const now = new Date();
-      const existingRecipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(
-          and(
-            eq(temporaryRecipes.userId, req.user!.id),
-            gt(temporaryRecipes.expiresAt, now)
-          )
-        );
-
-      if (existingRecipes.length > 0) {
-        return res.status(400).json({
-          error: "Active meal plan exists",
-          message: "You already have an active meal plan. Save or wait for it to expire before generating a new one."
-        });
-      }
-
       const { preferences, days } = req.body;
 
       // Validate input parameters
@@ -456,7 +423,10 @@ export function registerRoutes(app: express.Express) {
                 tags: validatedTags,
                 nutrition: validatedNutrition,
                 complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
-                created_at: new Date()
+                created_at: new Date(),
+                userId: req.user!.id,
+                is_favorited: false,
+                expires_at: null //Initially not expiring
               };
 
               // Format and validate recipe data for database insertion
@@ -464,8 +434,8 @@ export function registerRoutes(app: express.Express) {
                 name: recipeData.name,
                 description: recipeData.description || 'No description available',
                 imageUrl: recipeData.imageUrl || null,
-                prep_time: recipeData.prepTime || 0,
-                cook_time: recipeData.cookTime || 0,
+                prepTime: recipeData.prepTime || 0,
+                cookTime: recipeData.cookTime || 0,
                 servings: recipeData.servings || 2,
                 ingredients: Array.isArray(recipeData.ingredients)
                   ? recipeData.ingredients.map(ing => {
@@ -520,7 +490,10 @@ export function registerRoutes(app: express.Express) {
                   };
                 })(),
                 complexity: Math.max(1, Math.min(3, Number(recipeData.complexity || 1))),
-                created_at: new Date()
+                created_at: new Date(),
+                userId: req.user!.id,
+                is_favorited: false,
+                expires_at: null
               };
 
               // Validate all arrays are properly formatted
@@ -555,28 +528,28 @@ export function registerRoutes(app: express.Express) {
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
 
-      const savedRecipes: TemporaryRecipe[] = [];
+      const savedRecipes: Partial<Recipe>[] = [];
       for (const recipe of suggestedRecipes) {
         if (!recipe) continue;
 
         const [savedRecipe] = await db
-          .insert(temporaryRecipes)
+          .insert(recipes)
           .values({
-            user_id: req.user!.id, // Fix: Changed from userId to user_id to match schema
-            favorited: false, // Add default value
+            user_id: req.user!.id,
+            is_favorited: false,
             name: String(recipe.name || ''),
             description: recipe.description?.toString() || null,
-            imageUrl: recipe.imageUrl?.toString() || null,
-            prepTime: Number(recipe.prepTime) || 0,
-            cookTime: Number(recipe.cookTime) || 0,
+            image_url: recipe.imageUrl?.toString() || null,
+            prep_time: Number(recipe.prepTime) || 0,
+            cook_time: Number(recipe.cookTime) || 0,
             servings: Number(recipe.servings) || 2,
             ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
             instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
             tags: Array.isArray(recipe.tags) ? recipe.tags : [],
             nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
             complexity: Number(recipe.complexity) || 1,
-            createdAt: new Date(),
-            expiresAt: expirationDate
+            created_at: new Date(),
+            expires_at: expirationDate
           })
           .returning();
 

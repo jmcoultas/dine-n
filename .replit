@@ -69,7 +69,7 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "tsx watch --clear-screen=false server/index.ts"
+args = "npx drizzle-kit generate:pg && tsx watch --clear-screen=false server/index.ts"
 waitForPort = 5000
 
 [[workflows.workflow]]
