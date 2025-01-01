@@ -163,7 +163,12 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_platform="recipe_widget"
           data-recipe-ingredients={JSON.stringify(Object.values(aggregatedItems)
             .filter(item => !checkedItems.has(item.name))
-            .map(item => item.recipeIngredient))}
+            .map(item => ({
+              "@type": "Ingredient",
+              name: normalizeIngredientName(item.name),
+              amount: item.amount,
+              unitOfMeasure: item.unit
+            })))}
           className="inline-flex h-10 items-center"
         />
       </div>
