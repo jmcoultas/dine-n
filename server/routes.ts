@@ -32,8 +32,8 @@ export function registerRoutes(app: express.Express) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      // Get temporary favorited recipes
-      const favoritedTempRecipes = await db
+      // Get favorited recipes from temporary recipes table
+      const favoriteRecipes = await db
         .select()
         .from(temporaryRecipes)
         .where(
@@ -43,31 +43,8 @@ export function registerRoutes(app: express.Express) {
           )
         );
 
-      // Get regular favorited recipes
-      const userFavorites = await db
-        .select({
-          id: recipes.id,
-          name: recipes.name,
-          description: recipes.description,
-          imageUrl: recipes.imageUrl,
-          prepTime: recipes.prepTime,
-          cookTime: recipes.cookTime,
-          servings: recipes.servings,
-          ingredients: recipes.ingredients,
-          instructions: recipes.instructions,
-          tags: recipes.tags,
-          nutrition: recipes.nutrition,
-          complexity: recipes.complexity,
-        })
-        .from(userRecipes)
-        .innerJoin(recipes, eq(recipes.id, userRecipes.recipe_id))
-        .where(eq(userRecipes.user_id, req.user.id));
-
-      // Combine both types of recipes
-      const allFavorites = [...favoritedTempRecipes, ...userFavorites];
-
       res.setHeader('Content-Type', 'application/json');
-      return res.json(allFavorites);
+      return res.json(favoriteRecipes);
     } catch (error: any) {
       console.error("Error fetching favorite recipes:", error);
       return res.status(500).json({
