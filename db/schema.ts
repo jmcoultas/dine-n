@@ -34,7 +34,7 @@ export const users = pgTable("users", {
 });
 
 export const recipes = pgTable("recipes", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ start: 900000, increment: 1, min: 900000, max: 999999 }),
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1 }),
   name: text("name").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
@@ -50,7 +50,7 @@ export const recipes = pgTable("recipes", {
 });
 
 export const temporaryRecipes = pgTable("temporary_recipes", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1, start: 100000 }),userId: integer("user_id").notNull().references(() => users.id),
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1 }),userId: integer("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
