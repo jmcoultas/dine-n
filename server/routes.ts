@@ -252,8 +252,8 @@ export function registerRoutes(app: express.Express) {
           and(
             eq(temporaryRecipes.userId, req.user!.id),
             or(
-              gt(temporaryRecipes.expiresAt, now),
-              eq(temporaryRecipes.favorited, true)
+              eq(temporaryRecipes.favorited, true),
+              gt(temporaryRecipes.expiresAt, now)
             )
           )
         );
@@ -563,6 +563,7 @@ export function registerRoutes(app: express.Express) {
           .insert(temporaryRecipes)
           .values({
             userId: req.user!.id,
+            favorited: false,
             name: String(recipe.name || ''),
             description: recipe.description?.toString() || null,
             imageUrl: recipe.imageUrl?.toString() || null,

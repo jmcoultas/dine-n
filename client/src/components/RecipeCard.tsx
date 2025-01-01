@@ -58,6 +58,9 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         throw new Error("Must be logged in to favorite recipes");
       }
 
+      // For temporary recipes (negative IDs), we need different handling
+      const isTemporary = recipe.id < 0;
+
       const payload = recipe.id < 0 ? {
         name: recipe.name,
         description: recipe.description,
