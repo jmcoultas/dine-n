@@ -4,11 +4,13 @@ import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
+import { useSubscription } from "@/hooks/use-subscription";
 import PreferenceModal from "@/components/PreferenceModal";
 import { generateMealPlan } from "@/lib/api";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
-import { RecipeResponseSchema, type Recipe } from "@/lib/types";
+import { RecipeResponseSchema } from "@/lib/types";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
 
 const HERO_IMAGES = [
   "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
@@ -18,7 +20,10 @@ const HERO_IMAGES = [
 
 export default function Home() {
   const { user } = useUser();
+  const { subscription } = useSubscription();
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [featureContext, setFeatureContext] = useState("Meal plan generation");
   const [preferences, setPreferences] = useState<Preferences>({
     dietary: [],
     allergies: [],
@@ -53,6 +58,11 @@ export default function Home() {
 
   const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
+      if (subscription?.tier !== 'premium') {
+        setShowSubscriptionModal(true);
+        throw new Error("Premium subscription required");
+      }
+
       const cleanPreferences = {
         dietary: prefs.dietary.filter(Boolean),
         allergies: prefs.allergies.filter(Boolean),
@@ -98,19 +108,22 @@ export default function Home() {
         }
       };
 
-      const errorData = err.response?.data;
-      const errorMessage = errorData?.error ||
+      // Only show error toast for non-subscription related errors
+      if (!err.message?.includes('subscription')) {
+        const errorData = err.response?.data;
+        const errorMessage = errorData?.error ||
                         errorData?.message ||
                         err.message ||
                         "Failed to generate meal plan. Please try again.";
-      const errorDetails = errorData?.details || '';
-      const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
+        const errorDetails = errorData?.details || '';
+        const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
 
-      toast({
-        title: "Error",
-        description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}${import.meta.env.DEV ? debugInfo : ''}`,
-        variant: "destructive",
-      });
+        toast({
+          title: "Error",
+          description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}${import.meta.env.DEV ? debugInfo : ''}`,
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -120,6 +133,11 @@ export default function Home() {
 
   return (
     <div className="space-y-16">
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        feature={featureContext}
+      />
       <section
         className="relative h-[600px] rounded-lg overflow-hidden bg-cover bg-center"
         style={{
