@@ -23,6 +23,12 @@ import { PreferenceSchema, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 
 type PreferenceField = keyof Omit<Preferences, 'chefPreferences'>;
+type PreferenceValue = string[] | ChefPreferences | undefined;
+
+// Type guard to check if a value is an array of strings
+function isPreferenceArray(value: PreferenceValue): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
 
 const CHEF_PREFERENCES = {
   difficulty: ChefPreferencesSchema.shape.difficulty.options,
@@ -69,11 +75,6 @@ const STEPS = [
   }
 ] as const;
 
-// Type guard to check if a value is an array
-function isArray<T>(value: T | T[]): value is T[] {
-  return Array.isArray(value);
-}
-
 interface PreferenceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -105,7 +106,7 @@ export default function PreferenceModal({
     setTempPreferences(preferences);
     // Check if any preference array has values
     const hasValues = Object.entries(preferences).some(([key, value]) =>
-      key !== 'chefPreferences' && isArray(value) && value.length > 0
+      key !== 'chefPreferences' && isPreferenceArray(value) && value.length > 0
     );
     setCurrentStep(hasValues ? -1 : 0);
     setIsEditMode(false);
@@ -116,7 +117,7 @@ export default function PreferenceModal({
   const isFirstStep = currentStep === 0;
 
   const hasExistingPreferences = Object.entries(preferences).some(([key, value]) =>
-    key !== 'chefPreferences' && isArray(value) && value.length > 0
+    key !== 'chefPreferences' && isPreferenceArray(value) && value.length > 0
   );
 
   const handleNext = async () => {

@@ -43,7 +43,7 @@ export default function MealPlan() {
       allergies: [],
       cuisine: [],
       meatTypes: [],
-      chefPreferences: {} // Added chefPreferences to handle potential undefined
+      chefPreferences: undefined
     };
   });
 
@@ -159,7 +159,8 @@ export default function MealPlan() {
     },
   });
 
-  const isArrayValue = (value: unknown): value is string[] => {
+  // Helper function to type check preference arrays
+  const isPreferenceArray = (value: unknown): value is string[] => {
     return Array.isArray(value);
   };
 
@@ -175,11 +176,11 @@ export default function MealPlan() {
             <div className="bg-secondary/20 rounded-lg p-4">
               <h3 className="text-sm font-semibold mb-2">Current Preferences</h3>
               {Object.entries(preferences).some(([key, values]) =>
-                key !== 'chefPreferences' && isArrayValue(values) && values.length > 0
+                key !== 'chefPreferences' && isPreferenceArray(values) && values.length > 0
               ) ? (
                 <div className="space-y-3">
                   {Object.entries(preferences).map(([key, values]) =>
-                    key !== 'chefPreferences' && isArrayValue(values) && values.length > 0 ? (
+                    key !== 'chefPreferences' && isPreferenceArray(values) && values.length > 0 ? (
                       <div key={key} className="space-y-1.5">
                         <p className="text-sm font-medium capitalize">{key}:</p>
                         <div className="flex flex-wrap gap-2">
