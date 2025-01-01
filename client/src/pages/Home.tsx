@@ -59,6 +59,7 @@ export default function Home() {
   const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
       if (subscription?.tier !== 'premium') {
+        setShowPreferences(false); // Close preference modal first
         setShowSubscriptionModal(true);
         throw new Error("Premium subscription required");
       }
@@ -112,9 +113,9 @@ export default function Home() {
       if (!err.message?.includes('subscription')) {
         const errorData = err.response?.data;
         const errorMessage = errorData?.error ||
-                        errorData?.message ||
-                        err.message ||
-                        "Failed to generate meal plan. Please try again.";
+                            errorData?.message ||
+                            err.message ||
+                            "Failed to generate meal plan. Please try again.";
         const errorDetails = errorData?.details || '';
         const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
 

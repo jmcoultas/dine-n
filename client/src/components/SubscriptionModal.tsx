@@ -22,8 +22,8 @@ export function SubscriptionModal({ open, onOpenChange, feature }: SubscriptionM
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
+      <DialogContent className="sm:max-w-md z-50">
         <DialogHeader>
           <DialogTitle>Premium Feature</DialogTitle>
           <DialogDescription>
