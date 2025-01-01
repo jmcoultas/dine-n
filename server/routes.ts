@@ -69,14 +69,14 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      if (recipeId >= 100000 && recipeId < 200000) {
-        // Update temporary recipe favorite status
+      // Handle temporary recipes (negative IDs)
+      if (recipeId < 0) {
         const [updatedRecipe] = await db
           .update(temporaryRecipes)
           .set({ favorited: true })
           .where(
             and(
-              eq(temporaryRecipes.id, recipeId),
+              eq(temporaryRecipes.id, Math.abs(recipeId)),
               eq(temporaryRecipes.userId, req.user!.id)
             )
           )

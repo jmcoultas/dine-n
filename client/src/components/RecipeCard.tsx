@@ -61,24 +61,8 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
       // For temporary recipes (negative IDs), we need different handling
       const isTemporary = recipe.id < 0;
 
-      const payload = recipe.id < 0 ? {
-        name: recipe.name,
-        description: recipe.description,
-        image_url: recipe.imageUrl,
-        prep_time: recipe.prepTime,
-        cook_time: recipe.cookTime,
-        servings: recipe.servings,
-        ingredients: recipe.ingredients,
-        instructions: recipe.instructions,
-        tags: recipe.tags,
-        nutrition: recipe.nutrition || {
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0
-        },
-        complexity: recipe.complexity || 1
-      } : {};
+      // We don't need to send the entire recipe data anymore
+      const payload = {};
       
       // For temporary recipes, we need to use the negative ID
       const recipeId = recipe.id < 0 ? recipe.id : Math.abs(recipe.id);
