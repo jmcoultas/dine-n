@@ -8,10 +8,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16',
+  apiVersion: '2024-12-18.acacia',
 });
 
-// Price IDs for your subscription plans
 export const SUBSCRIPTION_PRICES = {
   PREMIUM: process.env.STRIPE_PREMIUM_PRICE_ID || 'price_placeholder',
 };
@@ -29,7 +28,7 @@ export const stripeService = {
       await db
         .update(users)
         .set({
-          stripeCustomerId: customer.id,
+          stripe_customer_id: customer.id,
         })
         .where(eq(users.id, userId));
 
@@ -100,17 +99,17 @@ export const stripeService = {
           const [customer] = await db
             .select()
             .from(users)
-            .where(eq(users.stripeCustomerId, customerId))
+            .where(eq(users.stripe_customer_id, customerId))
             .limit(1);
 
           if (customer) {
             await db
               .update(users)
               .set({
-                stripeSubscriptionId: subscription.id,
-                subscriptionStatus: subscription.status === 'active' ? 'active' : 'inactive',
-                subscriptionTier: 'premium',
-                subscriptionEndDate: new Date(subscription.current_period_end * 1000),
+                stripe_subscription_id: subscription.id,
+                subscription_status: subscription.status === 'active' ? 'active' : 'inactive',
+                subscription_tier: 'premium',
+                subscription_end_date: new Date(subscription.current_period_end * 1000),
               })
               .where(eq(users.id, customer.id));
           }
@@ -123,16 +122,16 @@ export const stripeService = {
           const [customer] = await db
             .select()
             .from(users)
-            .where(eq(users.stripeCustomerId, customerId))
+            .where(eq(users.stripe_customer_id, customerId))
             .limit(1);
 
           if (customer) {
             await db
               .update(users)
               .set({
-                subscriptionStatus: 'cancelled',
-                subscriptionTier: 'free',
-                subscriptionEndDate: new Date(),
+                subscription_status: 'cancelled',
+                subscription_tier: 'free',
+                subscription_end_date: new Date(),
               })
               .where(eq(users.id, customer.id));
           }

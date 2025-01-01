@@ -35,28 +35,14 @@ export const RecipeNutritionSchema = z.object({
   fat: z.number()
 });
 
-export const users = pgTable("users", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  email: text("email").notNull().unique(),
-  name: text("name"),
-  password_hash: text("password_hash").notNull(),
-  preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
-  // Add subscription-related columns
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
-  subscriptionStatus: text("subscription_status").$type<z.infer<typeof SubscriptionStatusEnum>>().default('inactive'),
-  subscriptionTier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
-  subscriptionEndDate: timestamp("subscription_end_date"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
+// Recipe table fields - using snake_case consistently
 export const recipes = pgTable("recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1 }),
   name: text("name").notNull(),
   description: text("description"),
-  imageUrl: text("image_url"),
-  prepTime: integer("prep_time"),
-  cookTime: integer("cook_time"),
+  image_url: text("image_url"),
+  prep_time: integer("prep_time"),
+  cook_time: integer("cook_time"),
   servings: integer("servings"),
   ingredients: jsonb("ingredients").$type<z.infer<typeof RecipeIngredientSchema>[]>(),
   instructions: jsonb("instructions").$type<string[]>(),
@@ -66,23 +52,39 @@ export const recipes = pgTable("recipes", {
   created_at: timestamp("created_at").defaultNow().notNull()
 });
 
+// Users table with proper Stripe fields
+export const users = pgTable("users", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  password_hash: text("password_hash").notNull(),
+  preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
+  // Stripe-related fields matching our migration
+  stripe_customer_id: text("stripe_customer_id"),
+  stripe_subscription_id: text("stripe_subscription_id"),
+  subscription_status: text("subscription_status").$type<z.infer<typeof SubscriptionStatusEnum>>().default('inactive'),
+  subscription_tier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
+  subscription_end_date: timestamp("subscription_end_date"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const temporaryRecipes = pgTable("temporary_recipes", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity({ increment: 1 }),
-  userId: integer("user_id").notNull().references(() => users.id),
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  user_id: integer("user_id").notNull().references(() => users.id),
   favorited: boolean("favorited").default(false),
   name: text("name").notNull(),
   description: text("description"),
-  imageUrl: text("image_url"),
-  prepTime: integer("prep_time"),
-  cookTime: integer("cook_time"),
+  image_url: text("image_url"),
+  prep_time: integer("prep_time"),
+  cook_time: integer("cook_time"),
   servings: integer("servings"),
   ingredients: jsonb("ingredients").$type<z.infer<typeof RecipeIngredientSchema>[]>(),
   instructions: jsonb("instructions").$type<string[]>(),
   tags: jsonb("tags").$type<string[]>(),
   nutrition: jsonb("nutrition").$type<z.infer<typeof RecipeNutritionSchema>>(),
   complexity: integer("complexity").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  expires_at: timestamp("expires_at").notNull(),
 });
 
 export const userRecipes = pgTable("user_recipes", {
@@ -94,20 +96,20 @@ export const userRecipes = pgTable("user_recipes", {
 
 export const mealPlans = pgTable("meal_plans", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  user_id: integer("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  start_date: timestamp("start_date").notNull(),
+  end_date: timestamp("end_date").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const mealPlanRecipes = pgTable("meal_plan_recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  mealPlanId: integer("meal_plan_id").notNull().references(() => mealPlans.id),
-  recipeId: integer("recipe_id").notNull().references(() => recipes.id),
+  meal_plan_id: integer("meal_plan_id").notNull().references(() => mealPlans.id),
+  recipe_id: integer("recipe_id").notNull().references(() => recipes.id),
   day: timestamp("day").notNull(),
   meal: text("meal").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const groceryLists = pgTable("grocery_lists", {

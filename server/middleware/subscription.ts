@@ -18,9 +18,9 @@ export async function requireActiveSubscription(
   try {
     const [user] = await db
       .select({
-        subscriptionStatus: users.subscriptionStatus,
-        subscriptionTier: users.subscriptionTier,
-        subscriptionEndDate: users.subscriptionEndDate,
+        subscription_status: users.subscription_status,
+        subscription_tier: users.subscription_tier,
+        subscription_end_date: users.subscription_end_date,
       })
       .from(users)
       .where(eq(users.id, req.user.id))
@@ -33,7 +33,7 @@ export async function requireActiveSubscription(
       });
     }
 
-    if (user.subscriptionStatus !== 'active' || user.subscriptionTier !== 'premium') {
+    if (user.subscription_status !== 'active' || user.subscription_tier !== 'premium') {
       return res.status(403).json({
         error: 'Active subscription required',
         code: 'SUBSCRIPTION_REQUIRED',
@@ -41,8 +41,7 @@ export async function requireActiveSubscription(
       });
     }
 
-    // Check if subscription has expired
-    if (user.subscriptionEndDate && new Date() > user.subscriptionEndDate) {
+    if (user.subscription_end_date && new Date() > user.subscription_end_date) {
       return res.status(403).json({
         error: 'Subscription expired',
         code: 'SUBSCRIPTION_EXPIRED',

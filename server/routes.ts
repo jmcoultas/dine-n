@@ -20,13 +20,13 @@ export function registerRoutes(app: express.Express) {
     try {
       const user = req.user!;
 
-      if (!user.stripeCustomerId) {
+      if (!user.stripe_customer_id) {
         const customer = await stripeService.createCustomer(user.email, user.id);
-        user.stripeCustomerId = customer.id;
+        user.stripe_customer_id = customer.id;
       }
 
       const session = await stripeService.createCheckoutSession(
-        user.stripeCustomerId,
+        user.stripe_customer_id,
         SUBSCRIPTION_PRICES.PREMIUM
       );
 
@@ -41,27 +41,15 @@ export function registerRoutes(app: express.Express) {
     try {
       const user = req.user!;
 
-      if (!user.stripeSubscriptionId) {
+      if (!user.stripe_subscription_id) {
         return res.status(400).json({ error: "No active subscription found" });
       }
 
-      await stripeService.cancelSubscription(user.stripeSubscriptionId);
+      await stripeService.cancelSubscription(user.stripe_subscription_id);
       res.json({ message: "Subscription cancelled successfully" });
     } catch (error: any) {
       console.error("Error cancelling subscription:", error);
       res.status(500).json({ error: "Failed to cancel subscription" });
-    }
-  });
-
-  app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
-
-    try {
-      await stripeService.handleWebhook(req.body, sig);
-      res.json({ received: true });
-    } catch (error: any) {
-      console.error('Webhook Error:', error.message);
-      res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
 
@@ -89,7 +77,7 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.userId, req.user.id),
+            eq(temporaryRecipes.user_id, req.user.id),
             eq(temporaryRecipes.favorited, true)
           )
         );
@@ -118,7 +106,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.userId, req.user!.id)
+            eq(temporaryRecipes.user_id, req.user!.id)
           )
         )
         .returning();
@@ -150,7 +138,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.userId, req.user!.id)
+            eq(temporaryRecipes.user_id, req.user!.id)
           )
         )
         .returning();
@@ -178,8 +166,8 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.userId, req.user!.id),
-            gt(temporaryRecipes.expiresAt, now)
+            eq(temporaryRecipes.user_id, req.user!.id),
+            gt(temporaryRecipes.expires_at, now)
           )
         );
 
@@ -300,21 +288,21 @@ export function registerRoutes(app: express.Express) {
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
           .values({
-            userId: req.user!.id,
+            user_id: req.user!.id,
             favorited: false,
             name: String(recipe.name || ''),
             description: recipe.description?.toString() || null,
-            imageUrl: recipe.imageUrl?.toString() || null,
-            prepTime: Number(recipe.prepTime) || 0,
-            cookTime: Number(recipe.cookTime) || 0,
+            image_url: recipe.image_url?.toString() || null,
+            prep_time: Number(recipe.prep_time) || 0,
+            cook_time: Number(recipe.cook_time) || 0,
             servings: Number(recipe.servings) || 2,
             ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
             instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
             tags: Array.isArray(recipe.tags) ? recipe.tags : [],
             nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
             complexity: Number(recipe.complexity) || 1,
-            createdAt: new Date(),
-            expiresAt: expirationDate
+            created_at: new Date(),
+            expires_at: expirationDate
           })
           .returning();
 
@@ -338,7 +326,7 @@ export function registerRoutes(app: express.Express) {
   app.get("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userMealPlans = await db.query.mealPlans.findMany({
-        where: eq(mealPlans.userId, req.user!.id),
+        where: eq(mealPlans.user_id, req.user!.id),
       });
       res.json(userMealPlans);
     } catch (error: any) {
@@ -355,9 +343,9 @@ export function registerRoutes(app: express.Express) {
         .insert(mealPlans)
         .values({
           name,
-          userId: req.user!.id,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
+          user_id: req.user!.id,
+          start_date: new Date(startDate),
+          end_date: new Date(endDate),
         })
         .returning();
 
@@ -369,16 +357,15 @@ export function registerRoutes(app: express.Express) {
   });
 
   // Grocery Lists - Protected Routes
-  app.get("/api/grocery-lists/:mealPlanId", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/grocery-lists/:meal_plan_id", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { mealPlanId } = req.params;
-      const parsedMealPlanId = parseInt(mealPlanId);
+      const { meal_plan_id } = req.params;
+      const parsedMealPlanId = parseInt(meal_plan_id);
 
       if (isNaN(parsedMealPlanId)) {
         return res.status(400).json({ error: "Invalid meal plan ID" });
       }
 
-      // First verify meal plan ownership
       const mealPlan = await db.query.mealPlans.findFirst({
         where: eq(mealPlans.id, parsedMealPlanId),
       });
@@ -387,7 +374,7 @@ export function registerRoutes(app: express.Express) {
         return res.status(404).json({ error: "Meal plan not found" });
       }
 
-      if (mealPlan.userId !== req.user!.id) {
+      if (mealPlan.user_id !== req.user!.id) {
         return res.status(403).json({ error: "Not authorized to access this meal plan" });
       }
 
@@ -404,18 +391,17 @@ export function registerRoutes(app: express.Express) {
 
   app.post("/api/grocery-lists", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
-      const { mealPlanId, items } = req.body;
+      const { meal_plan_id, items } = req.body;
 
-      // Verify meal plan ownership
       const mealPlan = await db.query.mealPlans.findFirst({
-        where: eq(mealPlans.id, mealPlanId),
+        where: eq(mealPlans.id, meal_plan_id),
       });
 
       if (!mealPlan) {
         return res.status(404).json({ error: "Meal plan not found" });
       }
 
-      if (mealPlan.userId !== req.user!.id) {
+      if (mealPlan.user_id !== req.user!.id) {
         return res.status(403).json({ error: "Not authorized to create grocery list for this meal plan" });
       }
 
@@ -423,7 +409,7 @@ export function registerRoutes(app: express.Express) {
         .insert(groceryLists)
         .values({
           userId: req.user!.id,
-          mealPlanId,
+          mealPlanId: meal_plan_id,
           items,
           created: new Date(),
         })
@@ -441,7 +427,6 @@ export function registerRoutes(app: express.Express) {
     try {
       console.log('Fetching temporary recipes for user:', req.user?.id);
       const now = new Date();
-      // For meal plan page - only show non-expired recipes
       const { source } = req.query;
       const isFromMealPlan = source === 'mealplan';
 
@@ -450,12 +435,12 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.userId, req.user!.id),
+            eq(temporaryRecipes.user_id, req.user!.id),
             isFromMealPlan
-              ? gt(temporaryRecipes.expiresAt, now) // Only non-expired for meal plan
-              : or( // For recipes page - show favorited or non-expired
+              ? gt(temporaryRecipes.expires_at, now)
+              : or(
                   eq(temporaryRecipes.favorited, true),
-                  gt(temporaryRecipes.expiresAt, now)
+                  gt(temporaryRecipes.expires_at, now)
                 )
           )
         );

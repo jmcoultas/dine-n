@@ -29,7 +29,6 @@ const crypto = {
   },
 };
 
-// extend express user object with our schema
 declare global {
   namespace Express {
     interface User extends SelectUser { }
@@ -44,7 +43,7 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     cookie: {},
     store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+      checkPeriod: 86400000,
     }),
   };
 
@@ -72,7 +71,12 @@ export function setupAuth(app: Express) {
             name: users.name,
             password_hash: users.password_hash,
             preferences: users.preferences,
-            createdAt: users.createdAt,
+            stripe_customer_id: users.stripe_customer_id,
+            stripe_subscription_id: users.stripe_subscription_id,
+            subscription_status: users.subscription_status,
+            subscription_tier: users.subscription_tier,
+            subscription_end_date: users.subscription_end_date,
+            created_at: users.created_at,
           })
           .from(users)
           .where(eq(users.email, email.toLowerCase()))
@@ -99,7 +103,19 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       const [user] = await db
-        .select()
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          password_hash: users.password_hash,
+          preferences: users.preferences,
+          stripe_customer_id: users.stripe_customer_id,
+          stripe_subscription_id: users.stripe_subscription_id,
+          subscription_status: users.subscription_status,
+          subscription_tier: users.subscription_tier,
+          subscription_end_date: users.subscription_end_date,
+          created_at: users.created_at,
+        })
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
@@ -112,8 +128,7 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const { email, password, name } = req.body;
-      
-      // Basic input validation
+
       if (!email?.trim() || !password?.trim()) {
         return res.status(400).json({ 
           error: "Validation Error",
@@ -125,7 +140,7 @@ export function setupAuth(app: Express) {
 
       const normalizedEmail = email.toLowerCase().trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      
+
       if (!emailRegex.test(normalizedEmail)) {
         return res.status(400).json({
           error: "Validation Error",
@@ -135,7 +150,6 @@ export function setupAuth(app: Express) {
         });
       }
 
-      // Password validation
       if (password.length < 6) {
         return res.status(400).json({
           error: "Validation Error",
@@ -156,7 +170,6 @@ export function setupAuth(app: Express) {
         });
       }
 
-      // Check if email is already taken
       const [existingUser] = await db
         .select()
         .from(users)
@@ -172,18 +185,18 @@ export function setupAuth(app: Express) {
         });
       }
 
-      // Create new user with hashed password
       const hashedPassword = await crypto.hash(password);
       const [newUser] = await db
         .insert(users)
         .values({
           email: normalizedEmail,
           password_hash: hashedPassword,
-          name: name?.trim() || normalizedEmail.split('@')[0]
+          name: name?.trim() || normalizedEmail.split('@')[0],
+          subscription_status: 'inactive',
+          subscription_tier: 'free',
         })
         .returning();
 
-      // Log the user in after successful registration
       req.login(newUser, (err) => {
         if (err) {
           return next(err);
@@ -193,13 +206,15 @@ export function setupAuth(app: Express) {
           user: {
             id: newUser.id,
             email: newUser.email,
-            name: newUser.name
+            name: newUser.name,
+            subscription_tier: newUser.subscription_tier,
+            subscription_status: newUser.subscription_status,
           }
         });
       });
     } catch (error) {
       console.error("Registration error:", error);
-      
+
       if ((error as any)?.code === '23505') {
         return res.status(400).json({
           error: "Registration Error",
@@ -208,7 +223,7 @@ export function setupAuth(app: Express) {
           type: "DUPLICATE_EMAIL"
         });
       }
-      
+
       res.status(500).json({
         error: "Server Error",
         message: "An error occurred during registration. Please try again.",
@@ -222,7 +237,7 @@ export function setupAuth(app: Express) {
       email: z.string().email(),
       password: z.string().min(1)
     });
-    
+
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
       return res
@@ -246,7 +261,13 @@ export function setupAuth(app: Express) {
 
         return res.json({
           message: "Login successful",
-          user: { id: user.id, email: user.email },
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            subscription_tier: user.subscription_tier,
+            subscription_status: user.subscription_status,
+          },
         });
       });
     };
@@ -258,16 +279,22 @@ export function setupAuth(app: Express) {
       if (err) {
         return res.status(500).send("Logout failed");
       }
-
       res.json({ message: "Logout successful" });
     });
   });
 
   app.get("/api/user", (req, res) => {
     if (req.isAuthenticated()) {
-      return res.json(req.user);
+      const user = req.user;
+      return res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        preferences: user.preferences,
+        subscription_tier: user.subscription_tier,
+        subscription_status: user.subscription_status,
+      });
     }
-
     res.status(401).send("Not logged in");
   });
 }
