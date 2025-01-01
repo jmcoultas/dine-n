@@ -44,7 +44,7 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
       meatTypes: params.meatTypes
     }, null, 2));
       
-    const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}.
+    const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}. Do not include recipes with Tofu unless the user chose Vegetarian or Vegan.
 ${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : "No specific dietary restrictions"}
 ${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}. Do not include any ingredients that could contain these allergens.` : "No allergies to consider"}
 ${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : "No specific cuisine preference"}
