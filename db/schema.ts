@@ -101,10 +101,10 @@ export const temporaryRecipes = pgTable("temporary_recipes", {
   prep_time: integer("prep_time"),
   cook_time: integer("cook_time"),
   servings: integer("servings"),
-  ingredients: jsonb("ingredients").$type<z.infer<typeof RecipeIngredientSchema>[]>(),
-  instructions: jsonb("instructions").$type<string[]>(),
-  tags: jsonb("tags").$type<string[]>(),
-  nutrition: jsonb("nutrition").$type<z.infer<typeof RecipeNutritionSchema>>(),
+  ingredients: jsonb("ingredients"),
+  instructions: jsonb("instructions"),
+  tags: jsonb("tags"),
+  nutrition: jsonb("nutrition"),
   complexity: integer("complexity").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
   expires_at: timestamp("expires_at").notNull(),
@@ -118,7 +118,7 @@ export const groceryLists = pgTable("grocery_lists", {
   created: timestamp("created").notNull(),
 });
 
-// Create Zod schemas for validation after table definitions
+// Create validation schemas for inserting/selecting data
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertRecipeSchema = createInsertSchema(recipes);
@@ -129,7 +129,25 @@ export const insertUserRecipeSchema = createInsertSchema(userRecipes);
 export const selectUserRecipeSchema = createSelectSchema(userRecipes);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
-export const insertTemporaryRecipeSchema = createInsertSchema(temporaryRecipes);
+
+export const insertTemporaryRecipeSchema = z.object({
+  user_id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+  image_url: z.string().nullable(),
+  prep_time: z.number(),
+  cook_time: z.number(),
+  servings: z.number(),
+  ingredients: z.array(RecipeIngredientSchema),
+  instructions: z.array(z.string()),
+  tags: z.array(z.string()),
+  nutrition: RecipeNutritionSchema,
+  complexity: z.number(),
+  created_at: z.date(),
+  expires_at: z.date(),
+  favorited: z.boolean()
+});
+
 export const selectTemporaryRecipeSchema = createSelectSchema(temporaryRecipes);
 
 // Export types

@@ -7,17 +7,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing Stripe secret key');
 }
 
-if (!process.env.STRIPE_PREMIUM_PRICE_ID) {
-  throw new Error('Missing Stripe premium price ID');
-}
-
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-12-18.acacia',
 });
-
-export const SUBSCRIPTION_PRICES = {
-  PREMIUM: process.env.STRIPE_PREMIUM_PRICE_ID,
-};
 
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
@@ -47,9 +39,20 @@ export const stripeService = {
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
+      payment_method_types: ['card'],
       line_items: [
         {
-          price: SUBSCRIPTION_PRICES.PREMIUM,
+          price_data: {
+            currency: 'usd',
+            recurring: {
+              interval: 'month'
+            },
+            product_data: {
+              name: 'Premium Subscription',
+              description: 'Monthly subscription for unlimited meal plans'
+            },
+            unit_amount: 999, // $9.99 per month
+          },
           quantity: 1,
         },
       ],

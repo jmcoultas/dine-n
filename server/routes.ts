@@ -1,10 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
-import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, type TemporaryRecipe, PreferenceSchema } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
-import { stripeService, SUBSCRIPTION_PRICES } from "./services/stripe";
+import { stripeService } from "./services/stripe";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -25,11 +25,7 @@ export function registerRoutes(app: express.Express) {
         user.stripe_customer_id = customer.id;
       }
 
-      const session = await stripeService.createCheckoutSession(
-        user.stripe_customer_id,
-        SUBSCRIPTION_PRICES.PREMIUM
-      );
-
+      const session = await stripeService.createCheckoutSession(user.stripe_customer_id);
       res.json({ sessionId: session.id });
     } catch (error: any) {
       console.error("Error creating checkout session:", error);
@@ -37,6 +33,41 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  app.post("/api/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    const signature = req.headers['stripe-signature'];
+
+    if (!signature || typeof signature !== 'string') {
+      return res.status(400).send('Missing stripe signature');
+    }
+
+    try {
+      await stripeService.handleWebhook(req.body, signature);
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Error handling webhook:', error);
+      return res.status(400).send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  // Get subscription status
+  app.get("/api/subscription/status", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+
+      const subscriptionData = {
+        isActive: user.subscription_status === 'active',
+        tier: user.subscription_tier,
+        endDate: user.subscription_end_date,
+      };
+
+      res.json(subscriptionData);
+    } catch (error: any) {
+      console.error("Error fetching subscription status:", error);
+      res.status(500).json({ error: "Failed to fetch subscription status" });
+    }
+  });
+
+  // Cancel subscription
   app.post("/api/subscription/cancel", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
@@ -53,39 +84,91 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
-    const signature = req.headers['stripe-signature'];
-
-    if (!signature) {
-      return res.status(400).send('Missing stripe signature');
-    }
-
+  // Temporary recipes endpoints
+  app.get("/api/temporary-recipes", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const payload = req.body.toString();
-      await stripeService.handleWebhook(payload, signature);
-      res.json({ received: true });
-    } catch (error) {
-      console.error('Error handling webhook:', error);
-      return res.status(400).send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.log('Fetching temporary recipes for user:', req.user?.id);
+      const now = new Date();
+      const { source } = req.query;
+      const isFromMealPlan = source === 'mealplan';
+
+      const activeRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.user_id, req.user!.id),
+            isFromMealPlan
+              ? gt(temporaryRecipes.expires_at, now)
+              : or(
+                  eq(temporaryRecipes.favorited, true),
+                  gt(temporaryRecipes.expires_at, now)
+                )
+          )
+        );
+
+      console.log('Found recipes:', activeRecipes.length);
+      res.json(activeRecipes);
+    } catch (error: any) {
+      console.error("Error fetching temporary recipes:", error);
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({
+        error: "Failed to fetch temporary recipes",
+        details: error.message
+      });
     }
   });
 
-  app.get("/api/subscription/status", isAuthenticated, async (req: Request, res: Response) => {
+  // Save temporary recipe with type-safe insert
+  app.post("/api/temporary-recipes", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
-      const user = req.user!;
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
 
-      const subscriptionData = {
-        isActive: user.subscription_status === 'active',
-        tier: user.subscription_tier,
-        endDate: user.subscription_end_date,
-        customerId: user.stripe_customer_id,
-        subscriptionId: user.stripe_subscription_id
+      const recipe = req.body;
+      const insertData = {
+        user_id: req.user!.id,
+        name: String(recipe.name || ''),
+        description: recipe.description?.toString() || null,
+        image_url: recipe.image_url?.toString() || null,
+        prep_time: Number(recipe.prep_time) || 0,
+        cook_time: Number(recipe.cook_time) || 0,
+        servings: Number(recipe.servings) || 2,
+        ingredients: recipe.ingredients || [],
+        instructions: recipe.instructions || [],
+        tags: recipe.tags || [],
+        nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        complexity: Number(recipe.complexity) || 1,
+        created_at: new Date(),
+        expires_at: expirationDate,
+        favorited: false
       };
 
-      res.json(subscriptionData);
+      const parseResult = insertTemporaryRecipeSchema.safeParse(insertData);
+
+      if (!parseResult.success) {
+        return res.status(400).json({
+          error: "Invalid recipe data",
+          details: parseResult.error.errors
+        });
+      }
+
+      const [savedRecipe] = await db
+        .insert(temporaryRecipes)
+        .values(parseResult.data)
+        .returning();
+
+      res.json(savedRecipe);
     } catch (error: any) {
-      console.error("Error fetching subscription status:", error);
-      res.status(500).json({ error: "Failed to fetch subscription status" });
+      console.error("Error saving temporary recipe:", error);
+      res.status(500).json({
+        error: "Failed to save temporary recipe",
+        details: error.message
+      });
     }
   });
 
@@ -107,13 +190,12 @@ export function registerRoutes(app: express.Express) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      // Get favorited recipes from temporary recipes table
       const favoriteRecipes = await db
         .select()
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.userId, req.user.id),
+            eq(temporaryRecipes.user_id, req.user.id),
             eq(temporaryRecipes.favorited, true)
           )
         );
@@ -142,7 +224,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.userId, req.user!.id)
+            eq(temporaryRecipes.user_id, req.user!.id)
           )
         )
         .returning();
@@ -174,7 +256,7 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.userId, req.user!.id)
+            eq(temporaryRecipes.user_id, req.user!.id)
           )
         )
         .returning();
@@ -202,8 +284,8 @@ export function registerRoutes(app: express.Express) {
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.userId, req.user!.id),
-            gt(temporaryRecipes.expiresAt, now)
+            eq(temporaryRecipes.user_id, req.user!.id),
+            gt(temporaryRecipes.expires_at, now)
           )
         );
 
@@ -231,14 +313,6 @@ export function registerRoutes(app: express.Express) {
         user: req.user?.id
       }, null, 2));
 
-      console.log('Starting meal plan generation with preferences:', JSON.stringify({
-        dietary: preferences.dietary,
-        allergies: preferences.allergies,
-        cuisine: preferences.cuisine,
-        meatTypes: preferences.meatTypes,
-        days
-      }, null, 2));
-
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
       const suggestedRecipes = [];
       const usedRecipeNames = new Set<string>();
@@ -251,42 +325,18 @@ export function registerRoutes(app: express.Express) {
         meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : []
       };
 
-      console.log('Starting meal plan generation with normalized preferences:', JSON.stringify({
-        dietary: normalizedPreferences.dietary,
-        allergies: normalizedPreferences.allergies,
-        cuisine: normalizedPreferences.cuisine,
-        meatTypes: normalizedPreferences.meatTypes,
-        days
-      }, null, 2));
-
-      // Generate exactly one recipe per meal type per day
+      // Generate recipes
       for (let day = 0; day < days; day++) {
         for (const mealType of mealTypes) {
           console.log(`Generating recipe for day ${day + 1}, meal ${mealType}`);
           try {
             const existingNames = Array.from(usedRecipeNames);
-            console.log(`Generating recipe for ${mealType} with preferences:`, {
-              dietary: preferences.dietary,
-              allergies: preferences.allergies,
-              cuisine: preferences.cuisine,
-              meatTypes: preferences.meatTypes,
-              excludeNames: existingNames
-            });
-
-            console.log(`Generating recipe for ${mealType} with preferences:`, {
-              dietary: preferences.dietary,
-              allergies: preferences.allergies,
-              cuisine: preferences.cuisine,
-              meatTypes: preferences.meatTypes,
-              excludeNames: existingNames
-            });
-
             const recipeData = await generateRecipeRecommendation({
-              dietary: preferences.dietary.filter(Boolean),
-              allergies: preferences.allergies.filter(Boolean),
-              cuisine: preferences.cuisine.filter(Boolean),
-              meatTypes: preferences.meatTypes.filter(Boolean),
-              mealType: mealType,
+              dietary: normalizedPreferences.dietary,
+              allergies: normalizedPreferences.allergies,
+              cuisine: normalizedPreferences.cuisine,
+              meatTypes: normalizedPreferences.meatTypes,
+              mealType,
               excludeNames: existingNames,
             });
 
@@ -296,10 +346,9 @@ export function registerRoutes(app: express.Express) {
             }
 
             if (!usedRecipeNames.has(recipeData.name)) {
-              // Use the validated recipe data from earlier
               const generatedRecipe: Partial<Recipe> = {
                 ...recipeData,
-                id: -(suggestedRecipes.length + 1), // Using negative IDs to distinguish from DB records
+                id: -(suggestedRecipes.length + 1), // Using negative IDs for temporary recipes
               };
 
               console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
@@ -313,33 +362,40 @@ export function registerRoutes(app: express.Express) {
         }
       }
 
-      // Instead of returning directly, save to temporary_recipes table
+      // Save generated recipes to temporary_recipes table
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
 
-      const savedRecipes: TemporaryRecipe[] = [];
+      const savedRecipes = [];
       for (const recipe of suggestedRecipes) {
         if (!recipe) continue;
 
+        const insertResult = insertTemporaryRecipeSchema.safeParse({
+          user_id: req.user!.id,
+          name: String(recipe.name || ''),
+          description: recipe.description?.toString() || null,
+          image_url: recipe.image_url?.toString() || null,
+          prep_time: Number(recipe.prep_time) || 0,
+          cook_time: Number(recipe.cook_time) || 0,
+          servings: Number(recipe.servings) || 2,
+          ingredients: Array.isArray(recipe.ingredients) ? JSON.stringify(recipe.ingredients) : "[]",
+          instructions: Array.isArray(recipe.instructions) ? JSON.stringify(recipe.instructions) : "[]",
+          tags: Array.isArray(recipe.tags) ? JSON.stringify(recipe.tags) : "[]",
+          nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+          complexity: Number(recipe.complexity) || 1,
+          created_at: new Date(),
+          expires_at: expirationDate,
+          favorited: false
+        });
+
+        if (!insertResult.success) {
+          console.error('Invalid recipe data:', insertResult.error.issues);
+          continue;
+        }
+
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
-          .values({
-            user_id: req.user!.id,
-            favorited: false,
-            name: String(recipe.name || ''),
-            description: recipe.description?.toString() || null,
-            image_url: recipe.image_url?.toString() || null,
-            prep_time: Number(recipe.prep_time) || 0,
-            cook_time: Number(recipe.cook_time) || 0,
-            servings: Number(recipe.servings) || 2,
-            ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-            instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
-            tags: Array.isArray(recipe.tags) ? recipe.tags : [],
-            nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-            complexity: Number(recipe.complexity) || 1,
-            created_at: new Date(),
-            expires_at: expirationDate
-          })
+          .values([insertResult.data])
           .returning();
 
         savedRecipes.push(savedRecipe);
@@ -457,46 +513,6 @@ export function registerRoutes(app: express.Express) {
       res.status(500).json({ error: "Failed to create grocery list" });
     }
   });
-
-  // AI Meal Plan Generation - Protected Route
-  app.get("/api/temporary-recipes", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      console.log('Fetching temporary recipes for user:', req.user?.id);
-      const now = new Date();
-      const { source } = req.query;
-      const isFromMealPlan = source === 'mealplan';
-
-      const activeRecipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(
-          and(
-            eq(temporaryRecipes.userId, req.user!.id),
-            isFromMealPlan
-              ? gt(temporaryRecipes.expiresAt, now)
-              : or(
-                  eq(temporaryRecipes.favorited, true),
-                  gt(temporaryRecipes.expiresAt, now)
-                )
-          )
-        );
-
-      console.log('Found recipes:', activeRecipes.length);
-      res.json(activeRecipes);
-    } catch (error: any) {
-      console.error("Error fetching temporary recipes:", error);
-      console.error("Error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({
-        error: "Failed to fetch temporary recipes",
-        details: error.message
-      });
-    }
-  });
-
 
   // Ingredient Substitution endpoint
   app.post("/api/substitute-ingredient", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
