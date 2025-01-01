@@ -162,10 +162,11 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
           data-recipe-ingredients={JSON.stringify({
+            "@context": "https://schema.org",
             "@type": "Recipe",
             recipeIngredient: Object.values(aggregatedItems)
               .filter(item => !checkedItems.has(item.name))
-              .map(item => `${item.amount} ${item.unit} ${normalizeIngredientName(item.name)}`)
+              .map(item => `${item.amount} ${item.unit} ${item.name}`.trim())
           })}
           className="inline-flex h-10 items-center"
         />
