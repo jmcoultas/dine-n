@@ -77,9 +77,11 @@ export default function Recipes() {
     );
   }
 
-  const filteredRecipes = recipes.filter((recipe: Recipe) =>
-    recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRecipes = recipes.filter((recipe: Recipe) => {
+    const isMatch = recipe.name.toLowerCase().includes(searchTerm.toLowerCase());
+    // Include both regular and temporary favorited recipes
+    return isMatch;
+  });
 
   return (
     <div className="space-y-6">
