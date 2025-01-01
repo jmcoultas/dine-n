@@ -116,16 +116,25 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      await db
-        .delete(userRecipes)
+      const [updatedRecipe] = await db
+        .update(temporaryRecipes)
+        .set({ favorited: false })
         .where(
           and(
-            eq(userRecipes.user_id, req.user!.id),
-            eq(userRecipes.recipe_id, recipeId)
+            eq(temporaryRecipes.id, recipeId),
+            eq(temporaryRecipes.userId, req.user!.id)
           )
-        );
+        )
+        .returning();
 
-      res.json({ message: "Recipe removed from favorites" });
+      if (!updatedRecipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      return res.json({ 
+        message: "Recipe removed from favorites",
+        recipe: updatedRecipe
+      });
     } catch (error: any) {
       console.error("Error removing recipe from favorites:", error);
       res.status(500).json({ error: "Failed to remove recipe from favorites" });
