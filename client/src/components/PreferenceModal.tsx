@@ -22,7 +22,7 @@ import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { PreferenceSchema, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 
-type PreferenceField = keyof Preferences;
+type PreferenceField = keyof Omit<Preferences, 'chefPreferences'>;
 
 const CHEF_PREFERENCES = {
   difficulty: ChefPreferencesSchema.shape.difficulty.options,
@@ -69,6 +69,11 @@ const STEPS = [
   }
 ] as const;
 
+// Type guard to check if a value is an array
+function isArray<T>(value: T | T[]): value is T[] {
+  return Array.isArray(value);
+}
+
 interface PreferenceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -98,7 +103,11 @@ export default function PreferenceModal({
 
   useEffect(() => {
     setTempPreferences(preferences);
-    setCurrentStep(Object.values(preferences).some(arr => arr.length > 0) ? -1 : 0);
+    // Check if any preference array has values
+    const hasValues = Object.entries(preferences).some(([key, value]) =>
+      key !== 'chefPreferences' && isArray(value) && value.length > 0
+    );
+    setCurrentStep(hasValues ? -1 : 0);
     setIsEditMode(false);
   }, [preferences, open]);
 
@@ -106,26 +115,14 @@ export default function PreferenceModal({
   const isLastStep = currentStep === STEPS.length - 1;
   const isFirstStep = currentStep === 0;
 
-  const hasExistingPreferences = Object.values(preferences).some(arr => arr.length > 0);
+  const hasExistingPreferences = Object.entries(preferences).some(([key, value]) =>
+    key !== 'chefPreferences' && isArray(value) && value.length > 0
+  );
 
   const handleNext = async () => {
     if (isLastStep) {
       try {
-        const response = await fetch('/api/user/profile', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            preferences: tempPreferences
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update preferences');
-        }
-
+        await handleSavePreferences();
         onGenerate?.(chefPreferences);
       } catch (error) {
         toast({
@@ -155,7 +152,10 @@ export default function PreferenceModal({
 
   const handleSelectPreference = (field: PreferenceField, value: string) => {
     try {
-      const parsed = PreferenceSchema.shape[field].element.safeParse(value);
+      const fieldSchema = PreferenceSchema.shape[field];
+      if (!('element' in fieldSchema)) return;
+
+      const parsed = fieldSchema.element.safeParse(value);
       if (!parsed.success) {
         console.error('Invalid preference value:', parsed.error);
         toast({
@@ -207,18 +207,23 @@ export default function PreferenceModal({
   };
 
   const handleRemovePreference = (field: PreferenceField, value: string) => {
-    const parsed = PreferenceSchema.shape[field].element.safeParse(value);
+    const fieldSchema = PreferenceSchema.shape[field];
+    if (!('element' in fieldSchema)) return;
+
+    const parsed = fieldSchema.element.safeParse(value);
     if (!parsed.success) return;
 
     setTempPreferences((prev) => {
+      const currentValues = Array.isArray(prev[field]) ? prev[field] as string[] : [];
+      const newValues = currentValues.filter(item => item !== value);
+
       const newPrefs = {
         ...prev,
-        [field]: (prev[field] || []).filter((item) => item !== value)
+        [field]: newValues
       };
 
       const validated = PreferenceSchema.safeParse(newPrefs);
       if (validated.success) {
-        onUpdatePreferences(validated.data);
         return validated.data;
       }
 
@@ -229,6 +234,42 @@ export default function PreferenceModal({
   const handleGenerateClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     onGenerate?.(chefPreferences);
+  };
+
+  const handleSavePreferences = async () => {
+    try {
+      const updatedPreferences = {
+        ...tempPreferences,
+        chefPreferences
+      };
+
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          preferences: updatedPreferences
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update preferences');
+      }
+
+      onUpdatePreferences(updatedPreferences);
+      toast({
+        title: "Success",
+        description: "Preferences updated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update preferences",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isGenerating) {
@@ -489,7 +530,7 @@ export default function PreferenceModal({
                 {isLastStep && (
                   <Button
                     variant="outline"
-                    onClick={() => onUpdatePreferences(tempPreferences)}
+                    onClick={handleSavePreferences}
                     className="w-full sm:w-auto"
                   >
                     Save Preferences

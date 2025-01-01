@@ -43,6 +43,7 @@ export default function MealPlan() {
       allergies: [],
       cuisine: [],
       meatTypes: [],
+      chefPreferences: {} // Added chefPreferences to handle potential undefined
     };
   });
 
@@ -67,7 +68,7 @@ export default function MealPlan() {
 
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
-      setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe => 
+      setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe =>
         recipe !== null && typeof recipe === 'object' && 'id' in recipe
       ));
     }
@@ -110,7 +111,7 @@ export default function MealPlan() {
         endDate: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
         userId: user?.id ?? 0,
         recipes: generatedRecipes.map((recipe, index) => ({
-          recipeId: recipe.id, 
+          recipeId: recipe.id,
           day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
           meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
         }))
@@ -158,6 +159,10 @@ export default function MealPlan() {
     },
   });
 
+  const isArrayValue = (value: unknown): value is string[] => {
+    return Array.isArray(value);
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4">
@@ -169,10 +174,12 @@ export default function MealPlan() {
             </p>
             <div className="bg-secondary/20 rounded-lg p-4">
               <h3 className="text-sm font-semibold mb-2">Current Preferences</h3>
-              {Object.entries(preferences).some(([_, values]) => values.length > 0) ? (
+              {Object.entries(preferences).some(([key, values]) =>
+                key !== 'chefPreferences' && isArrayValue(values) && values.length > 0
+              ) ? (
                 <div className="space-y-3">
                   {Object.entries(preferences).map(([key, values]) =>
-                    values.length > 0 ? (
+                    key !== 'chefPreferences' && isArrayValue(values) && values.length > 0 ? (
                       <div key={key} className="space-y-1.5">
                         <p className="text-sm font-medium capitalize">{key}:</p>
                         <div className="flex flex-wrap gap-2">
@@ -198,7 +205,7 @@ export default function MealPlan() {
                 <p className="text-sm text-muted-foreground">No preferences set</p>
               )}
             </div>
-            <Button 
+            <Button
               onClick={() => setShowPreferences(true)}
               className="mt-4"
               variant="outline"
@@ -293,8 +300,8 @@ export default function MealPlan() {
                       );
                     })}
                   </div>
-                  <Button 
-                    onClick={() => saveMutation.mutate()} 
+                  <Button
+                    onClick={() => saveMutation.mutate()}
                     disabled={saveMutation.isPending}
                     className="mt-4"
                   >

@@ -3,11 +3,18 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Define preference types
+export const ChefPreferencesSchema = z.object({
+  difficulty: z.enum(["Easy", "Moderate", "Advanced"]),
+  mealType: z.enum(["Breakfast", "Lunch", "Dinner", "Any"]),
+  cookTime: z.enum(["15 minutes or less", "15-30 minutes", "30-60 minutes", "60+ minutes"])
+}).optional();
+
 export const PreferenceSchema = z.object({
   dietary: z.array(z.enum(["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo", "Mediterranean", "Protein Heavy"])),
   allergies: z.array(z.enum(["Dairy", "Eggs", "Tree Nuts", "Peanuts", "Shellfish", "Wheat", "Soy"])),
   cuisine: z.array(z.enum(["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"])),
-  meatTypes: z.array(z.enum(["Chicken", "Beef", "Pork", "Fish", "Lamb", "Turkey", "None"]))
+  meatTypes: z.array(z.enum(["Chicken", "Beef", "Pork", "Fish", "Lamb", "Turkey", "None"])),
+  chefPreferences: ChefPreferencesSchema
 });
 
 // Define recipe-related schemas
