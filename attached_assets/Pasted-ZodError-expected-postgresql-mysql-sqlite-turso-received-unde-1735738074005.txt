@@ -1,0 +1,103 @@
+ZodError: [
+  {
+    "expected": "'postgresql' | 'mysql' | 'sqlite' | 'turso'",
+    "received": "undefined",
+    "code": "invalid_type",
+    "path": [
+      "dialect"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_union",
+    "unionErrors": [
+      {
+        "issues": [
+          {
+            "code": "invalid_union",
+            "unionErrors": [
+              {
+                "issues": [
+                  {
+                    "received": "pg",
+                    "code": "invalid_literal",
+                    "expected": "d1-http",
+                    "path": [
+                      "driver"
+                    ],
+                    "message": "Invalid literal value, expected \"d1-http\""
+                  }
+                ],
+                "name": "ZodError"
+              },
+              {
+                "issues": [
+                  {
+                    "received": "pg",
+                    "code": "invalid_literal",
+                    "expected": "expo",
+                    "path": [
+                      "driver"
+                    ],
+                    "message": "Invalid literal value, expected \"expo\""
+                  }
+                ],
+                "name": "ZodError"
+              }
+            ],
+            "path": [
+              "driver"
+            ],
+            "message": "Invalid input"
+          }
+        ],
+        "name": "ZodError"
+      },
+      {
+        "issues": [
+          {
+            "code": "invalid_union",
+            "unionErrors": [
+              {
+                "issues": [
+                  {
+                    "received": "pg",
+                    "code": "invalid_literal",
+                    "expected": "aws-data-api",
+                    "path": [
+                      "driver"
+                    ],
+                    "message": "Invalid literal value, expected \"aws-data-api\""
+                  }
+                ],
+                "name": "ZodError"
+              },
+              {
+                "issues": [
+                  {
+                    "received": "pg",
+                    "code": "invalid_literal",
+                    "expected": "pglite",
+                    "path": [
+                      "driver"
+                    ],
+                    "message": "Invalid literal value, expected \"pglite\""
+                  }
+                ],
+                "name": "ZodError"
+              }
+            ],
+            "path": [
+              "driver"
+            ],
+            "message": "Invalid input"
+          }
+        ],
+        "name": "ZodError"
+      }
+    ],
+    "path": [
+      "driver"
+    ],
+    "message": "Invalid input"
+  }
