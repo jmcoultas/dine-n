@@ -243,6 +243,7 @@ export function registerRoutes(app: express.Express) {
   // AI Meal Plan Generation - Protected Route
   app.get("/api/temporary-recipes", isAuthenticated, async (req: Request, res: Response) => {
     try {
+      console.log('Fetching temporary recipes for user:', req.user?.id);
       const now = new Date();
       const activeRecipes = await db
         .select()
@@ -256,11 +257,20 @@ export function registerRoutes(app: express.Express) {
             )
           )
         );
-
+      
+      console.log('Found recipes:', activeRecipes.length);
       res.json(activeRecipes);
     } catch (error: any) {
       console.error("Error fetching temporary recipes:", error);
-      res.status(500).json({ error: "Failed to fetch temporary recipes" });
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({ 
+        error: "Failed to fetch temporary recipes",
+        details: error.message 
+      });
     }
   });
 
