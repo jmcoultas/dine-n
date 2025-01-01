@@ -11,6 +11,11 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-12-18.acacia',
 });
 
+const baseUrl = process.env.CLIENT_URL || 
+    (process.env.REPL_SLUG && process.env.REPL_OWNER 
+      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+      : 'http://localhost:5173');
+
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
     try {
@@ -36,6 +41,7 @@ export const stripeService = {
   },
 
   async createCheckoutSession(customerId: string) {
+    console.log('Creating checkout session for customer:', customerId);
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
@@ -56,13 +62,19 @@ export const stripeService = {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/subscription/canceled`,
+      success_url: `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/subscription/canceled`,
       subscription_data: {
         metadata: {
           tier: 'premium'
         }
       }
+    });
+
+    console.log('Checkout session created:', {
+      sessionId: session.id,
+      successUrl: session.success_url,
+      cancelUrl: session.cancel_url
     });
 
     return session;
@@ -105,7 +117,8 @@ export const stripeService = {
             subscriptionId: subscription.id,
             customerId,
             status: subscription.status,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+            eventType: event.type
           });
 
           const [customer] = await db
@@ -118,7 +131,8 @@ export const stripeService = {
             console.log('Updating user subscription:', {
               userId: customer.id,
               subscriptionId: subscription.id,
-              newStatus: subscription.status === 'active' ? 'active' : 'inactive'
+              newStatus: subscription.status === 'active' ? 'active' : 'inactive',
+              currentTime: new Date().toISOString()
             });
 
             await db
@@ -130,6 +144,8 @@ export const stripeService = {
                 subscription_end_date: new Date(subscription.current_period_end * 1000),
               })
               .where(eq(users.id, customer.id));
+
+            console.log('Successfully updated user subscription status');
           } else {
             console.warn('Customer not found for Stripe customerId:', customerId);
           }
@@ -142,7 +158,8 @@ export const stripeService = {
 
           console.log('Processing subscription deletion:', {
             subscriptionId: subscription.id,
-            customerId
+            customerId,
+            timestamp: new Date().toISOString()
           });
 
           const [customer] = await db
@@ -154,7 +171,8 @@ export const stripeService = {
           if (customer) {
             console.log('Updating user subscription to cancelled:', {
               userId: customer.id,
-              subscriptionId: subscription.id
+              subscriptionId: subscription.id,
+              timestamp: new Date().toISOString()
             });
 
             await db
@@ -165,6 +183,8 @@ export const stripeService = {
                 subscription_end_date: new Date(),
               })
               .where(eq(users.id, customer.id));
+
+            console.log('Successfully marked subscription as cancelled');
           } else {
             console.warn('Customer not found for Stripe customerId:', customerId);
           }
