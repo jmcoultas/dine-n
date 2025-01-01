@@ -562,7 +562,8 @@ export function registerRoutes(app: express.Express) {
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
           .values({
-            userId: req.user!.id,
+            user_id: req.user!.id, // Fix: Changed from userId to user_id to match schema
+            favorited: false, // Add default value
             name: String(recipe.name || ''),
             description: recipe.description?.toString() || null,
             imageUrl: recipe.imageUrl?.toString() || null,
