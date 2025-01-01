@@ -58,7 +58,13 @@ export default function MealPlan() {
   const { data: temporaryRecipes, isLoading, refetch } = useQuery({
     queryKey: ['temporaryRecipes'],
     queryFn: async () => {
-      const response = await getTemporaryRecipes();
+      const response = await fetch('/api/temporary-recipes?source=mealplan', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch recipes');
+      }
+      return response.json();
       return response as Recipe[];
     },
     refetchInterval: 60000,

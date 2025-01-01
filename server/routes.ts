@@ -240,16 +240,22 @@ export function registerRoutes(app: express.Express) {
     try {
       console.log('Fetching temporary recipes for user:', req.user?.id);
       const now = new Date();
+      // For meal plan page - only show non-expired recipes
+      const { source } = req.query;
+      const isFromMealPlan = source === 'mealplan';
+
       const activeRecipes = await db
         .select()
         .from(temporaryRecipes)
         .where(
           and(
             eq(temporaryRecipes.userId, req.user!.id),
-            or(
-              eq(temporaryRecipes.favorited, true),
-              gt(temporaryRecipes.expiresAt, now)
-            )
+            isFromMealPlan
+              ? gt(temporaryRecipes.expiresAt, now) // Only non-expired for meal plan
+              : or( // For recipes page - show favorited or non-expired
+                  eq(temporaryRecipes.favorited, true),
+                  gt(temporaryRecipes.expiresAt, now)
+                )
           )
         );
       
