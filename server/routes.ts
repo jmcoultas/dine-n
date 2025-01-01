@@ -358,12 +358,7 @@ export function registerRoutes(app: express.Express) {
               excludeNames: existingNames,
             });
 
-            if (!recipeData || typeof recipeData !== 'object') {
-              console.error('Invalid recipe data received:', recipeData);
-              throw new Error('Invalid recipe data received from API');
-            }
-
-            if (!recipeData || !recipeData.name) {
+            if (!recipeData?.name || typeof recipeData !== 'object') {
               console.error('Invalid recipe data received:', recipeData);
               throw new Error('Invalid recipe data received from API');
             }
