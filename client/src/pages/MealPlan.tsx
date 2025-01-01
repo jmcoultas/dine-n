@@ -16,6 +16,7 @@ import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPla
 import type { Recipe } from "@/lib/types";
 import type { Preferences } from "@db/schema";
 import type { ChefPreferences } from "@/lib/types";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -38,7 +39,7 @@ export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showSubscriptionRequired, setShowSubscriptionRequired] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const { subscription } = useSubscription();
 
   const [preferences, setPreferences] = useState<Preferences>(() => {
@@ -60,7 +61,7 @@ export default function MealPlan() {
       });
       if (!response.ok) {
         if (response.status === 403) {
-          setShowSubscriptionRequired(true);
+          setShowSubscriptionModal(true);
           return [];
         }
         throw new Error('Failed to fetch recipes');
@@ -89,7 +90,7 @@ export default function MealPlan() {
 
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
     if (subscription?.tier !== 'premium') {
-      setShowSubscriptionRequired(true);
+      setShowSubscriptionModal(true);
       return;
     }
 
@@ -103,7 +104,7 @@ export default function MealPlan() {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('subscription')) {
-        setShowSubscriptionRequired(true);
+        setShowSubscriptionModal(true);
       } else {
         toast({
           title: "Error",
@@ -179,7 +180,7 @@ export default function MealPlan() {
     },
     onError: (error) => {
       if (error.message.includes('subscription')) {
-        setShowSubscriptionRequired(true);
+        setShowSubscriptionModal(true);
       } else {
         toast({
           title: "Error",
@@ -190,22 +191,14 @@ export default function MealPlan() {
     }
   });
 
-  if (showSubscriptionRequired) {
-    return (
-      <div className="space-y-8">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold mb-4">Premium Feature</h1>
-          <p className="text-muted-foreground mb-8">
-            Unlock unlimited meal plan generation and saving with a premium subscription
-          </p>
-          <SubscriptionManager />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
+      <SubscriptionModal 
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        feature="Meal plan generation"
+      />
+
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-center">
           <div>
