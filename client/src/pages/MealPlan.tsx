@@ -64,8 +64,7 @@ export default function MealPlan() {
       if (!response.ok) {
         throw new Error('Failed to fetch recipes');
       }
-      return response.json();
-      return response as Recipe[];
+      return response.json() as Promise<Recipe[]>;
     },
     refetchInterval: 60000,
   });
