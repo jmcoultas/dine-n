@@ -161,14 +161,18 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_id="5333" 
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
-          data-recipe={JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            name: "Grocery List",
-            recipeIngredient: Object.values(aggregatedItems)
-              .filter(item => !checkedItems.has(item.name))
-              .map(item => `${item.amount} ${item.unit} ${item.name}`.trim())
-          })}
+          data-recipe={(() => {
+            const recipeData = {
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Grocery List",
+              recipeIngredient: Object.values(aggregatedItems)
+                .filter(item => !checkedItems.has(item.name))
+                .map(item => `${item.amount} ${item.unit} ${item.name}`.trim())
+            };
+            console.log('Instacart Recipe Data:', recipeData);
+            return JSON.stringify(recipeData);
+          })()}
           className="inline-flex h-10 items-center"
         />
       </div>
