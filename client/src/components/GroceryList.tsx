@@ -161,9 +161,10 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_id="5333" 
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
-          data-recipe-ingredients={JSON.stringify({
+          data-recipe={JSON.stringify({
             "@context": "https://schema.org",
             "@type": "Recipe",
+            name: "Grocery List",
             recipeIngredient: Object.values(aggregatedItems)
               .filter(item => !checkedItems.has(item.name))
               .map(item => `${item.amount} ${item.unit} ${item.name}`.trim())
