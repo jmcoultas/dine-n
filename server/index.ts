@@ -8,7 +8,7 @@ import { db } from "../db";
 
 const app = express();
 const server = createServer(app);
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 5000;
 
 // Basic middleware
 app.use(express.json());
