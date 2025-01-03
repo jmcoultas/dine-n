@@ -59,8 +59,8 @@ export const stripeService = {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}&canceled=true`,
+      success_url: `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/subscription/canceled?session_id={CHECKOUT_SESSION_ID}`,
       subscription_data: {
         metadata: {
           tier: 'premium'
