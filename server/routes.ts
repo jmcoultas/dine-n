@@ -351,9 +351,7 @@ export function registerRoutes(app: express.Express) {
             if (!usedRecipeNames.has(recipeData.name)) {
               const generatedRecipe: Partial<Recipe> = {
                 ...recipeData,
-                ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
-                instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
-                tags: Array.isArray(recipeData.tags) ? recipeData.tags : []
+                id: -(suggestedRecipes.length + 1), // Using negative IDs for temporary recipes
               };
 
               console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
