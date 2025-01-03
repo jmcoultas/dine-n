@@ -16,9 +16,13 @@ export function SubscriptionSuccess() {
       setLocation('/');
       return;
     }
-    // Invalidate both user and subscription queries to fetch fresh data
-    queryClient.invalidateQueries({ queryKey: ['subscription'] });
-    queryClient.invalidateQueries({ queryKey: ['user'] });
+
+    // Add small delay to ensure DB updates are complete
+    setTimeout(() => {
+      // Invalidate both user and subscription queries to fetch fresh data
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    }, 1000);
 
     // Redirect to home page after 3 seconds
     const timer = setTimeout(() => {

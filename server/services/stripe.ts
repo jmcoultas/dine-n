@@ -12,7 +12,7 @@ export const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
 });
 
-const baseUrl = process.env.CLIENT_URL || 'https://dine-n-johncoultas.replit.app';
+const baseUrl = process.env.CLIENT_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
 
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
