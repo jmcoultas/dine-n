@@ -3,11 +3,12 @@ import { db } from '../../db';
 import { users } from '@db/schema';
 import { eq } from 'drizzle-orm';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing Stripe secret key');
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeKey || typeof stripeKey !== 'string') {
+  throw new Error('Missing or invalid Stripe secret key');
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+export const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
 });
 
