@@ -133,21 +133,6 @@ export const stripeService = {
               currentTime: new Date().toISOString()
             });
 
-            // Map Stripe status to our enum values
-            const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
-              switch (stripeStatus) {
-                case 'active':
-                case 'trialing':
-                  return 'active';
-                case 'canceled':
-                case 'unpaid':
-                case 'past_due':
-                  return 'cancelled';
-                default:
-                  return 'inactive';
-              }
-            };
-
             // Map Stripe subscription status to our enum values
             const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
               switch (stripeStatus) {
