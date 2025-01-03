@@ -166,9 +166,13 @@ export default function GroceryList({ items }: GroceryListProps) {
               "@context": "https://schema.org",
               "@type": "Recipe",
               name: "Grocery List",
-              recipeIngredient: Object.values(aggregatedItems)
+              recipeIngredient: Array.isArray(items) ? items
                 .filter(item => !checkedItems.has(item.name))
-                .map(item => `${item.amount} ${item.unit} ${item.name}`.trim())
+                .map(item => ({
+                  name: item.name,
+                  amount: item.amount,
+                  unit: item.unit
+                })) : []
             };
             console.log('Instacart Recipe Data:', recipeData);
             return JSON.stringify(recipeData);
