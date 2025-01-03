@@ -192,9 +192,9 @@ export default function UserProfile() {
     <div className="container py-8">
       <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Left Column - 2/3 width */}
-        <div className="md:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Full width on mobile, 2/3 width on desktop */}
+        <div className="col-span-1 lg:col-span-2 space-y-6">
           {/* Profile Settings Card */}
           <Card>
             <CardHeader>
@@ -251,7 +251,7 @@ export default function UserProfile() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Dietary Preferences</Label>
@@ -302,8 +302,8 @@ export default function UserProfile() {
           </Card>
         </div>
 
-        {/* Right Column - 1/3 width */}
-        <div className="md:col-span-1 space-y-6">
+        {/* Right Column - Full width on mobile, 1/3 width on desktop */}
+        <div className="col-span-1 space-y-6">
           {/* Subscription Status Card */}
           <Card>
             <CardHeader>
