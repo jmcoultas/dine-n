@@ -26,15 +26,15 @@ interface Section {
 
 const sections: Section[] = [
   { id: "profile", title: "Profile", icon: <User className="h-4 w-4" /> },
-  { id: "preferences", title: "Preferences", icon: <Settings className="h-4 w-4" /> },
   { id: "subscription", title: "Subscription", icon: <CreditCard className="h-4 w-4" /> },
+  { id: "preferences", title: "Preferences", icon: <Settings className="h-4 w-4" /> },
 ];
 
 export default function UserProfile() {
   const { user, isLoading, logout } = useUser();
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("profile");
-  const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [formData, setFormData] = useState<ProfileFormData>({
     name: '',
     email: '',
@@ -95,9 +95,8 @@ export default function UserProfile() {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.message || 'Failed to update profile');
       }
 
@@ -108,10 +107,6 @@ export default function UserProfile() {
         description: "Profile updated successfully",
       });
 
-      setFormData({
-        name: normalizedName,
-        email: normalizedEmail,
-      });
     } catch (error) {
       toast({
         title: "Error",
@@ -124,20 +119,15 @@ export default function UserProfile() {
   };
 
   const handlePreferencesSave = async (newPreferences: Preferences) => {
-    const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
-    if (!parsedPrefs.success) {
-      toast({
-        title: "Error",
-        description: "Invalid preferences format",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setPreferences(parsedPrefs.data);
-    setShowPreferences(false);
-
     try {
+      const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
+      if (!parsedPrefs.success) {
+        throw new Error("Invalid preferences format");
+      }
+
+      setPreferences(parsedPrefs.data);
+      setShowPreferences(false);
+
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: {
@@ -172,13 +162,23 @@ export default function UserProfile() {
 
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth' });
+    const element = sectionRefs.current[sectionId];
+    if (element) {
+      const offset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+    }
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -186,187 +186,214 @@ export default function UserProfile() {
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <p>Please log in to view your profile</p>
+        <p className="text-muted-foreground">Please log in to view your profile</p>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-screen-xl mx-auto py-8 px-4">
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="md:w-64 shrink-0">
-          <div className="sticky top-8 space-y-1 bg-card rounded-lg p-4 shadow-sm">
-            <h2 className="font-semibold text-lg mb-4">Navigation</h2>
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => scrollToSection(section.id)}
-                className={cn(
-                  "flex items-center w-full px-4 py-2.5 text-sm font-medium rounded-md transition-colors",
-                  "hover:bg-muted/50",
-                  activeSection === section.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-foreground/60 hover:text-foreground"
-                )}
-              >
-                {section.icon}
-                <span className="ml-3">{section.title}</span>
-              </button>
-            ))}
-            <Button
-              variant="destructive"
-              className="w-full mt-4"
-              onClick={() => {
-                logout().then(() => {
-                  toast({
-                    title: "Success",
-                    description: "You have been logged out",
-                  });
-                });
-              }}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log Out
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 space-y-6">
-          <section
-            ref={(el: HTMLDivElement | null) => sectionRefs.current.profile = el}
-            id="profile"
-            className="scroll-mt-16"
-          >
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Profile Information</CardTitle>
-                <CardDescription>
-                  Update your basic profile information
-                </CardDescription>
-              </CardHeader>
-              <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Name</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Your name"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        placeholder="your.email@example.com"
-                        required
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" disabled={isSaving}>
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Changes'
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 max-w-[1200px]">
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Left Navigation Panel - Fixed on desktop, top on mobile */}
+          <aside className="md:w-64 shrink-0">
+            <div className="sticky top-4 space-y-4 rounded-lg border bg-card p-4 shadow-sm">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
+                <p className="text-sm text-muted-foreground">
+                  Manage your account settings and preferences
+                </p>
+              </div>
+              <nav className="space-y-2">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => scrollToSection(section.id)}
+                    className={cn(
+                      "flex w-full items-center rounded-md px-3 py-2 text-sm font-medium",
+                      "transition-colors hover:bg-accent hover:text-accent-foreground",
+                      activeSection === section.id
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted"
                     )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          </section>
-
-          <section
-            ref={(el: HTMLDivElement | null) => sectionRefs.current.subscription = el}
-            id="subscription"
-            className="scroll-mt-16"
-          >
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Subscription Status</CardTitle>
-                <CardDescription>
-                  Manage your subscription and billing
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <SubscriptionManager />
-              </CardContent>
-            </Card>
-          </section>
-
-          <section
-            ref={(el: HTMLDivElement | null) => sectionRefs.current.preferences = el}
-            id="preferences"
-            className="scroll-mt-16"
-          >
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Meal Preferences</CardTitle>
-                <CardDescription>
-                  Manage your dietary preferences, allergies, and cuisine choices
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Dietary Preferences</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {preferences.dietary.length > 0
-                          ? preferences.dietary.join(", ")
-                          : "No dietary preferences set"}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Allergies</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {preferences.allergies.length > 0
-                          ? preferences.allergies.join(", ")
-                          : "No allergies set"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Preferred Cuisines</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {preferences.cuisine.length > 0
-                          ? preferences.cuisine.join(", ")
-                          : "No cuisine preferences set"}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Meat Preferences</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {preferences.meatTypes.length > 0
-                          ? preferences.meatTypes.join(", ")
-                          : "No meat preferences set"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
+                  >
+                    {section.icon}
+                    <span className="ml-2">{section.title}</span>
+                  </button>
+                ))}
+              </nav>
+              <div className="pt-4 border-t">
                 <Button
-                  variant="outline"
-                  onClick={() => setShowPreferences(true)}
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => {
+                    logout().then(() => {
+                      toast({
+                        title: "Success",
+                        description: "You have been logged out",
+                      });
+                    });
+                  }}
                 >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Edit Preferences
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Log Out
                 </Button>
-              </CardFooter>
-            </Card>
-          </section>
+              </div>
+            </div>
+          </aside>
+
+          {/* Main Content Area - Responsive grid for 770-1024px */}
+          <main className="flex-1 space-y-6">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1">
+              {/* Left Column */}
+              <div className="space-y-6">
+                <section
+                  ref={(el) => (sectionRefs.current.profile = el)}
+                  id="profile"
+                  className="scroll-mt-16"
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Profile Information</CardTitle>
+                      <CardDescription>
+                        Update your basic profile information
+                      </CardDescription>
+                    </CardHeader>
+                    <form onSubmit={handleSubmit}>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="name">Name</Label>
+                            <Input
+                              id="name"
+                              value={formData.name}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  name: e.target.value,
+                                }))
+                              }
+                              placeholder="Your name"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={formData.email}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  email: e.target.value,
+                                }))
+                              }
+                              placeholder="your.email@example.com"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                      <CardFooter>
+                        <Button type="submit" disabled={isSaving}>
+                          {isSaving ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Changes"
+                          )}
+                        </Button>
+                      </CardFooter>
+                    </form>
+                  </Card>
+                </section>
+
+                <section
+                  ref={(el) => (sectionRefs.current.preferences = el)}
+                  id="preferences"
+                  className="scroll-mt-16"
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Meal Preferences</CardTitle>
+                      <CardDescription>
+                        Manage your dietary preferences and restrictions
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Dietary Preferences</Label>
+                          <p className="text-sm text-muted-foreground">
+                            {preferences.dietary.length > 0
+                              ? preferences.dietary.join(", ")
+                              : "No dietary preferences set"}
+                          </p>
+                        </div>
+                        <div>
+                          <Label>Allergies</Label>
+                          <p className="text-sm text-muted-foreground">
+                            {preferences.allergies.length > 0
+                              ? preferences.allergies.join(", ")
+                              : "No allergies set"}
+                          </p>
+                        </div>
+                        <div>
+                          <Label>Preferred Cuisines</Label>
+                          <p className="text-sm text-muted-foreground">
+                            {preferences.cuisine.length > 0
+                              ? preferences.cuisine.join(", ")
+                              : "No cuisine preferences set"}
+                          </p>
+                        </div>
+                        <div>
+                          <Label>Meat Preferences</Label>
+                          <p className="text-sm text-muted-foreground">
+                            {preferences.meatTypes.length > 0
+                              ? preferences.meatTypes.join(", ")
+                              : "No meat preferences set"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowPreferences(true)}
+                      >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Edit Preferences
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                </section>
+              </div>
+
+              {/* Right Column */}
+              <div className="space-y-6">
+                <section
+                  ref={(el) => (sectionRefs.current.subscription = el)}
+                  id="subscription"
+                  className="scroll-mt-16"
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Subscription Status</CardTitle>
+                      <CardDescription>
+                        Manage your subscription and billing settings
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <SubscriptionManager />
+                    </CardContent>
+                  </Card>
+                </section>
+              </div>
+            </div>
+          </main>
         </div>
       </div>
 
