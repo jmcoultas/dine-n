@@ -136,8 +136,9 @@ export const stripeService = {
             const updateData = {
               stripe_subscription_id: subscription.id,
               subscription_status: subscription.status === 'active' ? 'active' : 'inactive',
-              subscription_tier: 'premium',
+              subscription_tier: subscription.metadata?.tier || 'premium',
               subscription_end_date: new Date(subscription.current_period_end * 1000),
+              updated_at: new Date(),
             };
             
             console.log('Updating user subscription with data:', {
