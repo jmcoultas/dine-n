@@ -5,11 +5,10 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { users, password_reset_tokens, type User } from "@db/schema";
+import { users, insertUserSchema, type User as SelectUser } from "@db/schema";
 import { z } from "zod";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
-import { emailService } from "./services/email";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -32,7 +31,7 @@ const crypto = {
 
 declare global {
   namespace Express {
-    interface User extends Pick<User, keyof User> { }
+    interface User extends SelectUser { }
   }
 }
 
@@ -298,123 +297,4 @@ export function setupAuth(app: Express) {
     }
     res.status(401).send("Not logged in");
   });
-
-  // Add new password reset endpoints
-  app.post("/api/forgot-password", async (req, res) => {
-    try {
-      const { email } = req.body;
-
-      if (!email?.trim()) {
-        return res.status(400).json({
-          error: "Validation Error",
-          message: "Email is required",
-        });
-      }
-
-      const normalizedEmail = email.toLowerCase().trim();
-
-      // Find user by email
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, normalizedEmail))
-        .limit(1);
-
-      if (!user) {
-        // Return success even if user not found to prevent email enumeration
-        return res.json({ message: "If an account exists with that email, you will receive a password reset link shortly." });
-      }
-
-      // Generate reset token
-      const token = randomBytes(32).toString('hex');
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
-
-      // Save reset token
-      await db
-        .insert(password_reset_tokens)
-        .values({
-          user_id: user.id,
-          token,
-          expires_at: expiresAt,
-        });
-
-      // Send reset email
-      await emailService.sendPasswordResetEmail(user.email, token, user.id);
-
-      res.json({ message: "If an account exists with that email, you will receive a password reset link shortly." });
-    } catch (error) {
-      console.error("Password reset request error:", error);
-      res.status(500).json({ 
-        error: "Server Error",
-        message: "Failed to process password reset request"
-      });
-    }
-  });
-
-  app.post("/api/reset-password", async (req, res) => {
-    try {
-      const { token, userId, newPassword } = req.body;
-
-      if (!token || !userId || !newPassword) {
-        return res.status(400).json({
-          error: "Validation Error",
-          message: "Missing required fields"
-        });
-      }
-
-      // Validate password requirements
-      if (newPassword.length < 6) {
-        return res.status(400).json({
-          error: "Validation Error",
-          message: "Password must be at least 6 characters long"
-        });
-      }
-
-      const hasUpperCase = /[A-Z]/.test(newPassword);
-      const hasNumber = /[0-9]/.test(newPassword);
-      if (!hasUpperCase || !hasNumber) {
-        return res.status(400).json({
-          error: "Validation Error",
-          message: "Password must contain at least one uppercase letter and one number"
-        });
-      }
-
-      // Find valid reset token
-      const [resetToken] = await db
-        .select()
-        .from(password_reset_tokens)
-        .where(eq(password_reset_tokens.token, token))
-        .limit(1);
-
-      if (!resetToken || resetToken.user_id !== userId || resetToken.expires_at < new Date()) {
-        return res.status(400).json({
-          error: "Invalid Token",
-          message: "Invalid or expired reset token"
-        });
-      }
-
-      // Update password
-      const hashedPassword = await crypto.hash(newPassword);
-      await db
-        .update(users)
-        .set({ password_hash: hashedPassword })
-        .where(eq(users.id, userId));
-
-      // Delete used token
-      await db
-        .delete(password_reset_tokens)
-        .where(eq(password_reset_tokens.token, token));
-
-      res.json({ message: "Password successfully reset" });
-    } catch (error) {
-      console.error("Password reset error:", error);
-      res.status(500).json({ 
-        error: "Server Error",
-        message: "Failed to reset password"
-      });
-    }
-  });
-
-  return app;
 }

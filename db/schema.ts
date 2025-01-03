@@ -118,14 +118,6 @@ export const groceryLists = pgTable("grocery_lists", {
   created: timestamp("created").notNull(),
 });
 
-export const password_reset_tokens = pgTable("password_reset_tokens", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  user_id: integer("user_id").notNull().references(() => users.id),
-  token: text("token").notNull(),
-  expires_at: timestamp("expires_at").notNull(),
-  created_at: timestamp("created_at").defaultNow().notNull(),
-});
-
 // Create validation schemas for inserting/selecting data
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -137,6 +129,7 @@ export const insertUserRecipeSchema = createInsertSchema(userRecipes);
 export const selectUserRecipeSchema = createSelectSchema(userRecipes);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
+
 export const insertTemporaryRecipeSchema = z.object({
   user_id: z.number(),
   name: z.string(),
@@ -157,11 +150,6 @@ export const insertTemporaryRecipeSchema = z.object({
 
 export const selectTemporaryRecipeSchema = createSelectSchema(temporaryRecipes);
 
-// Add password reset token schemas
-export const insertPasswordResetTokenSchema = createInsertSchema(password_reset_tokens);
-export const selectPasswordResetTokenSchema = createSelectSchema(password_reset_tokens);
-
-
 // Export types
 export type User = z.infer<typeof selectUserSchema>;
 export type Recipe = z.infer<typeof selectRecipeSchema>;
@@ -172,4 +160,3 @@ export type Preferences = z.infer<typeof PreferenceSchema>;
 export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;
 export type SubscriptionTier = z.infer<typeof SubscriptionTierEnum>;
 export type SubscriptionStatus = z.infer<typeof SubscriptionStatusEnum>;
-export type PasswordResetToken = z.infer<typeof selectPasswordResetTokenSchema>;

@@ -7,11 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useLocation } from "wouter";
-import { Link } from "wouter";
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const { toast } = useToast();
   const { login, register, user } = useUser();
   const [, setLocation] = useLocation();
@@ -23,45 +21,6 @@ export default function AuthPage() {
     }
   }, [user, setLocation]);
 
-  const handleForgotPassword = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
-
-    const formData = new FormData(event.currentTarget);
-    const email = formData.get("email") as string;
-
-    try {
-      const response = await fetch('/api/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send reset email');
-      }
-
-      toast({
-        title: "Check your email",
-        description: "If an account exists with that email, you will receive a password reset link shortly.",
-      });
-
-      setIsForgotPassword(false);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>, isLogin: boolean) => {
     event.preventDefault();
     setIsLoading(true);
@@ -72,7 +31,7 @@ export default function AuthPage() {
 
     try {
       const result = await (isLogin ? login : register)({ email, password });
-
+      
       if (!result.ok) {
         toast({
           title: "Error",
@@ -97,73 +56,6 @@ export default function AuthPage() {
       setIsLoading(false);
     }
   };
-
-  if (isForgotPassword) {
-    return (
-      <div className="container relative flex-col items-center justify-center grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-        <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
-          <div className="absolute inset-0 bg-zinc-900" />
-          <div className="relative z-20 flex items-center text-lg font-medium">
-            <img src="/logo.png" alt="Logo" className="mr-2 h-6 w-6" />
-            Meal Planner
-          </div>
-          <div className="relative z-20 mt-auto">
-            <blockquote className="space-y-2">
-              <p className="text-lg">
-                "This app has revolutionized how I plan my meals. The AI-powered
-                suggestions are fantastic, and it's made grocery shopping so much
-                easier!"
-              </p>
-              <footer className="text-sm">Sofia Davis</footer>
-            </blockquote>
-          </div>
-        </div>
-        <div className="lg:p-8">
-          <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-            <Card>
-              <form onSubmit={handleForgotPassword}>
-                <CardHeader>
-                  <CardTitle>Forgot Password</CardTitle>
-                  <CardDescription>
-                    Enter your email address and we'll send you a link to reset your password
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="john@example.com"
-                      required
-                    />
-                  </div>
-                </CardContent>
-                <CardFooter className="flex flex-col space-y-2">
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Sending..." : "Send Reset Link"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="w-full"
-                    onClick={() => setIsForgotPassword(false)}
-                  >
-                    Back to Login
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="container relative flex-col items-center justify-center grid lg:max-w-none lg:grid-cols-2 lg:px-0">
@@ -229,21 +121,13 @@ export default function AuthPage() {
                       />
                     </div>
                   </CardContent>
-                  <CardFooter className="flex flex-col space-y-2">
+                  <CardFooter>
                     <Button
                       type="submit"
                       className="w-full"
                       disabled={isLoading}
                     >
                       {isLoading ? "Logging in..." : "Login"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="w-full"
-                      onClick={() => setIsForgotPassword(true)}
-                    >
-                      Forgot password?
                     </Button>
                   </CardFooter>
                 </form>
