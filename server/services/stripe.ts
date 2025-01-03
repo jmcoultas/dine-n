@@ -98,10 +98,11 @@ export const stripeService = {
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      console.log('Received webhook event:', {
+      console.log('Processing webhook event:', {
         type: event.type,
         id: event.id,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        object: event.data.object
       });
 
       switch (event.type) {
@@ -132,15 +133,24 @@ export const stripeService = {
               currentTime: new Date().toISOString()
             });
 
+            const updateData = {
+              stripe_subscription_id: subscription.id,
+              subscription_status: subscription.status === 'active' ? 'active' : 'inactive',
+              subscription_tier: 'premium',
+              subscription_end_date: new Date(subscription.current_period_end * 1000),
+            };
+            
+            console.log('Updating user subscription with data:', {
+              userId: customer.id,
+              ...updateData
+            });
+
             await db
               .update(users)
-              .set({
-                stripe_subscription_id: subscription.id,
-                subscription_status: subscription.status === 'active' ? 'active' : 'inactive',
-                subscription_tier: 'premium',
-                subscription_end_date: new Date(subscription.current_period_end * 1000),
-              })
+              .set(updateData)
               .where(eq(users.id, customer.id));
+
+            console.log('Successfully updated subscription for user:', customer.id);
 
             console.log('Successfully updated user subscription status');
           } else {
