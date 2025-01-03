@@ -163,12 +163,17 @@ export const stripeService = {
               ...updateData
             });
 
-            await db
+            const result = await db
               .update(users)
               .set(updateData)
-              .where(eq(users.id, customer.id));
+              .where(eq(users.id, customer.id))
+              .returning();
 
-            console.log('Successfully updated subscription for user:', customer.id);
+            console.log('Database update result:', {
+              userId: customer.id,
+              updatedFields: updateData,
+              result: result
+            });
 
             console.log('Successfully updated user subscription status');
           } else {
