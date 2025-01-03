@@ -133,9 +133,24 @@ export const stripeService = {
               currentTime: new Date().toISOString()
             });
 
+            // Map Stripe status to our enum values
+            const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
+              switch (stripeStatus) {
+                case 'active':
+                case 'trialing':
+                  return 'active';
+                case 'canceled':
+                case 'unpaid':
+                case 'past_due':
+                  return 'cancelled';
+                default:
+                  return 'inactive';
+              }
+            };
+
             const updateData = {
               stripe_subscription_id: subscription.id,
-              subscription_status: subscription.status === 'active' ? 'active' : 'inactive',
+              subscription_status: getSubscriptionStatus(subscription.status),
               subscription_tier: subscription.metadata?.tier || 'premium',
               subscription_end_date: new Date(subscription.current_period_end * 1000),
               updated_at: new Date(),
