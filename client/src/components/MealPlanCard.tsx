@@ -161,11 +161,10 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                 >
                   <Heart 
                     className={`h-5 w-5 transition-colors ${
-                      recipe.favorited 
+                      isFavorited 
                         ? 'fill-red-500 text-red-500 scale-110' 
                         : 'text-gray-500 hover:text-red-400'
                     }`}
-                    fill={recipe.favorited ? "currentColor" : "none"}
                   />
                   <span className="sr-only">Add to favorites</span>
                 </Button>
