@@ -66,7 +66,12 @@ export async function generateMealPlan(
     throw new Error(errorData.message || "Failed to generate meal plan");
   }
 
-  return response.json();
+  const data = await response.json();
+  if (!data.recipes || !Array.isArray(data.recipes)) {
+    throw new Error('Invalid response format from server');
+  }
+
+  return data;
 }
 
 export async function createMealPlan(mealPlan: Partial<MealPlan>): Promise<MealPlan> {

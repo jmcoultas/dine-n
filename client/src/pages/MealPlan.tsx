@@ -99,6 +99,9 @@ export default function MealPlan() {
     try {
       setIsGenerating(true);
       const result = await generateMealPlan(preferences, 2, chefPreferences);
+      if (!result.recipes || result.recipes.length === 0) {
+        throw new Error('No recipes were generated. Please try again.');
+      }
       await refetch();
       toast({
         title: "Success",
