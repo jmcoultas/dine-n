@@ -19,6 +19,7 @@ interface MealPlanCardProps {
     name: string;
     description: string | null;
     imageUrl: string | null;
+    isFavorited?: boolean;
     prepTime: number | null;
     cookTime: number | null;
     servings: number | null;
@@ -158,7 +159,13 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                     toggleFavorite.mutate();
                   }}
                 >
-                  <Heart className="h-5 w-5 text-gray-500 hover:text-red-500 transition-colors" />
+                  <Heart 
+                    className={`h-5 w-5 transition-colors ${
+                      isFavorited 
+                        ? 'fill-red-500 text-red-500 scale-110' 
+                        : 'text-gray-500 hover:text-red-400'
+                    }`}
+                  />
                   <span className="sr-only">Add to favorites</span>
                 </Button>
               )}
