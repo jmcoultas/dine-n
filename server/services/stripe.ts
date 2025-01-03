@@ -12,7 +12,15 @@ export const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
 });
 
-const baseUrl = process.env.CLIENT_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+// Get the Replit workspace domain for development
+const replitDomain = process.env.REPL_SLUG && process.env.REPL_OWNER 
+  ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+  : null;
+
+// Use workspace domain for development, fallback to CLIENT_URL for production
+const baseUrl = process.env.REPL_DEV_DOMAIN 
+  ? `https://${process.env.REPL_DEV_DOMAIN}`
+  : (replitDomain || process.env.CLIENT_URL);
 
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
