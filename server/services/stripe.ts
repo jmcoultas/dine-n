@@ -148,13 +148,30 @@ export const stripeService = {
               }
             };
 
+            // Map Stripe subscription status to our enum values
+            const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
+              switch (stripeStatus) {
+                case 'active':
+                case 'trialing':
+                  return 'active';
+                case 'canceled':
+                case 'unpaid':
+                case 'past_due':
+                  return 'cancelled';
+                default:
+                  return 'inactive';
+              }
+            };
+
             const updateData = {
               stripe_subscription_id: subscription.id,
-              subscription_status: getSubscriptionStatus(subscription.status),
-              subscription_tier: (subscription.metadata?.tier || 'premium') as 'free' | 'premium',
+              subscription_status: getSubscriptionStatus(subscription.status) as 'active' | 'inactive' | 'cancelled',
+              subscription_tier: 'premium' as const,
               subscription_end_date: new Date(subscription.current_period_end * 1000),
               updated_at: new Date(),
             };
+
+            console.log('Processing subscription update with data:', updateData);
             
             console.log('Updating user subscription with data:', {
               userId: customer.id,
