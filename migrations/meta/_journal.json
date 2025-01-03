@@ -8,13 +8,6 @@
       "when": 1735508028505,
       "tag": "0000_far_spencer_smythe",
       "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1735868954833,
-      "tag": "0001_faulty_wasp",
-      "breakpoints": true
     }
   ]
 }

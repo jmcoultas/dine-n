@@ -47,11 +47,6 @@ export const users = pgTable("users", {
   subscription_status: text("subscription_status").$type<z.infer<typeof SubscriptionStatusEnum>>().default('inactive'),
   subscription_tier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
   subscription_end_date: timestamp("subscription_end_date"),
-  email_verified: boolean("email_verified").default(false).notNull(),
-  verification_token: text("verification_token"),
-  verification_token_expires: timestamp("verification_token_expires"),
-  reset_token: text("reset_token"),
-  reset_token_expires: timestamp("reset_token_expires"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
