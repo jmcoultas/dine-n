@@ -161,7 +161,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                 >
                   <Heart 
                     className={`h-5 w-5 transition-colors ${
-                      isFavorited 
+                      recipe.favorited 
                         ? 'fill-red-500 text-red-500 scale-110' 
                         : 'text-gray-500 hover:text-red-400'
                     }`}
