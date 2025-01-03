@@ -6,9 +6,16 @@ import { Loader2 } from "lucide-react";
 
 export function SubscriptionSuccess() {
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const params = new URLSearchParams(location.split('?')[1]);
+  const userId = params.get('user_id');
 
   useEffect(() => {
+    if (!userId) {
+      console.error('No user ID found in redirect URL');
+      setLocation('/');
+      return;
+    }
     // Invalidate both user and subscription queries to fetch fresh data
     queryClient.invalidateQueries({ queryKey: ['subscription'] });
     queryClient.invalidateQueries({ queryKey: ['user'] });
