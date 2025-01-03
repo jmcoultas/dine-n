@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,20 +6,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Loader2, Settings } from "lucide-react";
+import { Loader2, Settings, User, CreditCard, LogOut } from "lucide-react";
 import PreferenceModal from "@/components/PreferenceModal";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
 import { SubscriptionManager } from "@/components/SubscriptionManager";
+import { cn } from "@/lib/utils";
 
 interface ProfileFormData {
   name: string;
   email: string;
 }
 
+interface Section {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
+}
+
+const sections: Section[] = [
+  { id: "profile", title: "Profile", icon: <User className="h-4 w-4" /> },
+  { id: "preferences", title: "Preferences", icon: <Settings className="h-4 w-4" /> },
+  { id: "subscription", title: "Subscription", icon: <CreditCard className="h-4 w-4" /> },
+];
+
 export default function UserProfile() {
   const { user, isLoading, logout } = useUser();
   const queryClient = useQueryClient();
+  const [activeSection, setActiveSection] = useState("profile");
+  const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [formData, setFormData] = useState<ProfileFormData>({
     name: '',
     email: '',
@@ -45,13 +60,6 @@ export default function UserProfile() {
         const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
         if (parsedPrefs.success) {
           setPreferences(parsedPrefs.data);
-        } else {
-          setPreferences({
-            dietary: [],
-            allergies: [],
-            cuisine: [],
-            meatTypes: [],
-          });
         }
       }
     }
@@ -90,9 +98,6 @@ export default function UserProfile() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (data.error === "Validation Error") {
-          throw new Error(data.message);
-        }
         throw new Error(data.message || 'Failed to update profile');
       }
 
@@ -162,14 +167,12 @@ export default function UserProfile() {
         description: error instanceof Error ? error.message : "Failed to update preferences",
         variant: "destructive",
       });
-
-      if (user?.preferences) {
-        const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
-        if (parsedPrefs.success) {
-          setPreferences(parsedPrefs.data);
-        }
-      }
     }
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth' });
   };
 
   if (isLoading) {
@@ -189,159 +192,181 @@ export default function UserProfile() {
   }
 
   return (
-    <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
+    <div className="container max-w-screen-xl mx-auto py-8 px-4">
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="md:w-64 shrink-0">
+          <div className="sticky top-8 space-y-1 bg-card rounded-lg p-4 shadow-sm">
+            <h2 className="font-semibold text-lg mb-4">Navigation</h2>
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => scrollToSection(section.id)}
+                className={cn(
+                  "flex items-center w-full px-4 py-2.5 text-sm font-medium rounded-md transition-colors",
+                  "hover:bg-muted/50",
+                  activeSection === section.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground/60 hover:text-foreground"
+                )}
+              >
+                {section.icon}
+                <span className="ml-3">{section.title}</span>
+              </button>
+            ))}
+            <Button
+              variant="destructive"
+              className="w-full mt-4"
+              onClick={() => {
+                logout().then(() => {
+                  toast({
+                    title: "Success",
+                    description: "You have been logged out",
+                  });
+                });
+              }}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Log Out
+            </Button>
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Full width on mobile, 2/3 width on desktop */}
-        <div className="col-span-1 lg:col-span-2 space-y-6">
-          {/* Profile Settings Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-              <CardDescription>
-                Update your basic profile information
-              </CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Your name"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="your.email@example.com"
-                    required
-                  />
+        <div className="flex-1 space-y-6">
+          <section
+            ref={(el: HTMLDivElement | null) => sectionRefs.current.profile = el}
+            id="profile"
+            className="scroll-mt-16"
+          >
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Profile Information</CardTitle>
+                <CardDescription>
+                  Update your basic profile information
+                </CardDescription>
+              </CardHeader>
+              <form onSubmit={handleSubmit}>
+                <CardContent className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Your name"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="your.email@example.com"
+                        required
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                </CardFooter>
+              </form>
+            </Card>
+          </section>
+
+          <section
+            ref={(el: HTMLDivElement | null) => sectionRefs.current.subscription = el}
+            id="subscription"
+            className="scroll-mt-16"
+          >
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Subscription Status</CardTitle>
+                <CardDescription>
+                  Manage your subscription and billing
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SubscriptionManager />
+              </CardContent>
+            </Card>
+          </section>
+
+          <section
+            ref={(el: HTMLDivElement | null) => sectionRefs.current.preferences = el}
+            id="preferences"
+            className="scroll-mt-16"
+          >
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Meal Preferences</CardTitle>
+                <CardDescription>
+                  Manage your dietary preferences, allergies, and cuisine choices
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Dietary Preferences</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {preferences.dietary.length > 0
+                          ? preferences.dietary.join(", ")
+                          : "No dietary preferences set"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Allergies</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {preferences.allergies.length > 0
+                          ? preferences.allergies.join(", ")
+                          : "No allergies set"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Preferred Cuisines</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {preferences.cuisine.length > 0
+                          ? preferences.cuisine.join(", ")
+                          : "No cuisine preferences set"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Meat Preferences</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {preferences.meatTypes.length > 0
+                          ? preferences.meatTypes.join(", ")
+                          : "No meat preferences set"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPreferences(true)}
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Edit Preferences
                 </Button>
               </CardFooter>
-            </form>
-          </Card>
-
-          {/* Meal Preferences Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Meal Preferences</CardTitle>
-              <CardDescription>
-                Manage your dietary preferences, allergies, and cuisine choices
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Dietary Preferences</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {preferences.dietary.length > 0
-                        ? preferences.dietary.join(", ")
-                        : "No dietary preferences set"}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Allergies</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {preferences.allergies.length > 0
-                        ? preferences.allergies.join(", ")
-                        : "No allergies set"}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Preferred Cuisines</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {preferences.cuisine.length > 0
-                        ? preferences.cuisine.join(", ")
-                        : "No cuisine preferences set"}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Meat Preferences</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {preferences.meatTypes.length > 0
-                        ? preferences.meatTypes.join(", ")
-                        : "No meat preferences set"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowPreferences(true)}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Edit Preferences
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Right Column - Full width on mobile, 1/3 width on desktop */}
-        <div className="col-span-1 space-y-6">
-          {/* Subscription Status Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Subscription</CardTitle>
-              <CardDescription>
-                Manage your subscription and billing
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SubscriptionManager />
-            </CardContent>
-          </Card>
-
-          {/* Account Actions Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Actions</CardTitle>
-              <CardDescription>
-                Manage your account settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => {
-                  logout().then(() => {
-                    toast({
-                      title: "Success",
-                      description: "You have been logged out",
-                    });
-                  });
-                }}
-              >
-                Log Out
-              </Button>
-            </CardContent>
-          </Card>
+            </Card>
+          </section>
         </div>
       </div>
 
