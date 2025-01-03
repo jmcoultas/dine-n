@@ -1,9 +1,17 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import checker from 'vite-plugin-checker';
 import RuntimeErrorModalPlugin from '@replit/vite-plugin-runtime-error-modal';
 import ShadcnThemeJSONPlugin from '@replit/vite-plugin-shadcn-theme-json';
+
+// Log environment info for debugging
+console.log('Environment:', {
+  REPL_SLUG: process.env.REPL_SLUG,
+  REPL_OWNER: process.env.REPL_OWNER,
+  NODE_ENV: process.env.NODE_ENV
+});
 
 export default defineConfig({
   plugins: [
@@ -17,7 +25,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://0.0.0.0:5000',
+        target: process.env.NODE_ENV === 'production' 
+          ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev`
+          : 'http://0.0.0.0:5000',
         changeOrigin: true,
         secure: false,
         ws: true
