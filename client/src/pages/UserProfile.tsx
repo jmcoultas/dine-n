@@ -26,15 +26,15 @@ interface Section {
 
 const sections: Section[] = [
   { id: "profile", title: "Profile", icon: <User className="h-4 w-4" /> },
-  { id: "subscription", title: "Subscription", icon: <CreditCard className="h-4 w-4" /> },
   { id: "preferences", title: "Preferences", icon: <Settings className="h-4 w-4" /> },
+  { id: "subscription", title: "Subscription", icon: <CreditCard className="h-4 w-4" /> },
 ];
 
 export default function UserProfile() {
   const { user, isLoading, logout } = useUser();
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("profile");
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [formData, setFormData] = useState<ProfileFormData>({
     name: '',
     email: '',
@@ -64,6 +64,26 @@ export default function UserProfile() {
       }
     }
   }, [user]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentPosition = window.scrollY + 100;
+
+      for (const section of sections) {
+        const element = sectionRefs.current[section.id];
+        if (element) {
+          const { top, bottom } = element.getBoundingClientRect();
+          if (top <= 100 && bottom >= 100) {
+            setActiveSection(section.id);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,7 +215,7 @@ export default function UserProfile() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-[1200px]">
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Left Navigation Panel - Fixed on desktop, top on mobile */}
+          {/* Left Navigation Panel - Enhanced sticky behavior */}
           <aside className="md:w-64 shrink-0">
             <div className="sticky top-4 space-y-4 rounded-lg border bg-card p-4 shadow-sm">
               <div className="space-y-1">
@@ -210,10 +230,10 @@ export default function UserProfile() {
                     key={section.id}
                     onClick={() => scrollToSection(section.id)}
                     className={cn(
-                      "flex w-full items-center rounded-md px-3 py-2 text-sm font-medium",
-                      "transition-colors hover:bg-accent hover:text-accent-foreground",
+                      "flex w-full items-center rounded-md px-3 py-2 text-sm font-medium transition-all duration-200",
+                      "hover:bg-accent hover:text-accent-foreground",
                       activeSection === section.id
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:bg-muted"
                     )}
                   >
@@ -242,11 +262,11 @@ export default function UserProfile() {
             </div>
           </aside>
 
-          {/* Main Content Area - Responsive grid for 770-1024px */}
+          {/* Main Content Area - Optimized grid for tablet screens */}
           <main className="flex-1 space-y-6">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {/* Left Column */}
-              <div className="space-y-6">
+              <div className="space-y-6 md:col-span-1">
                 <section
                   ref={(el) => (sectionRefs.current.profile = el)}
                   id="profile"
@@ -373,11 +393,11 @@ export default function UserProfile() {
               </div>
 
               {/* Right Column */}
-              <div className="space-y-6">
+              <div className="space-y-6 md:col-span-1">
                 <section
                   ref={(el) => (sectionRefs.current.subscription = el)}
                   id="subscription"
-                  className="scroll-mt-16"
+                  className="scroll-mt-16 md:sticky md:top-4"
                 >
                   <Card>
                     <CardHeader>
