@@ -23,6 +23,7 @@ localPort = 5174
 externalPort = 3001
 
 [workflows]
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
