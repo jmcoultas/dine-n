@@ -207,6 +207,7 @@ export default function Home() {
         onUpdatePreferences={handlePreferencesSave}
         isGenerating={generateMutation.isPending}
         onGenerate={handleGenerate}
+        user={user}
       />
     </div>
   );

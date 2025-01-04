@@ -266,6 +266,7 @@ export default function MealPlan() {
         onUpdatePreferences={setPreferences}
         isGenerating={isGenerating}
         onGenerate={handleGenerateMealPlan}
+        user={user}
       />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">

@@ -215,7 +215,6 @@ export default function UserProfile() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-[1200px]">
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Left Navigation Panel - Enhanced sticky behavior */}
           <aside className="md:w-64 shrink-0">
             <div className="sticky top-4 space-y-4 rounded-lg border bg-card p-4 shadow-sm">
               <div className="space-y-1">
@@ -262,10 +261,8 @@ export default function UserProfile() {
             </div>
           </aside>
 
-          {/* Main Content Area - Optimized grid for tablet screens */}
           <main className="flex-1 space-y-6">
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {/* Left Column */}
               <div className="space-y-6 md:col-span-1">
                 <section
                   ref={(el) => (sectionRefs.current.profile = el)}
@@ -392,7 +389,6 @@ export default function UserProfile() {
                 </section>
               </div>
 
-              {/* Right Column */}
               <div className="space-y-6 md:col-span-1">
                 <section
                   ref={(el) => (sectionRefs.current.subscription = el)}
@@ -422,6 +418,7 @@ export default function UserProfile() {
         onOpenChange={setShowPreferences}
         preferences={preferences}
         onUpdatePreferences={handlePreferencesSave}
+        user={user}
       />
     </div>
   );

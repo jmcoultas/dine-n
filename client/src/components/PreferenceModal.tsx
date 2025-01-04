@@ -17,7 +17,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowRight, Settings2, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Settings2, Wand2, AlertTriangle } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { PreferenceSchema, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
@@ -25,7 +25,6 @@ import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 type PreferenceField = keyof Omit<Preferences, 'chefPreferences'>;
 type PreferenceValue = string[] | ChefPreferences | undefined;
 
-// Type guard to check if a value is an array of strings
 function isPreferenceArray(value: PreferenceValue): value is string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string');
 }
@@ -91,7 +90,8 @@ export default function PreferenceModal({
   onUpdatePreferences,
   isGenerating = false,
   onGenerate,
-}: PreferenceModalProps) {
+  user // Add user prop to access subscription info
+}: PreferenceModalProps & { user?: { subscription_tier: string, meal_plans_generated: number } }) {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(-1);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
@@ -104,7 +104,6 @@ export default function PreferenceModal({
 
   useEffect(() => {
     setTempPreferences(preferences);
-    // Check if any preference array has values
     const hasValues = Object.entries(preferences).some(([key, value]) =>
       key !== 'chefPreferences' && isPreferenceArray(value) && value.length > 0
     );
@@ -273,6 +272,8 @@ export default function PreferenceModal({
     }
   };
 
+  const showFreeTierWarning = user?.subscription_tier === 'free' && user?.meal_plans_generated === 0;
+
   if (isGenerating) {
     return <LoadingAnimation message="Cooking up your personalized meal plan..." />;
   }
@@ -291,7 +292,6 @@ export default function PreferenceModal({
 
             <div className="mt-6 space-y-6">
               {Object.entries(preferences).map(([key, values]) => {
-                // Skip non-array preferences like chefPreferences
                 if (key === 'chefPreferences' || !isPreferenceArray(values)) {
                   return null;
                 }
@@ -522,6 +522,21 @@ export default function PreferenceModal({
                 </>
               )}
             </div>
+
+            {currentStep === STEPS.length - 1 && showFreeTierWarning && (
+              <div className="mb-4 p-4 border rounded-md bg-yellow-50 dark:bg-yellow-900/20">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-yellow-800 dark:text-yellow-400">Free Plan Notice</h4>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                      You're currently on the free plan which includes one meal plan generation.
+                      After using this, you'll need to upgrade to generate more meal plans.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <DialogFooter className="flex flex-col-reverse sm:flex-row justify-between gap-2 mt-6">
               <div className="w-full sm:w-auto">
