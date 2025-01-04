@@ -58,12 +58,6 @@ export default function Home() {
 
   const generateMutation = useMutation({
     mutationFn: async (prefs: Preferences) => {
-      if (subscription?.tier !== 'premium') {
-        setShowPreferences(false); // Close preference modal first
-        setShowSubscriptionModal(true);
-        throw new Error("Premium subscription required");
-      }
-
       const cleanPreferences = {
         dietary: prefs.dietary.filter(Boolean),
         allergies: prefs.allergies.filter(Boolean),
@@ -102,35 +96,20 @@ export default function Home() {
       }
     },
     onError: (error: unknown) => {
-      const err = error as Error & {
-        response?: {
-          data?: {
-            type?: string;
-            error?: string;
-            message?: string;
-            details?: string;
-            debug?: {
-              code?: string;
-              status?: number;
-              message?: string;
-            }
-          }
-        }
-      };
+      const err = error as Error;
+
+      if (err.message === 'FREE_PLAN_LIMIT_REACHED') {
+        setShowPreferences(false);
+        setFeatureContext("Meal plan generation");
+        setShowSubscriptionModal(true);
+        return;
+      }
 
       // Only show error toast for non-subscription related errors
       if (!err.message?.includes('subscription')) {
-        const errorData = err.response?.data;
-        const errorMessage = errorData?.error ||
-                            errorData?.message ||
-                            err.message ||
-                            "Failed to generate meal plan. Please try again.";
-        const errorDetails = errorData?.details || '';
-        const debugInfo = errorData?.debug ? `\nDebug: ${JSON.stringify(errorData.debug)}` : '';
-
         toast({
           title: "Error",
-          description: `${errorMessage}${errorDetails ? `\n${errorDetails}` : ''}${import.meta.env.DEV ? debugInfo : ''}`,
+          description: err.message || "Failed to generate meal plan. Please try again.",
           variant: "destructive",
         });
       }

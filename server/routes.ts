@@ -26,7 +26,7 @@ export function registerRoutes(app: express.Express) {
       }
 
       const session = await stripeService.createCheckoutSession(user.stripe_customer_id);
-      res.json({ 
+      res.json({
         sessionId: session.id,
         url: session.url // Include the checkout session URL in the response
       });
@@ -144,8 +144,8 @@ export function registerRoutes(app: express.Express) {
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
         instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
         tags: Array.isArray(recipe.tags) ? recipe.tags : [],
-        nutrition: recipe.nutrition && typeof recipe.nutrition === 'object' 
-          ? recipe.nutrition 
+        nutrition: recipe.nutrition && typeof recipe.nutrition === 'object'
+          ? recipe.nutrition
           : { calories: 0, protein: 0, carbs: 0, fat: 0 },
         complexity: Math.min(3, Math.max(1, Number(recipe.complexity) || 1)),
         created_at: new Date(),
@@ -281,15 +281,29 @@ export function registerRoutes(app: express.Express) {
   });
 
   // Protected Routes requiring subscription
-  app.post("/api/generate-meal-plan", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+  app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
+      const user = req.user!;
+
+      // Check if user has remaining free generations or is premium
+      const isFreeTier = user.subscription_tier === 'free';
+      const hasUsedFreePlan = user.meal_plans_generated > 0;
+
+      if (isFreeTier && hasUsedFreePlan) {
+        return res.status(403).json({
+          error: "Free plan limit reached",
+          message: "You've reached your free meal plan limit. Please upgrade to premium for unlimited meal plans.",
+          code: "UPGRADE_REQUIRED"
+        });
+      }
+
       const now = new Date();
       const existingRecipes = await db
         .select()
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.user_id, req.user!.id),
+            eq(temporaryRecipes.user_id, user.id),
             gt(temporaryRecipes.expires_at, now)
           )
         );
@@ -406,9 +420,18 @@ export function registerRoutes(app: express.Express) {
         savedRecipes.push(savedRecipe);
       }
 
+      // After successfully saving recipes, increment the meal_plans_generated counter
+      if (savedRecipes.length > 0) {
+        await db
+          .update(users)
+          .set({ meal_plans_generated: user.meal_plans_generated + 1 })
+          .where(eq(users.id, user.id));
+      }
+
       res.json({
         recipes: savedRecipes,
-        status: savedRecipes.length === days * mealTypes.length ? 'success' : 'partial'
+        status: savedRecipes.length === days * mealTypes.length ? 'success' : 'partial',
+        remaining_free_plans: isFreeTier ? (hasUsedFreePlan ? 0 : 1) : null
       });
     } catch (error: any) {
       console.error("Error generating meal plan:", error);

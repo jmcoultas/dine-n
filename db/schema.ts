@@ -47,6 +47,7 @@ export const users = pgTable("users", {
   subscription_status: text("subscription_status").$type<z.infer<typeof SubscriptionStatusEnum>>().default('inactive'),
   subscription_tier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
   subscription_end_date: timestamp("subscription_end_date"),
+  meal_plans_generated: integer("meal_plans_generated").default(0).notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 

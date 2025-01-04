@@ -20,9 +20,10 @@ interface ChefPreferences {
   cookTime: string;
 }
 
-interface GenerateMealPlanResponse {
+export interface GenerateMealPlanResponse {
   recipes: Recipe[];
   status: 'success' | 'partial';
+  remaining_free_plans?: number | null;
 }
 
 export async function getTemporaryRecipes(): Promise<Recipe[]> {
@@ -63,6 +64,9 @@ export async function generateMealPlan(
 
   if (!response.ok) {
     const errorData = await response.json();
+    if (errorData.code === 'UPGRADE_REQUIRED') {
+      throw new Error('FREE_PLAN_LIMIT_REACHED');
+    }
     throw new Error(errorData.message || "Failed to generate meal plan");
   }
 
