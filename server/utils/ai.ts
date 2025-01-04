@@ -106,13 +106,8 @@ You must respond with a valid recipe in this exact JSON format:
       try {
         const imageResponse = await imagePromise;
 
-        if (imageResponse?.data?.[0]?.url) {
-          // Fetch the image and convert to base64
-          const imageUrlResponse = await fetch(imageResponse.data[0].url);
-          const arrayBuffer = await imageUrlResponse.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString('base64');
-          const contentType = imageUrlResponse.headers.get('content-type') || 'image/png';
-          recipeData.image_url = `data:${contentType};base64,${base64}`;
+        if (imageResponse && imageResponse.data && imageResponse.data[0]?.url) {
+          recipeData.image_url = imageResponse.data[0].url;
         } else {
           recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
         }
