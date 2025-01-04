@@ -5,8 +5,6 @@ import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes,
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
-import {StorageService} from "./services/storage"; //Import StorageService
-
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -17,26 +15,6 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 }
 
 export function registerRoutes(app: express.Express) {
-  // Serve recipe images
-  app.get("/api/images/:filename", async (req: Request, res: Response) => {
-    try {
-      const { filename } = req.params;
-      const imageBuffer = await StorageService.getRecipeImage(filename);
-
-      if (!imageBuffer) {
-        return res.status(404).send('Image not found');
-      }
-
-      // Set content type header for WebP images
-      res.setHeader('Content-Type', 'image/webp');
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-      res.send(imageBuffer);
-    } catch (error) {
-      console.error('Error serving recipe image:', error);
-      res.status(500).send('Error retrieving image');
-    }
-  });
-
   // Subscription Routes
   app.post("/api/subscription/create-checkout", isAuthenticated, async (req: Request, res: Response) => {
     try {

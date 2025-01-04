@@ -23,7 +23,6 @@ localPort = 5174
 externalPort = 3001
 
 [workflows]
-runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
@@ -67,6 +66,3 @@ task = "packager.installForAll"
 task = "shell.exec"
 args = "cd server && PORT=5000 tsx watch --clear-screen=false index.ts"
 waitForPort = 5000
-
-[objectStorage]
-defaultBucketID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff"
