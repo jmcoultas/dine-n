@@ -81,16 +81,25 @@ export default function Home() {
 
       return result.data;
     },
-    onSuccess: (data) => {
-      setShowPreferences(false);
+    onSuccess: async (data) => {
       if (Array.isArray(data.recipes)) {
-        localStorage.setItem('generatedRecipes', JSON.stringify(data.recipes));
+        await localStorage.setItem('generatedRecipes', JSON.stringify(data.recipes));
+        setShowPreferences(false);
+        // Small delay to ensure state updates are processed
+        setTimeout(() => {
+          setLocation("/meal-plan");
+          toast({
+            title: "Success!",
+            description: "Your meal plan has been generated.",
+          });
+        }, 100);
+      } else {
+        toast({
+          title: "Error",
+          description: "No recipes were generated",
+          variant: "destructive",
+        });
       }
-      setLocation("/meal-plan");
-      toast({
-        title: "Success!",
-        description: "Your meal plan has been generated.",
-      });
     },
     onError: (error: unknown) => {
       const err = error as Error & {
