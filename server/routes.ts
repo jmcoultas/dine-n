@@ -21,13 +21,14 @@ export function registerRoutes(app: express.Express) {
   app.get("/api/images/:imagePath", async (req: Request, res: Response) => {
     try {
       const imagePath = req.params.imagePath;
-      const { ok, value: imageData } = await storage.get(imagePath);
+      const result = await storage.download(imagePath);
       
-      if (!ok || !imageData) {
+      if (!result) {
         console.error('Failed to fetch image:', 'Not found');
         return res.status(404).send('Image not found');
       }
       
+      const imageData = Buffer.from(result);
       res.setHeader('Content-Type', 'image/jpeg');
       res.setHeader('Cache-Control', 'public, max-age=31536000');
       res.send(imageData);
