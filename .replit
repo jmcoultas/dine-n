@@ -5,6 +5,9 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 [nix]
 channel = "stable-24_05"
 
+[objectStorage]
+defaultBucketID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff"
+
 [deployment]
 deploymentTarget = "cloudrun"
 build = ["npm", "run", "build"]
