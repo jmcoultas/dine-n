@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import https from 'https';
 
 const STORAGE_DIR = path.join(process.cwd(), 'storage', 'recipes');
-const PUBLIC_PATH = '/storage/recipes';
+const PUBLIC_PATH = '/api/images';
 
 // Ensure storage directory exists
 fs.ensureDirSync(STORAGE_DIR);
@@ -39,6 +39,7 @@ export class StorageService {
     metadata: ImageMetadata;
   }> {
     try {
+      console.log('Downloading image from:', imageUrl);
       // Download the image
       const imageBuffer = await this.downloadImage(imageUrl);
 
@@ -59,8 +60,8 @@ export class StorageService {
 
       // Save the processed image
       await processedImage.toFile(filePath);
+      console.log('Image saved to:', filePath);
 
-      // Return the public URL and metadata
       return {
         storedUrl: `${PUBLIC_PATH}/${filename}`,
         metadata: {
@@ -73,6 +74,31 @@ export class StorageService {
     } catch (error) {
       console.error('Error storing recipe image:', error);
       throw new Error('Failed to store recipe image');
+    }
+  }
+
+  static async deleteRecipeImage(filename: string): Promise<void> {
+    try {
+      const filePath = path.join(STORAGE_DIR, filename);
+      if (await fs.pathExists(filePath)) {
+        await fs.remove(filePath);
+      }
+    } catch (error) {
+      console.error('Error deleting recipe image:', error);
+      throw new Error('Failed to delete recipe image');
+    }
+  }
+
+  static async getRecipeImage(filename: string): Promise<Buffer | null> {
+    try {
+      const filePath = path.join(STORAGE_DIR, filename);
+      if (await fs.pathExists(filePath)) {
+        return await fs.readFile(filePath);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error retrieving recipe image:', error);
+      return null;
     }
   }
 }
