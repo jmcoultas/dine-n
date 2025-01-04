@@ -81,32 +81,35 @@ async function startServer() {
       res.status(500).json({ error: "Server Error", message: err.message });
     });
 
-    // Start HTTP server with retry mechanism and dynamic port selection
-    const startHttpServer = (retries = 3) => {
-      server.listen(PORT, "0.0.0.0", () => {
-        console.log(`[express] Server running on port ${PORT}`);
-        console.log(`[express] Static files served from ${STORAGE_DIR}`);
-      });
+    // Kill any existing process using our port
+    server.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        console.log(`[express] Port ${PORT} is in use, trying to force close...`);
+        require('child_process').exec(`lsof -i :${PORT} | grep LISTEN | awk '{print $2}' | xargs kill -9`, (err: any) => {
+          if (err) {
+            console.error('[express] Could not kill process:', err);
+            process.exit(1);
+          }
+          // Retry starting the server after a brief delay
+          setTimeout(() => {
+            server.listen(PORT, "0.0.0.0", () => {
+              console.log(`[express] Server running on port ${PORT}`);
+              console.log(`[express] Static files served from ${STORAGE_DIR}`);
+            });
+          }, 1000);
+        });
+      } else {
+        console.error("[express] Server error:", error);
+        process.exit(1);
+      }
+    });
 
-      server.on('error', (error: NodeJS.ErrnoException) => {
-        if (error.code === 'EADDRINUSE') {
-          console.log(`[express] Port ${PORT} is in use, attempting to close existing connections...`);
-          server.close(() => {
-            if (retries > 0) {
-              setTimeout(() => startHttpServer(retries - 1), 1000);
-            } else {
-              console.error(`[express] Failed to bind to port ${PORT} after multiple attempts`);
-              process.exit(1);
-            }
-          });
-        } else {
-          console.error("[express] Server error:", error);
-          process.exit(1);
-        }
-      });
-    };
+    // Initial server start
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`[express] Server running on port ${PORT}`);
+      console.log(`[express] Static files served from ${STORAGE_DIR}`);
+    });
 
-    startHttpServer();
   } catch (err) {
     console.error("[express] Startup error:", err);
     process.exit(1);

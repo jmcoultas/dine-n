@@ -1,14 +1,11 @@
 import sharp from 'sharp';
-import fs from 'fs-extra';
-import path from 'path';
-import crypto from 'crypto';
 import https from 'https';
+import crypto from 'crypto';
+import { Client } from '@replit/object-storage';
 
-const STORAGE_DIR = path.join(process.cwd(), 'storage', 'recipes');
-const PUBLIC_PATH = '/api/images';
-
-// Ensure storage directory exists
-fs.ensureDirSync(STORAGE_DIR);
+// Initialize Object Storage client
+const storage = new Client();
+const BUCKET_ID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff";
 
 interface ImageMetadata {
   width: number;
@@ -45,7 +42,6 @@ export class StorageService {
 
       // Generate a unique filename
       const filename = this.generateUniqueFilename(imageUrl);
-      const filePath = path.join(STORAGE_DIR, filename);
 
       // Process and optimize the image
       const processedImage = await sharp(imageBuffer)
@@ -58,12 +54,18 @@ export class StorageService {
       // Get image metadata
       const metadata = await processedImage.metadata();
 
-      // Save the processed image
-      await processedImage.toFile(filePath);
-      console.log('Image saved to:', filePath);
+      // Get the processed buffer
+      const processedBuffer = await processedImage.toBuffer();
+
+      // Upload to object storage
+      const key = `recipes/${filename}`;
+      await storage.put(key, processedBuffer);
+
+      // Generate the public URL
+      const storedUrl = `/api/images/${filename}`;
 
       return {
-        storedUrl: `${PUBLIC_PATH}/${filename}`,
+        storedUrl,
         metadata: {
           width: metadata.width || 0,
           height: metadata.height || 0,
@@ -79,10 +81,8 @@ export class StorageService {
 
   static async deleteRecipeImage(filename: string): Promise<void> {
     try {
-      const filePath = path.join(STORAGE_DIR, filename);
-      if (await fs.pathExists(filePath)) {
-        await fs.remove(filePath);
-      }
+      const key = `recipes/${filename}`;
+      await storage.delete(key);
     } catch (error) {
       console.error('Error deleting recipe image:', error);
       throw new Error('Failed to delete recipe image');
@@ -91,11 +91,12 @@ export class StorageService {
 
   static async getRecipeImage(filename: string): Promise<Buffer | null> {
     try {
-      const filePath = path.join(STORAGE_DIR, filename);
-      if (await fs.pathExists(filePath)) {
-        return await fs.readFile(filePath);
-      }
-      return null;
+      const key = `recipes/${filename}`;
+      const object = await storage.get(key);
+      if (!object) return null;
+
+      // Convert the object data to Buffer
+      return Buffer.from(await object.arrayBuffer());
     } catch (error) {
       console.error('Error retrieving recipe image:', error);
       return null;
