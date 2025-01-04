@@ -103,7 +103,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
       <CardHeader className="p-0">
         <div className="aspect-video relative rounded-t-lg overflow-hidden">
           <img
-            src={recipe.imageUrl || recipe.image_url || ''}
+            src={recipe.imageUrl || ''}
             alt={recipe.name}
             className="object-cover w-full h-full"
           />
