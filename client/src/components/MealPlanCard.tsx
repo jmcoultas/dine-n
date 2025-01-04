@@ -206,7 +206,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
           <div className="space-y-4">
             <div className="aspect-video relative rounded-lg overflow-hidden">
               <img
-                src={recipe.image_url || recipe.imageUrl}
+                src={recipe.imageUrl || recipe.image_url || ''}
                 alt={recipe.name}
                 className="object-cover w-full h-full"
               />
