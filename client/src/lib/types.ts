@@ -11,7 +11,7 @@ export const RecipeSchema = z.object({
   imageUrl: data.imageUrl || data.image_url,
 }));
   prepTime: z.number().nullable(),
-  cookTime: z.number().nullable(),
+  cookTime; z.number().nullable(),
   servings: z.number().nullable(),
   ingredients: z.array(z.object({
     name: z.string(),
