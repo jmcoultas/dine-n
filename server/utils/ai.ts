@@ -117,10 +117,15 @@ You must respond with a valid recipe in this exact JSON format:
           
           // Store in object storage
           const imageName = `recipe-images/${Date.now()}-${encodeURIComponent(recipeData.name)}.jpg`;
-          await storage.put(imageName, imageBuffer);
+          const { ok, error } = await storage.put(imageName, imageBuffer);
           
-          // Set the image URL to our storage path
-          recipeData.image_url = `/api/images/${imageName}`;
+          if (!ok) {
+            console.error('Failed to store image:', error);
+            recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+          } else {
+            // Set the image URL to our storage path
+            recipeData.image_url = `/api/images/${imageName}`;
+          }
         } else {
           recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
         }
