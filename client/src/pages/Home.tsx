@@ -207,7 +207,10 @@ export default function Home() {
         onUpdatePreferences={handlePreferencesSave}
         isGenerating={generateMutation.isPending}
         onGenerate={handleGenerate}
-        user={user}
+        user={user ? {
+          subscription_tier: user.subscription_tier,
+          meal_plans_generated: user.meal_plans_generated
+        } : undefined}
       />
     </div>
   );

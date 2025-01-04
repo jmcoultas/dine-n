@@ -266,7 +266,10 @@ export default function MealPlan() {
         onUpdatePreferences={setPreferences}
         isGenerating={isGenerating}
         onGenerate={handleGenerateMealPlan}
-        user={user}
+        user={user ? {
+          subscription_tier: user.subscription_tier,
+          meal_plans_generated: user.meal_plans_generated
+        } : undefined}
       />
 
       <div className="grid md:grid-cols-[300px_1fr] gap-8">

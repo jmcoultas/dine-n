@@ -81,6 +81,10 @@ interface PreferenceModalProps {
   onUpdatePreferences: (preferences: Preferences) => void;
   isGenerating?: boolean;
   onGenerate?: (chefPreferences: ChefPreferences) => void;
+  user?: {
+    subscription_tier: string | null;
+    meal_plans_generated: number | undefined;
+  };
 }
 
 export default function PreferenceModal({
@@ -90,8 +94,8 @@ export default function PreferenceModal({
   onUpdatePreferences,
   isGenerating = false,
   onGenerate,
-  user // Add user prop to access subscription info
-}: PreferenceModalProps & { user?: { subscription_tier: string, meal_plans_generated: number } }) {
+  user
+}: PreferenceModalProps) {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(-1);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
@@ -272,7 +276,7 @@ export default function PreferenceModal({
     }
   };
 
-  const showFreeTierWarning = user?.subscription_tier === 'free' && user?.meal_plans_generated === 0;
+  const showFreeTierWarning = user?.subscription_tier === 'free' && (user?.meal_plans_generated === 0 || user?.meal_plans_generated === undefined);
 
   if (isGenerating) {
     return <LoadingAnimation message="Cooking up your personalized meal plan..." />;

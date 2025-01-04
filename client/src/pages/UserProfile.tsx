@@ -418,7 +418,10 @@ export default function UserProfile() {
         onOpenChange={setShowPreferences}
         preferences={preferences}
         onUpdatePreferences={handlePreferencesSave}
-        user={user}
+        user={user ? {
+          subscription_tier: user.subscription_tier,
+          meal_plans_generated: user.meal_plans_generated
+        } : undefined}
       />
     </div>
   );
