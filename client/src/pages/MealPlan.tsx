@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import type { Preferences } from "@db/schema";
@@ -39,7 +40,7 @@ export default function MealPlan() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [featureContext, setFeatureContext] = useState<string>(""); 
+  const [featureContext, setFeatureContext] = useState<string>("");
   const { subscription } = useSubscription();
 
   const [preferences, setPreferences] = useState<Preferences>(() => {
@@ -88,6 +89,54 @@ export default function MealPlan() {
   useEffect(() => {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
+
+  const generateLoadingMessages = (preferences: Preferences, chefPreferences?: ChefPreferences): string[] => {
+    const messages: string[] = [];
+
+    // Add cuisine-based messages
+    if (preferences.cuisine?.length) {
+      preferences.cuisine.forEach(cuisine => {
+        messages.push(`Exploring ${cuisine} cuisine recipes...`);
+      });
+    }
+
+    // Add dietary restriction messages
+    if (preferences.dietary?.length) {
+      preferences.dietary.forEach(diet => {
+        messages.push(`Ensuring recipes follow ${diet} guidelines...`);
+      });
+    }
+
+    // Add allergy check messages
+    if (preferences.allergies?.length) {
+      preferences.allergies.forEach(allergy => {
+        messages.push(`Checking for ${allergy} free alternatives...`);
+      });
+    }
+
+    // Add meat preference messages
+    if (preferences.meatTypes?.length) {
+      messages.push(`Including your preferred protein choices...`);
+    }
+
+    // Add chef preference messages
+    if (chefPreferences) {
+      messages.push(
+        `Finding ${chefPreferences.difficulty.toLowerCase()} level recipes...`,
+        `Selecting dishes that take ${chefPreferences.cookTime.toLowerCase()} to prepare...`
+      );
+    }
+
+    // Add general processing messages
+    messages.push(
+      "Calculating nutritional balance...",
+      "Arranging your weekly menu...",
+      "Adding finishing touches to your meal plan..."
+    );
+
+    return messages;
+  };
+
 
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
     if (subscription?.tier !== 'premium') {
@@ -202,7 +251,7 @@ export default function MealPlan() {
 
   return (
     <div className="space-y-8">
-      <SubscriptionModal 
+      <SubscriptionModal
         open={showSubscriptionModal}
         onOpenChange={setShowSubscriptionModal}
         feature={featureContext}
@@ -222,7 +271,7 @@ export default function MealPlan() {
               ) ? (
                 <div className="space-y-3">
                   {Object.entries(preferences).map(([key, values]) =>
-                    key !== 'chefPreferences' && isPreferenceArray(values) && values.length > 0 ? (
+                    key !== 'chefPreferences' && Array.isArray(values) && values.length > 0 ? (
                       <div key={key} className="space-y-1.5">
                         <p className="text-sm font-medium capitalize">{key}:</p>
                         <div className="flex flex-wrap gap-2">
@@ -231,8 +280,8 @@ export default function MealPlan() {
                               key={item}
                               variant={
                                 key === 'allergies' ? 'destructive' :
-                                key === 'dietary' ? 'default' :
-                                'secondary'
+                                  key === 'dietary' ? 'default' :
+                                    'secondary'
                               }
                               className="capitalize"
                             >
@@ -293,10 +342,9 @@ export default function MealPlan() {
           <TabsContent value="meals" className="mt-6">
             <div className="grid gap-6">
               {isLoading || isGenerating ? (
-                <div className="text-center py-12">
-                  <span className="loading loading-spinner"></span>
-                  {isGenerating ? 'Generating meal plan...' : 'Loading meal plan...'}
-                </div>
+                <LoadingAnimation
+                  messages={generateLoadingMessages(preferences, preferences.chefPreferences)}
+                />
               ) : generatedRecipes.length > 0 ? (
                 <>
                   {temporaryRecipes?.[0]?.expiresAt && (
