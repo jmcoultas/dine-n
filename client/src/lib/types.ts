@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 export const RecipeSchema = z.object({
@@ -6,12 +7,8 @@ export const RecipeSchema = z.object({
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
   image_url: z.string().nullable(),
-}).transform((data) => ({
-  ...data,
-  imageUrl: data.imageUrl || data.image_url,
-}));
   prepTime: z.number().nullable(),
-  cookTime; z.number().nullable(),
+  cookTime: z.number().nullable(),
   servings: z.number().nullable(),
   ingredients: z.array(z.object({
     name: z.string(),
@@ -31,7 +28,10 @@ export const RecipeSchema = z.object({
   favorited: z.boolean().optional(),
   created_at: z.coerce.date(),
   expiresAt: z.coerce.date().optional()
-});
+}).transform((data) => ({
+  ...data,
+  imageUrl: data.imageUrl || data.image_url
+}));
 
 export type Recipe = z.infer<typeof RecipeSchema>;
 
