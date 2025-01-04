@@ -5,10 +5,11 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { users, insertUserSchema, type User as SelectUser } from "@db/schema";
+import { users, type User as SelectUser } from "@db/schema";
 import { z } from "zod";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
+import { type User } from "./types";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -31,7 +32,7 @@ const crypto = {
 
 declare global {
   namespace Express {
-    interface User extends SelectUser { }
+    interface User extends User {} 
   }
 }
 
@@ -76,6 +77,7 @@ export function setupAuth(app: Express) {
             subscription_status: users.subscription_status,
             subscription_tier: users.subscription_tier,
             subscription_end_date: users.subscription_end_date,
+            meal_plans_generated: users.meal_plans_generated,
             created_at: users.created_at,
           })
           .from(users)
@@ -114,6 +116,7 @@ export function setupAuth(app: Express) {
           subscription_status: users.subscription_status,
           subscription_tier: users.subscription_tier,
           subscription_end_date: users.subscription_end_date,
+          meal_plans_generated: users.meal_plans_generated,
           created_at: users.created_at,
         })
         .from(users)
@@ -194,6 +197,7 @@ export function setupAuth(app: Express) {
           name: name?.trim() || normalizedEmail.split('@')[0],
           subscription_status: 'inactive',
           subscription_tier: 'free',
+          meal_plans_generated: 0,
         })
         .returning();
 
@@ -245,7 +249,7 @@ export function setupAuth(app: Express) {
         .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
     }
 
-    const cb = (err: any, user: Express.User, info: IVerifyOptions) => {
+    const cb = (err: any, user: Express.User | false | null | undefined, info: IVerifyOptions) => {
       if (err) {
         return next(err);
       }

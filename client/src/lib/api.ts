@@ -23,18 +23,7 @@ interface ChefPreferences {
 export interface GenerateMealPlanResponse {
   recipes: Recipe[];
   status: 'success' | 'partial';
-  remaining_free_plans?: number | null;
-}
-
-export async function getTemporaryRecipes(): Promise<Recipe[]> {
-  const response = await fetch(`${API_BASE}/temporary-recipes`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    throw new Error("Failed to fetch temporary recipes");
-  }
-  const data = await response.json();
-  return Array.isArray(data) ? data : [];
+  remaining_free_plans: number;
 }
 
 export async function generateMealPlan(
@@ -64,7 +53,7 @@ export async function generateMealPlan(
 
   if (!response.ok) {
     const errorData = await response.json();
-    if (errorData.code === 'UPGRADE_REQUIRED') {
+    if (errorData.code === 'UPGRADE_REQUIRED' || errorData.code === 'FREE_PLAN_LIMIT_REACHED') {
       throw new Error('FREE_PLAN_LIMIT_REACHED');
     }
     throw new Error(errorData.message || "Failed to generate meal plan");
@@ -76,6 +65,17 @@ export async function generateMealPlan(
   }
 
   return data;
+}
+
+export async function getTemporaryRecipes(): Promise<Recipe[]> {
+  const response = await fetch(`${API_BASE}/temporary-recipes`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch temporary recipes");
+  }
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createMealPlan(mealPlan: Partial<MealPlan>): Promise<MealPlan> {
