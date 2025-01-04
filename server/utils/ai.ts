@@ -1,7 +1,5 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
-import { Client } from '@replit/object-storage';
-const storage = new Client({ bucket: process.env.BUCKET_NAME });
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -107,23 +105,9 @@ You must respond with a valid recipe in this exact JSON format:
       // Wait for image generation
       try {
         const imageResponse = await imagePromise;
-        
-        if (imageResponse?.data?.[0]?.url) {
-          const dallEUrl = imageResponse.data[0].url;
-          
-          // Download image from DALL-E
-          const imageRes = await fetch(dallEUrl);
-          const imageBuffer = Buffer.from(await imageRes.arrayBuffer());
-          
-          // Store in object storage
-          const imageName = `recipe-images/${Date.now()}-${encodeURIComponent(recipeData.name)}.jpg`;
-          try {
-            await storage.put(imageName, Buffer.from(imageBuffer));
-            recipeData.image_url = `/api/images/${imageName}`;
-          } catch (error) {
-            console.error('Failed to store image:', error);
-            recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
-          }
+
+        if (imageResponse && imageResponse.data && imageResponse.data[0]?.url) {
+          recipeData.image_url = imageResponse.data[0].url;
         } else {
           recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
         }
