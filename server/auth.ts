@@ -5,11 +5,11 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { users, type User as SelectUser } from "@db/schema";
+import { users } from "@db/schema";
 import { z } from "zod";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
-import { type User } from "./types";
+import { type User, type PublicUser } from "./types";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -30,9 +30,10 @@ const crypto = {
   },
 };
 
+// Extend Express.User interface to match our PublicUser type
 declare global {
   namespace Express {
-    interface User extends User {} 
+    interface User extends PublicUser {}
   }
 }
 
@@ -65,32 +66,28 @@ export function setupAuth(app: Express) {
       passwordField: 'password'
     }, async (email, password, done) => {
       try {
-        const [user] = await db
-          .select({
-            id: users.id,
-            email: users.email,
-            name: users.name,
-            password_hash: users.password_hash,
-            preferences: users.preferences,
-            stripe_customer_id: users.stripe_customer_id,
-            stripe_subscription_id: users.stripe_subscription_id,
-            subscription_status: users.subscription_status,
-            subscription_tier: users.subscription_tier,
-            subscription_end_date: users.subscription_end_date,
-            meal_plans_generated: users.meal_plans_generated,
-            created_at: users.created_at,
-          })
+        const [foundUser] = await db
+          .select()
           .from(users)
           .where(eq(users.email, email.toLowerCase()))
           .limit(1);
 
-        if (!user) {
+        if (!foundUser) {
           return done(null, false, { message: "Incorrect email address." });
         }
-        const isMatch = await crypto.compare(password, user.password_hash);
+
+        const isMatch = await crypto.compare(password, foundUser.password_hash);
         if (!isMatch) {
           return done(null, false, { message: "Incorrect password." });
         }
+
+        const user: PublicUser = {
+          ...foundUser,
+          subscription_status: foundUser.subscription_status || 'inactive',
+          subscription_tier: foundUser.subscription_tier || 'free',
+          meal_plans_generated: foundUser.meal_plans_generated || 0
+        };
+
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -104,24 +101,23 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      const [user] = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          name: users.name,
-          password_hash: users.password_hash,
-          preferences: users.preferences,
-          stripe_customer_id: users.stripe_customer_id,
-          stripe_subscription_id: users.stripe_subscription_id,
-          subscription_status: users.subscription_status,
-          subscription_tier: users.subscription_tier,
-          subscription_end_date: users.subscription_end_date,
-          meal_plans_generated: users.meal_plans_generated,
-          created_at: users.created_at,
-        })
+      const [foundUser] = await db
+        .select()
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
+
+      if (!foundUser) {
+        return done(new Error('User not found'));
+      }
+
+      const user: PublicUser = {
+        ...foundUser,
+        subscription_status: foundUser.subscription_status || 'inactive',
+        subscription_tier: foundUser.subscription_tier || 'free',
+        meal_plans_generated: foundUser.meal_plans_generated || 0
+      };
+
       done(null, user);
     } catch (err) {
       done(err);
@@ -195,24 +191,32 @@ export function setupAuth(app: Express) {
           email: normalizedEmail,
           password_hash: hashedPassword,
           name: name?.trim() || normalizedEmail.split('@')[0],
-          subscription_status: 'inactive',
-          subscription_tier: 'free',
+          subscription_status: 'inactive' as const,
+          subscription_tier: 'free' as const,
           meal_plans_generated: 0,
         })
         .returning();
 
-      req.login(newUser, (err) => {
+      // Create a PublicUser object, ensuring all required fields have default values
+      const publicUser: PublicUser = {
+        ...newUser,
+        subscription_status: newUser.subscription_status || 'inactive',
+        subscription_tier: newUser.subscription_tier || 'free',
+        meal_plans_generated: newUser.meal_plans_generated || 0
+      };
+
+      req.login(publicUser, (err) => {
         if (err) {
           return next(err);
         }
         return res.json({
           message: "Registration successful",
           user: {
-            id: newUser.id,
-            email: newUser.email,
-            name: newUser.name,
-            subscription_tier: newUser.subscription_tier,
-            subscription_status: newUser.subscription_status,
+            id: publicUser.id,
+            email: publicUser.email,
+            name: publicUser.name,
+            subscription_tier: publicUser.subscription_tier,
+            subscription_status: publicUser.subscription_status,
           }
         });
       });
