@@ -5,7 +5,8 @@ import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes,
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
-import storage from '@replit/object-storage';
+import { Client } from '@replit/object-storage';
+const storage = new Client();
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {

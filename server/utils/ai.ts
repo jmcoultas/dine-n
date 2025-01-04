@@ -1,5 +1,7 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
+import { Client } from '@replit/object-storage';
+const storage = new Client();
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
