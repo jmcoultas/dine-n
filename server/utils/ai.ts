@@ -105,9 +105,20 @@ You must respond with a valid recipe in this exact JSON format:
       // Wait for image generation
       try {
         const imageResponse = await imagePromise;
-
-        if (imageResponse && imageResponse.data && imageResponse.data[0]?.url) {
-          recipeData.image_url = imageResponse.data[0].url;
+        
+        if (imageResponse?.data?.[0]?.url) {
+          const dallEUrl = imageResponse.data[0].url;
+          
+          // Download image from DALL-E
+          const imageRes = await fetch(dallEUrl);
+          const imageBuffer = Buffer.from(await imageRes.arrayBuffer());
+          
+          // Store in object storage
+          const imageName = `recipe-images/${Date.now()}-${encodeURIComponent(recipeData.name)}.jpg`;
+          await storage.put(imageName, imageBuffer);
+          
+          // Set the image URL to our storage path
+          recipeData.image_url = `/api/images/${imageName}`;
         } else {
           recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
         }

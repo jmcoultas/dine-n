@@ -5,6 +5,7 @@ import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes,
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
+import storage from '@replit/object-storage';
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -15,6 +16,25 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 }
 
 export function registerRoutes(app: express.Express) {
+  // Image serving endpoint
+  app.get("/api/images/:imagePath", async (req: Request, res: Response) => {
+    try {
+      const imagePath = req.params.imagePath;
+      const imageData = await storage.get(imagePath);
+      
+      if (!imageData) {
+        return res.status(404).send('Image not found');
+      }
+      
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.send(imageData);
+    } catch (error) {
+      console.error('Error serving image:', error);
+      res.status(500).send('Error serving image');
+    }
+  });
+
   // Subscription Routes
   app.post("/api/subscription/create-checkout", isAuthenticated, async (req: Request, res: Response) => {
     try {
