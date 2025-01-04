@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
+import { storeImageFromUrl } from "./storage";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -20,7 +21,6 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
   }
 
   try {
-    // Log detailed parameters at entry point
     const cleanParams = {
       dietary: Array.isArray(params.dietary) ? params.dietary.filter(Boolean) : [],
       allergies: Array.isArray(params.allergies) ? params.allergies.filter(Boolean) : [],
@@ -86,40 +86,32 @@ You must respond with a valid recipe in this exact JSON format:
     try {
       const recipeData = JSON.parse(content) as Partial<Recipe>;
 
-      // Start image generation as soon as we have the name
-      const imagePromise = recipeData.name ? 
-        openai.images.generate({
-          model: "dall-e-3",
-          prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
-          n: 1,
-          size: "1024x1024",
-          quality: "standard",
-          style: "natural"
-        }) : Promise.resolve(null);
+      let imageUrl: string | null = null;
 
-      // Validate required fields while image generates
-      if (!recipeData.name || !recipeData.description || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.instructions)) {
-        throw new Error("Missing required fields in recipe data");
-      }
+      if (recipeData.name) {
+        try {
+          const imageResponse = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
+            n: 1,
+            size: "1024x1024",
+            quality: "standard",
+            style: "natural"
+          });
 
-      // Wait for image generation
-      try {
-        const imageResponse = await imagePromise;
-
-        if (imageResponse && imageResponse.data && imageResponse.data[0]?.url) {
-          recipeData.image_url = imageResponse.data[0].url;
-        } else {
-          recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+          if (imageResponse && imageResponse.data && imageResponse.data[0]?.url) {
+            imageUrl = await storeImageFromUrl(imageResponse.data[0].url);
+          }
+        } catch (imageError) {
+          console.error('Error generating or storing image:', imageError);
+          imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
         }
-      } catch (imageError) {
-        console.error('Error generating image with DALL-E:', imageError);
-        recipeData.image_url = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
       }
 
       const validatedRecipe: Partial<Recipe> = {
         name: String(recipeData.name || '').trim(),
         description: String(recipeData.description || 'No description available').trim(),
-        image_url: String(recipeData.image_url || '').trim() || null,
+        image_url: imageUrl,
         prep_time: Math.max(0, Number(recipeData.prep_time) || 0),
         cook_time: Math.max(0, Number(recipeData.cook_time) || 0),
         servings: Math.max(1, Number(recipeData.servings) || 2),
