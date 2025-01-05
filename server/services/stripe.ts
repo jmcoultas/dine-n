@@ -19,11 +19,7 @@ const replitDomain = process.env.REPL_SLUG && process.env.REPL_OWNER
 
 // Use workspace domain for development, fallback to CLIENT_URL for production
 // Get the current host from the request or fallback to development URL
-const baseUrl = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:3000'
-  : (process.env.REPL_DEV_DOMAIN 
-      ? `https://${process.env.REPL_DEV_DOMAIN}`
-      : (replitDomain || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`));
+const baseUrl = 'https://dine-n-johncoultas.replit.app';
 
 console.log('Base URL for webhooks:', baseUrl);
 
