@@ -116,8 +116,8 @@ export const stripeService = {
 
       console.log('Successfully constructed webhook event:', {
         type: event.type,
-        customerId: (event.data.object as Stripe.Event.Data.Object).customer,
-        subscriptionId: (event.data.object as Stripe.Event.Data.Object).id
+        customerId: (event.data.object as any).customer,
+        subscriptionId: (event.data.object as any).id
       });
 
       console.log('🔔 Webhook received:', {
