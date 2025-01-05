@@ -618,7 +618,15 @@ export default function PreferenceModal({
                     </Button>
                   )}
                 </div>
-                {isLastStep && (
+                {!isLastStep ? (
+                  <Button
+                    onClick={handleNext}
+                    className="w-full sm:w-auto"
+                  >
+                    Next
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : (
                   <Button
                     variant="outline"
                     onClick={handleSavePreferences}
