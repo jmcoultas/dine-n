@@ -102,7 +102,8 @@ export default function PreferenceModal({
   const [chefPreferences, setChefPreferences] = useState<ChefPreferences>({
     difficulty: 'Moderate',
     mealType: 'Any',
-    cookTime: '30-60 minutes'
+    cookTime: '30-60 minutes',
+    servings: 4
   });
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -566,6 +567,30 @@ export default function PreferenceModal({
             )}
 
             <DialogFooter className="flex flex-col-reverse sm:flex-row justify-between gap-2 mt-6">
+
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Number of Servings</label>
+                      <Select
+                        value={chefPreferences.servings.toString()}
+                        onValueChange={(value: string) =>
+                          setChefPreferences(prev => ({ ...prev, servings: parseInt(value) }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 8 }, (_, i) => i + 1).map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              {num} {num === 1 ? 'serving' : 'servings'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
               <div className="w-full sm:w-auto">
                 {(!isFirstStep || hasExistingPreferences) && (
                   <Button
