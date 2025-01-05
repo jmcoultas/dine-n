@@ -284,13 +284,7 @@ export default function MealPlan() {
               </div>
             </div>
           )}
-          <Button
-            onClick={() => setShowPreferences(true)}
-            className="mt-2"
-            variant="outline"
-          >
-            Update Preferences & Generate
-          </Button>
+          
         </div>
       </div>
 
