@@ -6,13 +6,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
+import { createMealPlan, createGroceryList, generateMealPlan } from "@/lib/api";
 import type { Recipe, ChefPreferences } from "@/lib/types";
 import type { Preferences } from "@db/schema";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
@@ -32,6 +31,7 @@ interface MealPlan {
   start_date: Date;
   end_date: Date;
   recipes: MealPlanRecipe[];
+  created_at: Date;
 }
 
 const defaultChefPreferences: ChefPreferences = {
@@ -41,43 +41,54 @@ const defaultChefPreferences: ChefPreferences = {
   servingSize: '4'
 };
 
+const calculateNutritionTotals = (recipes: Recipe[]) => {
+  return recipes.reduce((totals, recipe) => {
+    if (!recipe.nutrition) return totals;
+    return {
+      calories: (totals.calories || 0) + (recipe.nutrition.calories || 0),
+      protein: (totals.protein || 0) + (recipe.nutrition.protein || 0),
+      carbs: (totals.carbs || 0) + (recipe.nutrition.carbs || 0),
+      fat: (totals.fat || 0) + (recipe.nutrition.fat || 0)
+    };
+  }, {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  });
+};
+
 const generateLoadingMessages = (preferences: Preferences, chefPreferences: ChefPreferences): string[] => {
   const messages: string[] = [];
 
-  // Add cuisine-based messages
   if (preferences.cuisine?.length) {
     preferences.cuisine.forEach(cuisine => {
       messages.push(`Exploring ${cuisine} cuisine recipes...`);
     });
   }
 
-  // Add dietary restriction messages
   if (preferences.dietary?.length) {
     preferences.dietary.forEach(diet => {
       messages.push(`Ensuring recipes follow ${diet} guidelines...`);
     });
   }
 
-  // Add allergy check messages
   if (preferences.allergies?.length) {
     preferences.allergies.forEach(allergy => {
       messages.push(`Checking for ${allergy} free alternatives...`);
     });
   }
 
-  // Add meat preference messages
   if (preferences.meatTypes?.length) {
     messages.push(`Including your preferred protein choices...`);
   }
 
-  // Add chef preference messages
   messages.push(
     `Finding ${chefPreferences.difficulty.toLowerCase()} level recipes...`,
     `Selecting dishes that take ${chefPreferences.cookTime.toLowerCase()} to prepare...`,
     `Adjusting portions for ${chefPreferences.servingSize} ${parseInt(chefPreferences.servingSize) === 1 ? 'person' : 'people'}...`
   );
 
-  // Add general processing messages
   messages.push(
     "Calculating nutritional balance...",
     "Creating your personalized meal plan...",
@@ -94,7 +105,6 @@ export default function MealPlan() {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState<string>("");
   const { subscription } = useSubscription();
-
   const [preferences, setPreferences] = useState<Preferences>(() => {
     const savedPreferences = localStorage.getItem('mealPlanPreferences');
     return savedPreferences ? JSON.parse(savedPreferences) : {
@@ -201,7 +211,8 @@ export default function MealPlan() {
         }))
       };
 
-      const mealPlan = await createMealPlan(mealPlanData);
+      const response = await createMealPlan(mealPlanData);
+      const mealPlan = response as MealPlan;
 
       const items = generatedRecipes.flatMap(recipe =>
         recipe.ingredients?.map(ingredient => ({
@@ -219,18 +230,7 @@ export default function MealPlan() {
         });
       }
 
-      return {
-        id: mealPlan.id,
-        user_id: mealPlan.user_id,
-        name: mealPlan.name,
-        start_date: mealPlan.start_date,
-        end_date: mealPlan.end_date,
-        recipes: generatedRecipes.map((recipe, index) => ({
-          recipe_id: recipe.id,
-          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner" as MealType
-        }))
-      };
+      return mealPlan;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mealPlans"] });
@@ -262,53 +262,35 @@ export default function MealPlan() {
       />
 
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-4xl font-bold">Meal Planning</h1>
-            <p className="text-muted-foreground mb-4">
-              Generate a personalized meal plan and organize your grocery shopping
-            </p>
-            <div className="bg-secondary/20 rounded-lg p-4">
-              <h3 className="text-sm font-semibold mb-2">Current Preferences</h3>
-              {Object.entries(preferences).some(([key, values]) =>
-                key !== 'chefPreferences' && Array.isArray(values) && values.length > 0
-              ) ? (
-                <div className="space-y-3">
-                  {Object.entries(preferences).map(([key, values]) =>
-                    key !== 'chefPreferences' && Array.isArray(values) && values.length > 0 ? (
-                      <div key={key} className="space-y-1.5">
-                        <p className="text-sm font-medium capitalize">{key}:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {values.map((item) => (
-                            <Badge
-                              key={item}
-                              variant={
-                                key === 'allergies' ? 'destructive' :
-                                  key === 'dietary' ? 'default' :
-                                    'secondary'
-                              }
-                              className="capitalize"
-                            >
-                              {String(item)}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No preferences set</p>
-              )}
+        <div>
+          <h1 className="text-4xl font-bold">Meal Planning</h1>
+          <p className="text-muted-foreground mb-4">
+            Generate a personalized meal plan and organize your grocery shopping
+          </p>
+          {generatedRecipes.length > 0 && (
+            <div className="bg-secondary/20 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-semibold mb-2">Total Nutrition Facts</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Object.entries(calculateNutritionTotals(generatedRecipes)).map(([nutrient, value]) => (
+                  <div key={nutrient} className="space-y-1">
+                    <p className="text-sm font-medium capitalize">{nutrient}</p>
+                    <p className="text-lg font-semibold">
+                      {nutrient === 'calories'
+                        ? Math.round(value)
+                        : `${Math.round(value)}g`}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <Button
-              onClick={() => setShowPreferences(true)}
-              className="mt-4"
-              variant="outline"
-            >
-              Update Preferences & Generate
-            </Button>
-          </div>
+          )}
+          <Button
+            onClick={() => setShowPreferences(true)}
+            className="mt-2"
+            variant="outline"
+          >
+            Update Preferences & Generate
+          </Button>
         </div>
       </div>
 
