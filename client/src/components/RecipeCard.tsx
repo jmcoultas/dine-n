@@ -51,6 +51,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
   const servings = recipe.servings ?? 2;
+  const totalTime = prepTime + cookTime;
 
   const toggleFavorite = useMutation({
     mutationFn: async () => {
@@ -139,7 +140,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <Clock className="w-4 h-4 mr-1" />
-            {prepTime + cookTime} min
+            <span>{totalTime} min</span>
           </div>
           <div className="flex items-center">
             <Users className="w-4 h-4 mr-1" />
