@@ -604,20 +604,20 @@ export default function PreferenceModal({
             </div>
 
 
-            <DialogFooter className="flex flex-col-reverse sm:flex-row justify-between gap-2 mt-6">
-              <div className="w-full sm:w-auto">
-                {(!isFirstStep || hasExistingPreferences) && (
-                  <Button
-                    variant="outline"
-                    onClick={handleBack}
-                    className="w-full sm:w-auto"
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                )}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <DialogFooter className="flex flex-col gap-2 mt-6">
+              <div className="flex flex-col sm:flex-row justify-between gap-2 w-full">
+                <div className="w-full sm:w-auto">
+                  {(!isFirstStep || hasExistingPreferences) && (
+                    <Button
+                      variant="outline"
+                      onClick={handleBack}
+                      className="w-full sm:w-auto"
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                  )}
+                </div>
                 {isLastStep && (
                   <Button
                     variant="outline"
@@ -627,24 +627,17 @@ export default function PreferenceModal({
                     Save Preferences
                   </Button>
                 )}
+              </div>
+              {isLastStep && (
                 <Button
                   onClick={handleNext}
                   disabled={isGenerating}
-                  className="w-full sm:w-auto"
+                  className="w-full mt-2"
                 >
-                  {isLastStep ? (
-                    <>
-                      <Wand2 className="mr-2 h-4 w-4" />
-                      Generate Meal Plan
-                    </>
-                  ) : (
-                    <>
-                      Next
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Generate Meal Plan
                 </Button>
-              </div>
+              )}
             </DialogFooter>
           </>
         )}
