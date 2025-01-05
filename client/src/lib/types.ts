@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 
 export const RecipeSchema = z.object({
@@ -45,7 +44,8 @@ export type RecipeResponse = z.infer<typeof RecipeResponseSchema>;
 export const ChefPreferencesSchema = z.object({
   difficulty: z.enum(['Easy', 'Moderate', 'Advanced']),
   mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Any']),
-  cookTime: z.enum(['15 minutes or less', '15-30 minutes', '30-60 minutes', '60+ minutes'])
+  cookTime: z.enum(['15 minutes or less', '15-30 minutes', '30-60 minutes', '60+ minutes']),
+  servingSize: z.enum(['1', '2', '3', '4', '5', '6', '7', '8'])
 });
 
 export type ChefPreferences = z.infer<typeof ChefPreferencesSchema>;

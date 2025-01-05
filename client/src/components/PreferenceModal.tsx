@@ -23,16 +23,17 @@ import { PreferenceSchema, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 
 type PreferenceField = keyof Omit<Preferences, 'chefPreferences'>;
-type PreferenceValue = string[] | ChefPreferences | undefined;
+type PreferenceValue = string[] | ChefPreferences;
 
-function isPreferenceArray(value: PreferenceValue): value is string[] {
-  return Array.isArray(value) && value.every(item => typeof item === 'string');
+function isPreferenceArray(value: unknown): value is string[] {
+  return Array.isArray(value);
 }
 
 const CHEF_PREFERENCES = {
   difficulty: ChefPreferencesSchema.shape.difficulty.options,
   mealType: ChefPreferencesSchema.shape.mealType.options,
-  cookTime: ChefPreferencesSchema.shape.cookTime.options
+  cookTime: ChefPreferencesSchema.shape.cookTime.options,
+  servingSize: ChefPreferencesSchema.shape.servingSize.options
 } as const;
 
 const STEPS = [
@@ -102,7 +103,8 @@ export default function PreferenceModal({
   const [chefPreferences, setChefPreferences] = useState<ChefPreferences>({
     difficulty: 'Moderate',
     mealType: 'Any',
-    cookTime: '30-60 minutes'
+    cookTime: '30-60 minutes',
+    servingSize: '4'
   });
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -129,7 +131,7 @@ export default function PreferenceModal({
         await handleSavePreferences();
         if (onGenerate) {
           onGenerate(chefPreferences);
-          onOpenChange(false); // Close modal after generation starts
+          onOpenChange(false); 
         }
       } catch (error) {
         toast({
@@ -446,6 +448,27 @@ export default function PreferenceModal({
                         </SelectContent>
                       </Select>
                     </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Serving Size</label>
+                      <Select
+                        value={chefPreferences.servingSize}
+                        onValueChange={(value: typeof CHEF_PREFERENCES.servingSize[number]) =>
+                          setChefPreferences(prev => ({ ...prev, servingSize: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHEF_PREFERENCES.servingSize.map((size) => (
+                            <SelectItem key={size} value={size}>
+                              {size} {parseInt(size) === 1 ? 'person' : 'people'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               ) : isLastStep ? (
@@ -481,6 +504,12 @@ export default function PreferenceModal({
                         <div className="flex justify-between">
                           <span className="text-sm">Cooking Time:</span>
                           <span className="text-sm font-medium">{chefPreferences.cookTime}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm">Serving Size:</span>
+                          <span className="text-sm font-medium">
+                            {chefPreferences.servingSize} {parseInt(chefPreferences.servingSize) === 1 ? 'person' : 'people'}
+                          </span>
                         </div>
                       </div>
                     </div>

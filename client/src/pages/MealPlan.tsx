@@ -13,9 +13,8 @@ import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { createMealPlan, createGroceryList, getTemporaryRecipes, generateMealPlan } from "@/lib/api";
-import type { Recipe } from "@/lib/types";
+import type { Recipe, ChefPreferences } from "@/lib/types";
 import type { Preferences } from "@db/schema";
-import type { ChefPreferences } from "@/lib/types";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 
 type MealType = "breakfast" | "lunch" | "dinner";
@@ -35,6 +34,52 @@ interface MealPlan {
   recipes: MealPlanRecipe[];
 }
 
+const generateLoadingMessages = (preferences: Preferences, chefPreferences: ChefPreferences): string[] => {
+  const messages: string[] = [];
+
+  // Add cuisine-based messages
+  if (preferences.cuisine?.length) {
+    preferences.cuisine.forEach(cuisine => {
+      messages.push(`Exploring ${cuisine} cuisine recipes...`);
+    });
+  }
+
+  // Add dietary restriction messages
+  if (preferences.dietary?.length) {
+    preferences.dietary.forEach(diet => {
+      messages.push(`Ensuring recipes follow ${diet} guidelines...`);
+    });
+  }
+
+  // Add allergy check messages
+  if (preferences.allergies?.length) {
+    preferences.allergies.forEach(allergy => {
+      messages.push(`Checking for ${allergy} free alternatives...`);
+    });
+  }
+
+  // Add meat preference messages
+  if (preferences.meatTypes?.length) {
+    messages.push(`Including your preferred protein choices...`);
+  }
+
+  // Add chef preference messages
+  messages.push(
+    `Finding ${chefPreferences.difficulty.toLowerCase()} level recipes...`,
+    `Selecting dishes that take ${chefPreferences.cookTime.toLowerCase()} to prepare...`,
+    `Adjusting portions for ${chefPreferences.servingSize} ${parseInt(chefPreferences.servingSize) === 1 ? 'person' : 'people'}...`
+  );
+
+  // Add general processing messages
+  messages.push(
+    "Calculating nutritional balance...",
+    "Creating your personalized meal plan...",
+    "Adding finishing touches..."
+  );
+
+  return messages;
+};
+
 export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
@@ -43,6 +88,13 @@ export default function MealPlan() {
   const [featureContext, setFeatureContext] = useState<string>("");
   const { subscription } = useSubscription();
 
+  const defaultChefPreferences: ChefPreferences = {
+    difficulty: 'Moderate',
+    mealType: 'Any',
+    cookTime: '30-60 minutes',
+    servingSize: '4'
+  };
+
   const [preferences, setPreferences] = useState<Preferences>(() => {
     const savedPreferences = localStorage.getItem('mealPlanPreferences');
     return savedPreferences ? JSON.parse(savedPreferences) : {
@@ -50,7 +102,7 @@ export default function MealPlan() {
       allergies: [],
       cuisine: [],
       meatTypes: [],
-      chefPreferences: undefined
+      chefPreferences: defaultChefPreferences
     };
   });
 
@@ -89,53 +141,6 @@ export default function MealPlan() {
   useEffect(() => {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
-
-  const generateLoadingMessages = (preferences: Preferences, chefPreferences?: ChefPreferences): string[] => {
-    const messages: string[] = [];
-
-    // Add cuisine-based messages
-    if (preferences.cuisine?.length) {
-      preferences.cuisine.forEach(cuisine => {
-        messages.push(`Exploring ${cuisine} cuisine recipes...`);
-      });
-    }
-
-    // Add dietary restriction messages
-    if (preferences.dietary?.length) {
-      preferences.dietary.forEach(diet => {
-        messages.push(`Ensuring recipes follow ${diet} guidelines...`);
-      });
-    }
-
-    // Add allergy check messages
-    if (preferences.allergies?.length) {
-      preferences.allergies.forEach(allergy => {
-        messages.push(`Checking for ${allergy} free alternatives...`);
-      });
-    }
-
-    // Add meat preference messages
-    if (preferences.meatTypes?.length) {
-      messages.push(`Including your preferred protein choices...`);
-    }
-
-    // Add chef preference messages
-    if (chefPreferences) {
-      messages.push(
-        `Finding ${chefPreferences.difficulty.toLowerCase()} level recipes...`,
-        `Selecting dishes that take ${chefPreferences.cookTime.toLowerCase()} to prepare...`
-      );
-    }
-
-    // Add general processing messages
-    messages.push(
-      "Calculating nutritional balance...",
-      "Arranging your weekly menu...",
-      "Adding finishing touches to your meal plan..."
-    );
-
-    return messages;
-  };
 
 
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
@@ -344,7 +349,7 @@ export default function MealPlan() {
             <div className="grid gap-6">
               {isLoading || isGenerating ? (
                 <LoadingAnimation
-                  messages={generateLoadingMessages(preferences, preferences.chefPreferences)}
+                  messages={generateLoadingMessages(preferences, preferences.chefPreferences || defaultChefPreferences)}
                 />
               ) : generatedRecipes.length > 0 ? (
                 <>
