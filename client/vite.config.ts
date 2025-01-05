@@ -1,4 +1,3 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -27,7 +26,7 @@ export default defineConfig({
       '/api': {
         target: process.env.NODE_ENV === 'production' 
           ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev`
-          : 'http://0.0.0.0:3000',
+          : 'http://0.0.0.0:3001',
         changeOrigin: true,
         secure: false,
         ws: true

@@ -64,6 +64,13 @@ export function registerRoutes(app: express.Express) {
         throw new Error('Expected raw body to be a Buffer');
       }
 
+      console.log('🎯 Webhook received:', {
+        signature,
+        timestamp: new Date().toISOString(),
+        bodyLength: rawBody.length,
+        headers: req.headers
+      });
+
       // Process the webhook event
       const result = await stripeService.handleWebhook(rawBody, signature);
 
@@ -79,16 +86,19 @@ export function registerRoutes(app: express.Express) {
         error: error instanceof Error ? {
           name: error.name,
           message: error.message,
-          stack: error.stack
+          stack: error.stack,
+          type: error.constructor.name
         } : error,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        headers: req.headers
       });
 
       // Send a 400 status code so Stripe will retry the webhook
       return res.status(400).json({
         error: 'Webhook processing failed',
         message: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        type: error instanceof Error ? error.constructor.name : 'Unknown'
       });
     }
   });

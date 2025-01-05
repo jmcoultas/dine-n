@@ -103,128 +103,237 @@ export const stripeService = {
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      console.log('🔔 Webhook received:', {
+      console.log('🔔 Processing webhook event:', {
         type: event.type,
         id: event.id,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        object: event.data.object
       });
 
-      // Start a transaction for database operations
-      const result = await db.transaction(async (tx) => {
-        switch (event.type) {
-          case 'customer.subscription.created':
-          case 'customer.subscription.updated': {
-            const subscription = event.data.object as Stripe.Subscription;
-            const customerId = subscription.customer as string;
+      // Start a transaction for database operations with retries
+      const maxRetries = 3;
+      let retryCount = 0;
+      let lastError: Error | null = null;
 
-            console.log('Processing subscription update:', {
-              subscriptionId: subscription.id,
-              customerId,
-              status: subscription.status,
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000)
-            });
+      while (retryCount < maxRetries) {
+        try {
+          const result = await db.transaction(async (tx) => {
+            switch (event.type) {
+              case 'checkout.session.completed': {
+                const session = event.data.object as Stripe.Checkout.Session;
+                const customerId = session.customer as string;
 
-            const [customer] = await tx
-              .select()
-              .from(users)
-              .where(eq(users.stripe_customer_id, customerId))
-              .limit(1);
+                console.log('Processing successful checkout:', {
+                  sessionId: session.id,
+                  customerId,
+                  paymentStatus: session.payment_status,
+                  metadata: session.metadata
+                });
 
-            if (!customer) {
-              throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
-            }
+                if (session.payment_status !== 'paid') {
+                  console.log('Checkout not paid yet, waiting for payment confirmation');
+                  return { success: false, reason: 'payment_pending' };
+                }
 
-            // Map Stripe subscription status to our enum values
-            const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
-              switch (stripeStatus) {
-                case 'active':
-                case 'trialing':
-                  return 'active';
-                case 'canceled':
-                case 'unpaid':
-                case 'past_due':
-                  return 'cancelled';
-                default:
-                  return 'inactive';
+                const [customer] = await tx
+                  .select()
+                  .from(users)
+                  .where(eq(users.stripe_customer_id, customerId))
+                  .limit(1);
+
+                if (!customer) {
+                  throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
+                }
+
+                // Calculate subscription end date (30 days from now)
+                const subscriptionEndDate = new Date();
+                subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+
+                const [updatedUser] = await tx
+                  .update(users)
+                  .set({
+                    subscription_status: 'active' as const,
+                    subscription_tier: 'premium' as const,
+                    subscription_end_date: subscriptionEndDate
+                  })
+                  .where(eq(users.id, customer.id))
+                  .returning();
+
+                if (!updatedUser) {
+                  throw new Error(`Failed to update user ${customer.id} subscription status`);
+                }
+
+                console.log('Successfully updated user subscription:', {
+                  userId: customer.id,
+                  newStatus: 'active',
+                  newTier: 'premium',
+                  endDate: subscriptionEndDate
+                });
+
+                return { 
+                  success: true, 
+                  user: updatedUser, 
+                  event: 'checkout_completed',
+                  metadata: session.metadata
+                };
               }
-            };
 
-            const updateData = {
-              stripe_subscription_id: subscription.id,
-              subscription_status: getSubscriptionStatus(subscription.status) as 'active' | 'inactive' | 'cancelled',
-              subscription_tier: 'premium' as const,
-              subscription_end_date: new Date(subscription.current_period_end * 1000)
-            };
+              case 'invoice.payment_succeeded': {
+                const invoice = event.data.object as Stripe.Invoice;
+                if (invoice.billing_reason === 'subscription_create') {
+                  console.log('Initial subscription invoice paid:', {
+                    invoiceId: invoice.id,
+                    customerId: invoice.customer
+                  });
+                }
+                return { success: true, event: 'invoice_paid' };
+              }
 
-            console.log('Updating user subscription:', {
-              userId: customer.id,
-              ...updateData
-            });
+              case 'customer.subscription.created':
+              case 'customer.subscription.updated': {
+                const subscription = event.data.object as Stripe.Subscription;
+                const customerId = subscription.customer as string;
 
-            const [updatedUser] = await tx
-              .update(users)
-              .set(updateData)
-              .where(eq(users.id, customer.id))
-              .returning();
+                console.log('Processing subscription update:', {
+                  subscriptionId: subscription.id,
+                  customerId,
+                  status: subscription.status,
+                  currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                  metadata: subscription.metadata
+                });
 
-            if (!updatedUser) {
-              throw new Error(`Failed to update user ${customer.id} subscription status`);
+                const [customer] = await tx
+                  .select()
+                  .from(users)
+                  .where(eq(users.stripe_customer_id, customerId))
+                  .limit(1);
+
+                if (!customer) {
+                  throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
+                }
+
+                const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
+                  switch (stripeStatus) {
+                    case 'active':
+                    case 'trialing':
+                      return 'active';
+                    case 'canceled':
+                    case 'unpaid':
+                    case 'past_due':
+                      return 'cancelled';
+                    default:
+                      return 'inactive';
+                  }
+                };
+
+                const updateData = {
+                  stripe_subscription_id: subscription.id,
+                  subscription_status: getSubscriptionStatus(subscription.status) as 'active' | 'inactive' | 'cancelled',
+                  subscription_tier: 'premium' as const,
+                  subscription_end_date: new Date(subscription.current_period_end * 1000)
+                };
+
+                const [updatedUser] = await tx
+                  .update(users)
+                  .set(updateData)
+                  .where(eq(users.id, customer.id))
+                  .returning();
+
+                if (!updatedUser) {
+                  throw new Error(`Failed to update user ${customer.id} subscription status`);
+                }
+
+                return { 
+                  success: true, 
+                  user: updatedUser,
+                  metadata: subscription.metadata
+                };
+              }
+
+              case 'customer.subscription.deleted': {
+                const subscription = event.data.object as Stripe.Subscription;
+                const customerId = subscription.customer as string;
+
+                console.log('Processing subscription deletion:', {
+                  subscriptionId: subscription.id,
+                  customerId,
+                  metadata: subscription.metadata
+                });
+
+                const [customer] = await tx
+                  .select()
+                  .from(users)
+                  .where(eq(users.stripe_customer_id, customerId))
+                  .limit(1);
+
+                if (!customer) {
+                  throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
+                }
+
+                const [updatedUser] = await tx
+                  .update(users)
+                  .set({
+                    subscription_status: 'cancelled' as const,
+                    subscription_tier: 'free' as const,
+                    subscription_end_date: new Date()
+                  })
+                  .where(eq(users.id, customer.id))
+                  .returning();
+
+                if (!updatedUser) {
+                  throw new Error(`Failed to cancel subscription for user ${customer.id}`);
+                }
+
+                return { 
+                  success: true, 
+                  user: updatedUser,
+                  metadata: subscription.metadata
+                };
+              }
+
+              default: {
+                console.log(`Unhandled event type: ${event.type}`);
+                return { success: true, unhandled: true };
+              }
             }
+          });
 
-            return { success: true, user: updatedUser };
-          }
+          console.log('Webhook processing completed successfully:', {
+            eventType: event.type,
+            result
+          });
 
-          case 'customer.subscription.deleted': {
-            const subscription = event.data.object as Stripe.Subscription;
-            const customerId = subscription.customer as string;
+          return result;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error('Unknown error');
+          console.error(`Webhook processing attempt ${retryCount + 1} failed:`, {
+            error: lastError,
+            timestamp: new Date().toISOString()
+          });
 
-            console.log('Processing subscription deletion:', {
-              subscriptionId: subscription.id,
-              customerId
-            });
-
-            const [customer] = await tx
-              .select()
-              .from(users)
-              .where(eq(users.stripe_customer_id, customerId))
-              .limit(1);
-
-            if (!customer) {
-              throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
-            }
-
-            const [updatedUser] = await tx
-              .update(users)
-              .set({
-                subscription_status: 'cancelled' as const,
-                subscription_tier: 'free' as const,
-                subscription_end_date: new Date()
-              })
-              .where(eq(users.id, customer.id))
-              .returning();
-
-            if (!updatedUser) {
-              throw new Error(`Failed to cancel subscription for user ${customer.id}`);
-            }
-
-            return { success: true, user: updatedUser };
-          }
-
-          default: {
-            console.log(`Unhandled event type: ${event.type}`);
-            return { success: true, unhandled: true };
+          retryCount++;
+          if (retryCount < maxRetries) {
+            // Wait for an exponential backoff period before retrying
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
           }
         }
-      });
+      }
 
-      console.log('Webhook processing completed successfully:', {
-        eventType: event.type,
-        result
-      });
+      // If we've exhausted all retries, throw the last error
+      if (lastError) {
+        throw lastError;
+      }
 
-      return result;
+      throw new Error('Unexpected webhook processing failure');
     } catch (error) {
-      console.error('Error handling webhook:', error);
+      console.error('Error handling webhook:', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   },
