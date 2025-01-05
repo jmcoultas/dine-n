@@ -10,8 +10,20 @@ const app = express();
 const server = createServer(app);
 const PORT = Number(process.env.PORT) || 5000;
 
-// Basic middleware
-app.use(express.json());
+// Webhook endpoint needs raw body
+app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res, next) => {
+  console.log('🎯 Webhook request received');
+  next();
+});
+
+// Other routes can use JSON parsing
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 app.use(express.urlencoded({ extended: false }));
 
 // Development CORS settings
