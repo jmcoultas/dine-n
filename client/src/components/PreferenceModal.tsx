@@ -481,7 +481,22 @@ export default function PreferenceModal({
                   </div>
                 </div>
               ) : isLastStep ? (
-                <div className="space-y-6">
+                <div className="space-y-4">
+                  {showFreeTierWarning && (
+                    <div className="p-4 border rounded-md bg-yellow-50 dark:bg-yellow-900/20">
+                      <div className="flex items-start space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-yellow-800 dark:text-yellow-400">Free Plan Notice</h4>
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                            You're currently on the free plan which includes one meal plan generation.
+                            After using this, you'll need to upgrade to generate more meal plans.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <h3 className="font-medium">Dietary Preferences</h3>
                     {(Object.entries(tempPreferences) as [PreferenceField, string[]][]).map(([key, values]) => (
@@ -499,7 +514,7 @@ export default function PreferenceModal({
                       </div>
                     ))}
 
-                    <div className="border-t pt-4 mt-4">
+                    <div className="border-t pt-4">
                       <h3 className="font-medium mb-4">Chef Preferences</h3>
                       <div className="space-y-2">
                         <div className="flex justify-between">
@@ -588,20 +603,6 @@ export default function PreferenceModal({
               )}
             </div>
 
-            {currentStep === STEPS.length - 1 && showFreeTierWarning && (
-              <div className="mb-4 p-4 border rounded-md bg-yellow-50 dark:bg-yellow-900/20">
-                <div className="flex items-start space-x-2">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
-                  <div>
-                    <h4 className="font-medium text-yellow-800 dark:text-yellow-400">Free Plan Notice</h4>
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                      You're currently on the free plan which includes one meal plan generation.
-                      After using this, you'll need to upgrade to generate more meal plans.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             <DialogFooter className="flex flex-col-reverse sm:flex-row justify-between gap-2 mt-6">
               <div className="w-full sm:w-auto">
