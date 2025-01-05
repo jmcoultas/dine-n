@@ -220,7 +220,7 @@ export default function PreferenceModal({
         title: "Error",
         description: "An unexpected error occurred",
         variant: "destructive",
-      });
+        });
     }
   };
 
@@ -353,12 +353,12 @@ export default function PreferenceModal({
               })}
             </div>
 
-            <DialogFooter className="flex flex-col sm:flex-row justify-end gap-2 mt-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+            <DialogFooter className="flex flex-col gap-2 mt-6">
+              <div className="flex flex-row justify-between gap-2 w-full">
                 <Button
                   variant="outline"
                   onClick={handleEditPreferences}
-                  className="text-sm"
+                  className="text-sm w-full sm:w-auto"
                 >
                   <Settings2 className="mr-2 h-4 w-4" />
                   Modify Preferences
@@ -366,7 +366,7 @@ export default function PreferenceModal({
                 <Button
                   onClick={handleGenerateClick}
                   disabled={isGenerating}
-                  className="text-sm"
+                  className="text-sm w-full sm:w-auto"
                 >
                   <Wand2 className="mr-2 h-4 w-4" />
                   Generate Meal Plan
@@ -605,7 +605,7 @@ export default function PreferenceModal({
 
 
             <DialogFooter className="flex flex-col gap-2 mt-6">
-              <div className="flex flex-col sm:flex-row justify-between gap-2 w-full">
+              <div className="flex flex-row justify-between gap-2 w-full">
                 <div className="w-full sm:w-auto">
                   {(!isFirstStep || hasExistingPreferences) && (
                     <Button
