@@ -107,10 +107,17 @@ export const stripeService = {
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      console.log('Processing webhook event:', {
+      console.log('🔔 Webhook received:', {
         type: event.type,
         id: event.id,
         timestamp: new Date().toISOString(),
+        signature: signature.substring(0, 20) + '...',
+        payload: typeof payload === 'string' ? payload.substring(0, 100) + '...' : 'Invalid payload'
+      });
+
+      console.log('📦 Event data:', {
+        type: event.type,
+        id: event.id,
         object: event.data.object
       });
 
