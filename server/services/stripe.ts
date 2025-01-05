@@ -12,13 +12,6 @@ export const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
 });
 
-// Get the Replit workspace domain for development
-const replitDomain = process.env.REPL_SLUG && process.env.REPL_OWNER 
-  ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-  : null;
-
-// Use workspace domain for development, fallback to CLIENT_URL for production
-// Get the current host from the request or fallback to development URL
 const baseUrl = 'https://dine-n-johncoultas.replit.app';
 
 console.log('Base URL for webhooks:', baseUrl);
@@ -96,14 +89,16 @@ export const stripeService = {
     }
   },
 
-  async handleWebhook(payload: string, signature: string) {
+  async handleWebhook(rawBody: Buffer, signature: string) {
+    let event: Stripe.Event;
+
     try {
       if (!process.env.STRIPE_WEBHOOK_SECRET) {
         throw new Error('Missing Stripe webhook secret');
       }
 
-      const event = stripe.webhooks.constructEvent(
-        payload,
+      event = stripe.webhooks.constructEvent(
+        rawBody,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET
       );
@@ -111,44 +106,33 @@ export const stripeService = {
       console.log('🔔 Webhook received:', {
         type: event.type,
         id: event.id,
-        timestamp: new Date().toISOString(),
-        signature: signature.substring(0, 20) + '...',
-        payload: typeof payload === 'string' ? payload.substring(0, 100) + '...' : 'Invalid payload'
+        timestamp: new Date().toISOString()
       });
 
-      console.log('📦 Event data:', {
-        type: event.type,
-        id: event.id,
-        object: event.data.object
-      });
+      // Start a transaction for database operations
+      const result = await db.transaction(async (tx) => {
+        switch (event.type) {
+          case 'customer.subscription.created':
+          case 'customer.subscription.updated': {
+            const subscription = event.data.object as Stripe.Subscription;
+            const customerId = subscription.customer as string;
 
-      switch (event.type) {
-        case 'customer.subscription.created':
-        case 'customer.subscription.updated': {
-          const subscription = event.data.object as Stripe.Subscription;
-          const customerId = subscription.customer as string;
-
-          console.log('Processing subscription update:', {
-            subscriptionId: subscription.id,
-            customerId,
-            status: subscription.status,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            eventType: event.type
-          });
-
-          const [customer] = await db
-            .select()
-            .from(users)
-            .where(eq(users.stripe_customer_id, customerId))
-            .limit(1);
-
-          if (customer) {
-            console.log('Updating user subscription:', {
-              userId: customer.id,
+            console.log('Processing subscription update:', {
               subscriptionId: subscription.id,
-              newStatus: subscription.status === 'active' ? 'active' : 'inactive',
-              currentTime: new Date().toISOString()
+              customerId,
+              status: subscription.status,
+              currentPeriodEnd: new Date(subscription.current_period_end * 1000)
             });
+
+            const [customer] = await tx
+              .select()
+              .from(users)
+              .where(eq(users.stripe_customer_id, customerId))
+              .limit(1);
+
+            if (!customer) {
+              throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
+            }
 
             // Map Stripe subscription status to our enum values
             const getSubscriptionStatus = (stripeStatus: string): 'active' | 'inactive' | 'cancelled' => {
@@ -169,77 +153,76 @@ export const stripeService = {
               stripe_subscription_id: subscription.id,
               subscription_status: getSubscriptionStatus(subscription.status) as 'active' | 'inactive' | 'cancelled',
               subscription_tier: 'premium' as const,
-              subscription_end_date: new Date(subscription.current_period_end * 1000),
-              updated_at: new Date(),
+              subscription_end_date: new Date(subscription.current_period_end * 1000)
             };
 
-            console.log('Processing subscription update with data:', updateData);
-            
-            console.log('Updating user subscription with data:', {
+            console.log('Updating user subscription:', {
               userId: customer.id,
               ...updateData
             });
 
-            const result = await db
+            const [updatedUser] = await tx
               .update(users)
               .set(updateData)
               .where(eq(users.id, customer.id))
               .returning();
 
-            console.log('Database update result:', {
-              userId: customer.id,
-              updatedFields: updateData,
-              result: result
-            });
+            if (!updatedUser) {
+              throw new Error(`Failed to update user ${customer.id} subscription status`);
+            }
 
-            console.log('Successfully updated user subscription status');
-          } else {
-            console.warn('Customer not found for Stripe customerId:', customerId);
+            return { success: true, user: updatedUser };
           }
-          break;
-        }
 
-        case 'customer.subscription.deleted': {
-          const subscription = event.data.object as Stripe.Subscription;
-          const customerId = subscription.customer as string;
+          case 'customer.subscription.deleted': {
+            const subscription = event.data.object as Stripe.Subscription;
+            const customerId = subscription.customer as string;
 
-          console.log('Processing subscription deletion:', {
-            subscriptionId: subscription.id,
-            customerId,
-            timestamp: new Date().toISOString()
-          });
-
-          const [customer] = await db
-            .select()
-            .from(users)
-            .where(eq(users.stripe_customer_id, customerId))
-            .limit(1);
-
-          if (customer) {
-            console.log('Updating user subscription to cancelled:', {
-              userId: customer.id,
+            console.log('Processing subscription deletion:', {
               subscriptionId: subscription.id,
-              timestamp: new Date().toISOString()
+              customerId
             });
 
-            await db
+            const [customer] = await tx
+              .select()
+              .from(users)
+              .where(eq(users.stripe_customer_id, customerId))
+              .limit(1);
+
+            if (!customer) {
+              throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
+            }
+
+            const [updatedUser] = await tx
               .update(users)
               .set({
-                subscription_status: 'cancelled',
-                subscription_tier: 'free',
-                subscription_end_date: new Date(),
+                subscription_status: 'cancelled' as const,
+                subscription_tier: 'free' as const,
+                subscription_end_date: new Date()
               })
-              .where(eq(users.id, customer.id));
+              .where(eq(users.id, customer.id))
+              .returning();
 
-            console.log('Successfully marked subscription as cancelled');
-          } else {
-            console.warn('Customer not found for Stripe customerId:', customerId);
+            if (!updatedUser) {
+              throw new Error(`Failed to cancel subscription for user ${customer.id}`);
+            }
+
+            return { success: true, user: updatedUser };
           }
-          break;
-        }
-      }
 
-      return true;
+          default: {
+            console.log(`Unhandled event type: ${event.type}`);
+            return { success: true, unhandled: true };
+          }
+        }
+      });
+
+      console.log('Webhook processing completed successfully:', {
+        eventType: event.type,
+        result
+      });
+
+      return result;
     } catch (error) {
       console.error('Error handling webhook:', error);
       throw error;

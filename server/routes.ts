@@ -15,6 +15,15 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 }
 
 export function registerRoutes(app: express.Express) {
+  // Configure body parsing middleware
+  app.use((req, res, next) => {
+    if (req.originalUrl === '/api/webhook') {
+      next();
+    } else {
+      express.json()(req, res, next);
+    }
+  });
+
   // Subscription Routes
   app.post("/api/subscription/create-checkout", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -28,7 +37,7 @@ export function registerRoutes(app: express.Express) {
       const session = await stripeService.createCheckoutSession(user.stripe_customer_id);
       res.json({
         sessionId: session.id,
-        url: session.url // Include the checkout session URL in the response
+        url: session.url
       });
     } catch (error: any) {
       console.error("Error creating checkout session:", error);
@@ -36,19 +45,51 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  // Use raw bodyParser for Stripe webhooks
   app.post("/api/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
     const signature = req.headers['stripe-signature'];
 
     if (!signature || typeof signature !== 'string') {
-      return res.status(400).send('Missing stripe signature');
+      console.error('Missing stripe signature in webhook request');
+      return res.status(400).json({
+        error: 'Missing stripe signature',
+        timestamp: new Date().toISOString()
+      });
     }
 
     try {
-      await stripeService.handleWebhook(req.body, signature);
-      res.json({ received: true });
+      // The raw body is available as a Buffer in req.body
+      const rawBody = req.body;
+      if (!Buffer.isBuffer(rawBody)) {
+        throw new Error('Expected raw body to be a Buffer');
+      }
+
+      // Process the webhook event
+      const result = await stripeService.handleWebhook(rawBody, signature);
+
+      // Send a 200 response to acknowledge receipt of the event
+      res.json({
+        received: true,
+        timestamp: new Date().toISOString(),
+        result
+      });
     } catch (error) {
-      console.error('Error handling webhook:', error);
-      return res.status(400).send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Log the full error details for debugging
+      console.error('Webhook processing failed:', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        timestamp: new Date().toISOString()
+      });
+
+      // Send a 400 status code so Stripe will retry the webhook
+      return res.status(400).json({
+        error: 'Webhook processing failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
