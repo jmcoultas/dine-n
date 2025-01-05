@@ -127,7 +127,10 @@ export default function PreferenceModal({
     if (isLastStep) {
       try {
         await handleSavePreferences();
-        onGenerate?.(chefPreferences);
+        if (onGenerate) {
+          onGenerate(chefPreferences);
+          onOpenChange(false); // Close modal after generation starts
+        }
       } catch (error) {
         toast({
           title: "Error",
@@ -278,30 +281,31 @@ export default function PreferenceModal({
 
   const showFreeTierWarning = user?.subscription_tier === 'free' && (user?.meal_plans_generated === 0 || user?.meal_plans_generated === undefined);
 
-  if (isGenerating) {
-    const loadingMessages = [
-      "Analyzing your preferences...",
-      ...(preferences.dietary.length > 0
-        ? preferences.dietary.map(diet => `Ensuring recipes follow ${diet} guidelines...`)
-        : []),
-      ...(preferences.allergies.length > 0
-        ? preferences.allergies.map(allergy => `Checking for ${allergy}-free alternatives...`)
-        : []),
-      ...(preferences.cuisine.length > 0
-        ? preferences.cuisine.map(cuisine => `Exploring ${cuisine} cuisine recipes...`)
-        : []),
-      ...(preferences.meatTypes.length > 0
-        ? [`Including your preferred protein choices...`]
-        : []),
-      "Calculating nutritional balance...",
-      "Creating your personalized meal plan...",
-      "Adding finishing touches..."
-    ];
+  const loadingMessages = [
+    "Analyzing your preferences...",
+    ...(preferences.dietary.length > 0
+      ? preferences.dietary.map(diet => `Ensuring recipes follow ${diet} guidelines...`)
+      : []),
+    ...(preferences.allergies.length > 0
+      ? preferences.allergies.map(allergy => `Checking for ${allergy}-free alternatives...`)
+      : []),
+    ...(preferences.cuisine.length > 0
+      ? preferences.cuisine.map(cuisine => `Exploring ${cuisine} cuisine recipes...`)
+      : []),
+    ...(preferences.meatTypes.length > 0
+      ? [`Including your preferred protein choices...`]
+      : []),
+    "Calculating nutritional balance...",
+    "Creating your personalized meal plan...",
+    "Adding finishing touches..."
+  ];
 
-    return <LoadingAnimation messages={loadingMessages} baseMessage="Cooking up your personalized meal plan..." />;
-  }
-
-  return (
+  return isGenerating ? (
+    <LoadingAnimation
+      messages={loadingMessages}
+      baseMessage="Cooking up your personalized meal plan..."
+    />
+  ) : (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         {currentStep === -1 ? (

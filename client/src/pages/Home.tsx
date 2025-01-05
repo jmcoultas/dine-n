@@ -68,16 +68,24 @@ export default function Home() {
       const response = await generateMealPlan(cleanPreferences, 2);
       console.log('Received response:', response);
 
-      const result = RecipeResponseSchema.safeParse(response);
-      if (!result.success) {
-        throw new Error('Invalid response format from server');
+      // Move the parsing after storing recipes
+      if (Array.isArray(response.recipes)) {
+        await localStorage.setItem('generatedRecipes', JSON.stringify(response.recipes));
       }
 
-      return result.data;
+      const result = RecipeResponseSchema.safeParse(response);
+      if (!result.success) {
+        console.warn('Response format validation failed:', result.error);
+        // Continue if we have recipes despite schema validation failure
+        if (!Array.isArray(response.recipes)) {
+          throw new Error('Invalid response format from server');
+        }
+      }
+
+      return response;
     },
     onSuccess: async (data) => {
       if (Array.isArray(data.recipes)) {
-        await localStorage.setItem('generatedRecipes', JSON.stringify(data.recipes));
         setShowPreferences(false);
         // Small delay to ensure state updates are processed
         setTimeout(() => {

@@ -44,6 +44,7 @@ args = "Server"
 [[workflows.workflow]]
 name = "Client"
 author = "agent"
+mode = "parallel"
 
 [workflows.workflow.metadata]
 agentRequireRestartOnSave = false
@@ -59,6 +60,7 @@ waitForPort = 5173
 [[workflows.workflow]]
 name = "Server"
 author = "agent"
+mode = "parallel"
 
 [workflows.workflow.metadata]
 agentRequireRestartOnSave = false

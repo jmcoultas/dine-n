@@ -160,10 +160,11 @@ export default function MealPlan() {
       if (error instanceof Error && error.message.includes('subscription')) {
         setFeatureContext("Meal plan generation");
         setShowSubscriptionModal(true);
-      } else {
+      } else if (error instanceof Error && !error.message.includes('format')) {
+        // Only show error toast for non-format related errors
         toast({
           title: "Error",
-          description: error instanceof Error ? error.message : "Failed to generate meal plan",
+          description: error.message,
           variant: "destructive",
         });
       }
