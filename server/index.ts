@@ -8,7 +8,7 @@ import { db } from "../db";
 
 const app = express();
 const server = createServer(app);
-const PORT = Number(process.env.PORT) || 5000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Webhook endpoint needs raw body
 app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res, next) => {

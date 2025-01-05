@@ -27,7 +27,7 @@ export default defineConfig({
       '/api': {
         target: process.env.NODE_ENV === 'production' 
           ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev`
-          : 'http://0.0.0.0:5000',
+          : 'http://0.0.0.0:3000',
         changeOrigin: true,
         secure: false,
         ws: true
