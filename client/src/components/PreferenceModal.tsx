@@ -88,6 +88,13 @@ interface PreferenceModalProps {
   };
 }
 
+const defaultChefPreferences: ChefPreferences = {
+  difficulty: 'Moderate',
+  mealType: 'Any',
+  cookTime: '30-60 minutes',
+  servingSize: '4'
+};
+
 export default function PreferenceModal({
   open,
   onOpenChange,
@@ -100,12 +107,9 @@ export default function PreferenceModal({
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(-1);
   const [tempPreferences, setTempPreferences] = useState<Preferences>(preferences);
-  const [chefPreferences, setChefPreferences] = useState<ChefPreferences>({
-    difficulty: 'Moderate',
-    mealType: 'Any',
-    cookTime: '30-60 minutes',
-    servingSize: '4'
-  });
+  const [chefPreferences, setChefPreferences] = useState<ChefPreferences>(
+    preferences.chefPreferences || defaultChefPreferences
+  );
   const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
@@ -115,6 +119,7 @@ export default function PreferenceModal({
     );
     setCurrentStep(hasValues ? -1 : 0);
     setIsEditMode(false);
+    setChefPreferences(preferences.chefPreferences || defaultChefPreferences);
   }, [preferences, open]);
 
   const currentStepConfig = currentStep >= 0 ? STEPS[currentStep] : null;
@@ -128,10 +133,14 @@ export default function PreferenceModal({
   const handleNext = async () => {
     if (isLastStep) {
       try {
+        const updatedPreferences = {
+          ...tempPreferences,
+          chefPreferences
+        };
         await handleSavePreferences();
         if (onGenerate) {
           onGenerate(chefPreferences);
-          onOpenChange(false); 
+          onOpenChange(false);
         }
       } catch (error) {
         toast({

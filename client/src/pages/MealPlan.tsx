@@ -34,6 +34,13 @@ interface MealPlan {
   recipes: MealPlanRecipe[];
 }
 
+const defaultChefPreferences: ChefPreferences = {
+  difficulty: 'Moderate',
+  mealType: 'Any',
+  cookTime: '30-60 minutes',
+  servingSize: '4'
+};
+
 const generateLoadingMessages = (preferences: Preferences, chefPreferences: ChefPreferences): string[] => {
   const messages: string[] = [];
 
@@ -88,13 +95,6 @@ export default function MealPlan() {
   const [featureContext, setFeatureContext] = useState<string>("");
   const { subscription } = useSubscription();
 
-  const defaultChefPreferences: ChefPreferences = {
-    difficulty: 'Moderate',
-    mealType: 'Any',
-    cookTime: '30-60 minutes',
-    servingSize: '4'
-  };
-
   const [preferences, setPreferences] = useState<Preferences>(() => {
     const savedPreferences = localStorage.getItem('mealPlanPreferences');
     return savedPreferences ? JSON.parse(savedPreferences) : {
@@ -142,7 +142,6 @@ export default function MealPlan() {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
 
-
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
     if (subscription?.tier !== 'premium') {
       setFeatureContext("Meal plan generation");
@@ -166,7 +165,6 @@ export default function MealPlan() {
         setFeatureContext("Meal plan generation");
         setShowSubscriptionModal(true);
       } else if (error instanceof Error && !error.message.includes('format')) {
-        // Only show error toast for non-format related errors
         toast({
           title: "Error",
           description: error.message,
