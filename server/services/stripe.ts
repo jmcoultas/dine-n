@@ -102,23 +102,11 @@ export const stripeService = {
         throw new Error('Missing Stripe webhook secret');
       }
 
-      console.log('Attempting to construct webhook event with:', {
-        signaturePresent: !!signature,
-        payloadLength: payload.length,
-        webhookSecretPresent: !!process.env.STRIPE_WEBHOOK_SECRET
-      });
-
       const event = stripe.webhooks.constructEvent(
         payload,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET
       );
-
-      console.log('Successfully constructed webhook event:', {
-        type: event.type,
-        customerId: (event.data.object as any).customer,
-        subscriptionId: (event.data.object as any).id
-      });
 
       console.log('🔔 Webhook received:', {
         type: event.type,
@@ -192,30 +180,11 @@ export const stripeService = {
               ...updateData
             });
 
-            try {
-              const result = await db
-                .update(users)
-                .set(updateData)
-                .where(eq(users.id, customer.id))
-                .returning();
-
-              if (!result.length) {
-                console.error('Database update returned no results:', {
-                  customerId: customer.id,
-                  updateData
-                });
-                throw new Error('Database update failed');
-              }
-
-              console.log('Successfully updated user subscription in database:', {
-                userId: customer.id,
-                subscriptionId: subscription.id,
-                newStatus: updateData.subscription_status
-              });
-            } catch (dbError) {
-              console.error('Database update failed:', dbError);
-              throw dbError;
-            }
+            const result = await db
+              .update(users)
+              .set(updateData)
+              .where(eq(users.id, customer.id))
+              .returning();
 
             console.log('Database update result:', {
               userId: customer.id,
