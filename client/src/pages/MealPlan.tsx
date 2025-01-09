@@ -145,19 +145,29 @@ export default function MealPlan() {
 
     try {
       setIsGenerating(true);
-      // Update preferences with the new chef preferences
-      const updatedPreferences = {
-        ...preferences,
-        chefPreferences
-      };
-      setPreferences(updatedPreferences);
 
+      // Update preferences with the new chef preferences and ensure arrays are initialized
+      const updatedPreferences = {
+        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
+        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
+        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : [],
+        chefPreferences: {
+          difficulty: chefPreferences.difficulty || defaultChefPreferences.difficulty,
+          mealType: chefPreferences.mealType || defaultChefPreferences.mealType,
+          cookTime: chefPreferences.cookTime || defaultChefPreferences.cookTime,
+          servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize
+        }
+      };
+
+      setPreferences(updatedPreferences);
       console.log('Generating meal plan with preferences:', JSON.stringify(updatedPreferences, null, 2));
 
-      const result = await generateMealPlan(updatedPreferences, 2, chefPreferences);
+      const result = await generateMealPlan(updatedPreferences, 2);
       if (!result.recipes || result.recipes.length === 0) {
         throw new Error('No recipes were generated. Please try again.');
       }
+
       await refetch();
       toast({
         title: "Success",
