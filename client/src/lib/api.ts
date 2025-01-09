@@ -33,10 +33,10 @@ export async function generateMealPlan(
     allergies: Array.isArray(preferences.allergies) ? preferences.allergies.filter(Boolean) : [],
     cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine.filter(Boolean) : [],
     meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes.filter(Boolean) : [],
-    chefPreferences: preferences.chefPreferences || chefPreferences
+    chefPreferences: preferences.chefPreferences || chefPreferences || {}
   };
 
-  console.log('Sending preferences to server:', JSON.stringify(cleanPreferences, null, 2));
+  console.log('Client: Sending preferences to server:', JSON.stringify(cleanPreferences, null, 2));
 
   const response = await fetch(`${API_BASE}/generate-meal-plan`, {
     method: "POST",

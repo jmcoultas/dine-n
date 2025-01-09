@@ -348,25 +348,14 @@ export function registerRoutes(app: express.Express) {
         });
       }
 
-      const now = new Date();
-      const existingRecipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(
-          and(
-            eq(temporaryRecipes.user_id, user.id),
-            gt(temporaryRecipes.expires_at, now)
-          )
-        );
-
-      if (existingRecipes.length > 0) {
-        return res.status(400).json({
-          error: "Active meal plan exists",
-          message: "You already have an active meal plan. Save or wait for it to expire before generating a new one."
-        });
-      }
-
       const { preferences, days } = req.body;
+
+      // Add detailed logging of received preferences
+      console.log('Received meal plan generation request:', {
+        preferences: JSON.stringify(preferences, null, 2),
+        days,
+        userId: user.id
+      });
 
       // Validate input parameters
       if (!preferences || !days) {
@@ -376,24 +365,21 @@ export function registerRoutes(app: express.Express) {
         });
       }
 
-      // Log received parameters
-      console.log('Received parameters:', JSON.stringify({
-        preferences,
-        days,
-        user: req.user?.id
-      }, null, 2));
-
-      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
-      const suggestedRecipes = [];
-      const usedRecipeNames = new Set<string>();
-
       // Ensure all preference arrays exist and are properly formatted
       const normalizedPreferences = {
         dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
         allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
         cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
-        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : []
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : [],
+        chefPreferences: preferences.chefPreferences || {}
       };
+
+      // Log normalized preferences
+      console.log('Normalized preferences:', JSON.stringify(normalizedPreferences, null, 2));
+
+      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
+      const suggestedRecipes = [];
+      const usedRecipeNames = new Set<string>();
 
       // Generate recipes
       for (let day = 0; day < days; day++) {

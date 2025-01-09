@@ -29,17 +29,24 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
       excludeNames: Array.isArray(params.excludeNames) ? params.excludeNames.filter(Boolean) : []
     };
 
-    console.log('Generating recipe with cleaned params:', JSON.stringify(cleanParams, null, 2));
+    console.log('AI Service: Generating recipe with cleaned params:', JSON.stringify(cleanParams, null, 2));
 
     const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
       ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`
       : "";
 
+    // Log the actual parameters being used to generate the prompt
+    console.log('AI Service: Using dietary restrictions:', cleanParams.dietary);
+    console.log('AI Service: Using allergies:', cleanParams.allergies);
+    console.log('AI Service: Using cuisine preferences:', cleanParams.cuisine);
+    console.log('AI Service: Using meat preferences:', cleanParams.meatTypes);
+    console.log('AI Service: Meal type:', cleanParams.mealType);
+
     const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}. Do not include recipes with Tofu unless the user chose Vegetarian or Vegan.
-${params.dietary.length > 0 ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : "No specific dietary restrictions"}
-${params.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${params.allergies.join(", ")}` : "No allergies to consider"}
-${params.cuisine.length > 0 ? `Preferred cuisines: ${params.cuisine.join(", ")}` : "No specific cuisine preference"}
-${params.meatTypes.length > 0 ? `Preferred meat types: ${params.meatTypes.join(", ")}` : "No specific meat preference"}
+${cleanParams.dietary.length > 0 ? `Must follow dietary restrictions: ${cleanParams.dietary.join(", ")}` : "No specific dietary restrictions"}
+${cleanParams.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${cleanParams.allergies.join(", ")}` : "No allergies to consider"}
+${cleanParams.cuisine.length > 0 ? `Preferred cuisines: ${cleanParams.cuisine.join(", ")}` : "No specific cuisine preference"}
+${cleanParams.meatTypes.length > 0 ? `Preferred meat types: ${cleanParams.meatTypes.join(", ")}` : "No specific meat preference"}
 ${excludeNamesStr}
 
 You must respond with a valid recipe in this exact JSON format:
@@ -55,6 +62,8 @@ You must respond with a valid recipe in this exact JSON format:
   "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number },
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
 }`;
+
+    console.log('AI Service: Generated prompt:', prompt);
 
     const completion = await openai.chat.completions.create({
       messages: [
@@ -88,7 +97,7 @@ You must respond with a valid recipe in this exact JSON format:
 
       if (recipeData.name) {
         try {
-          console.log('Generating image for recipe:', recipeData.name);
+          console.log('AI Service: Generating image for recipe:', recipeData.name);
           const imageResponse = await openai.images.generate({
             model: "dall-e-3",
             prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
@@ -99,14 +108,13 @@ You must respond with a valid recipe in this exact JSON format:
           });
 
           if (imageResponse.data[0]?.url) {
-            console.log('Successfully generated image URL:', imageResponse.data[0].url);
+            console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
             imageUrl = imageResponse.data[0].url;
           }
         } catch (imageError) {
-          console.error('Error generating image:', imageError);
-          // Fallback to Unsplash if image generation fails
+          console.error('AI Service: Error generating image:', imageError);
           imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
-          console.log('Using fallback image URL:', imageUrl);
+          console.log('AI Service: Using fallback image URL:', imageUrl);
         }
       }
 
@@ -124,13 +132,14 @@ You must respond with a valid recipe in this exact JSON format:
         complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
       };
 
+      console.log('AI Service: Generated recipe:', JSON.stringify(validatedRecipe, null, 2));
       return validatedRecipe;
     } catch (parseError) {
-      console.error('Error parsing OpenAI response:', parseError);
+      console.error('AI Service: Error parsing OpenAI response:', parseError);
       throw new Error("Failed to parse recipe data from OpenAI response");
     }
   } catch (error: any) {
-    console.error("OpenAI API Error:", error);
+    console.error("AI Service: OpenAI API Error:", error);
 
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       throw new Error("Failed to connect to OpenAI API");
