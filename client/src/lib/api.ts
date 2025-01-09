@@ -2,16 +2,12 @@ import type { Recipe, MealPlan, GroceryList } from "@db/schema";
 
 const API_BASE = "/api";
 
-export async function fetchRecipes(): Promise<Recipe[]> {
-  const response = await fetch(`${API_BASE}/recipes`);
-  return response.json();
-}
-
 interface MealPlanPreferences {
   dietary: string[];
   allergies: string[];
   cuisine: string[];
   meatTypes: string[];
+  chefPreferences?: ChefPreferences;
 }
 
 interface ChefPreferences {
@@ -36,8 +32,11 @@ export async function generateMealPlan(
     dietary: Array.isArray(preferences.dietary) ? preferences.dietary.filter(Boolean) : [],
     allergies: Array.isArray(preferences.allergies) ? preferences.allergies.filter(Boolean) : [],
     cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine.filter(Boolean) : [],
-    meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes.filter(Boolean) : []
+    meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes.filter(Boolean) : [],
+    chefPreferences: preferences.chefPreferences || chefPreferences
   };
+
+  console.log('Sending preferences to server:', JSON.stringify(cleanPreferences, null, 2));
 
   const response = await fetch(`${API_BASE}/generate-meal-plan`, {
     method: "POST",
@@ -48,7 +47,6 @@ export async function generateMealPlan(
     body: JSON.stringify({
       preferences: cleanPreferences,
       days,
-      chefPreferences
     }),
   });
 
@@ -66,6 +64,11 @@ export async function generateMealPlan(
   }
 
   return data;
+}
+
+export async function fetchRecipes(): Promise<Recipe[]> {
+  const response = await fetch(`${API_BASE}/recipes`);
+  return response.json();
 }
 
 export async function getTemporaryRecipes(): Promise<Recipe[]> {

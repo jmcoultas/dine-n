@@ -13,26 +13,10 @@ import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { createMealPlan, createGroceryList, generateMealPlan } from "@/lib/api";
 import type { Recipe, ChefPreferences } from "@/lib/types";
-import type { Preferences } from "@db/schema";
+import type { Preferences, MealPlan } from "@db/schema";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 
 type MealType = "breakfast" | "lunch" | "dinner";
-
-interface MealPlanRecipe {
-  recipe_id: number;
-  day: string;
-  meal: MealType;
-}
-
-interface MealPlan {
-  id: number;
-  user_id: number;
-  name: string;
-  start_date: Date;
-  end_date: Date;
-  recipes: MealPlanRecipe[];
-  created_at: Date;
-}
 
 const defaultChefPreferences: ChefPreferences = {
   difficulty: 'Moderate',
@@ -161,7 +145,16 @@ export default function MealPlan() {
 
     try {
       setIsGenerating(true);
-      const result = await generateMealPlan(preferences, 2, chefPreferences);
+      // Update preferences with the new chef preferences
+      const updatedPreferences = {
+        ...preferences,
+        chefPreferences
+      };
+      setPreferences(updatedPreferences);
+
+      console.log('Generating meal plan with preferences:', JSON.stringify(updatedPreferences, null, 2));
+
+      const result = await generateMealPlan(updatedPreferences, 2, chefPreferences);
       if (!result.recipes || result.recipes.length === 0) {
         throw new Error('No recipes were generated. Please try again.');
       }
@@ -187,7 +180,7 @@ export default function MealPlan() {
     }
   };
 
-  const saveMutation = useMutation<MealPlan, Error, void, unknown>({
+  const saveMutation = useMutation({
     mutationFn: async () => {
       if (subscription?.tier !== 'premium') {
         setFeatureContext("Meal plan saving");
@@ -212,25 +205,7 @@ export default function MealPlan() {
       };
 
       const response = await createMealPlan(mealPlanData);
-      const mealPlan = response as MealPlan;
-
-      const items = generatedRecipes.flatMap(recipe =>
-        recipe.ingredients?.map(ingredient => ({
-          ...ingredient,
-          checked: false,
-        })) ?? []
-      );
-
-      if (items.length > 0) {
-        await createGroceryList({
-          user_id: mealPlan.user_id,
-          meal_plan_id: mealPlan.id,
-          items,
-          created: new Date(),
-        });
-      }
-
-      return mealPlan;
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mealPlans"] });
@@ -239,7 +214,7 @@ export default function MealPlan() {
         description: "Meal plan saved with grocery list.",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       if (error.message.includes('subscription')) {
         setFeatureContext("Meal plan saving");
         setShowSubscriptionModal(true);
@@ -284,7 +259,7 @@ export default function MealPlan() {
               </div>
             </div>
           )}
-          
+
         </div>
       </div>
 
