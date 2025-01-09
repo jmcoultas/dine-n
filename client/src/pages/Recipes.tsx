@@ -21,7 +21,7 @@ interface Recipe {
   id: number;
   name: string;
   description?: string;
-  imageUrl?: string;
+  image_url?: string;
   prepTime?: number;
   cookTime?: number;
   servings?: number;
@@ -131,12 +131,12 @@ export default function Recipes() {
 
                 <div className="aspect-video relative rounded-lg overflow-hidden">
                   <img
-                    src={selectedRecipe.imageUrl}
+                    src={selectedRecipe.image_url}
                     alt={selectedRecipe.name}
                     className="object-cover w-full h-full"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="flex gap-2 flex-wrap">
                     {selectedRecipe.tags?.map((tag) => (

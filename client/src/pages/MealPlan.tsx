@@ -348,7 +348,10 @@ export default function MealPlan() {
                       return recipe ? (
                         <MealPlanCard
                           key={recipe.id}
-                          recipe={recipe}
+                          recipe={{
+                            ...recipe,
+                            image_url: recipe.image_url || undefined,
+                          }}
                           day={currentDay}
                           meal={mealType as MealType}
                           onRemove={() => {

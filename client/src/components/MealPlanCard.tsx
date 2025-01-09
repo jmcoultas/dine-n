@@ -18,7 +18,7 @@ interface MealPlanCardProps {
     id: number;
     name: string;
     description: string | null;
-    imageUrl: string | null;
+    image_url: string | undefined;
     isFavorited?: boolean;
     prepTime: number | null;
     cookTime: number | null;
@@ -66,22 +66,21 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       if (!user) {
         throw new Error("Must be logged in to favorite recipes");
       }
-      
+
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         },
-        // For generated recipes (negative IDs), we need to send the full recipe data
         body: JSON.stringify(recipe.id < 0 ? { recipe } : {})
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || "Failed to favorite recipe");
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -100,20 +99,17 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     },
   });
 
-  // Ensure type safety for complexity
-  const complexity: ComplexityLevel = isValidComplexity(recipe.complexity) 
-    ? recipe.complexity 
+  const complexity: ComplexityLevel = isValidComplexity(recipe.complexity)
+    ? recipe.complexity
     : 1;
 
-  // Add strict null checking for optional properties
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
   const totalTime = prepTime + cookTime;
   const servings = recipe.servings ?? 2;
-  const imageUrl = recipe.imageUrl ?? '';
+  const imageUrl = recipe.image_url ?? '';
   const description = recipe.description ?? '';
 
-  // Add strict null checking for nutrition
   const nutrition = {
     calories: recipe.nutrition?.calories ?? 0,
     protein: recipe.nutrition?.protein ?? 0,
@@ -121,21 +117,20 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     fat: recipe.nutrition?.fat ?? 0,
   } as const;
 
-  // Ensure arrays are defined with proper typing
   const ingredients = recipe.ingredients ?? [];
   const instructions = recipe.instructions ?? [];
   const tags = recipe.tags ?? [];
 
   return (
     <>
-      <Card 
+      <Card
         className="overflow-hidden transition-shadow hover:shadow-md cursor-pointer"
         onClick={() => setShowDetails(true)}
       >
         <div
           className="aspect-video relative"
           style={{
-            backgroundImage: `url(${imageUrl})`,
+            backgroundImage: recipe.image_url ? `url(${recipe.image_url})` : 'none',
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -202,14 +197,16 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
           <DialogHeader>
             <DialogTitle>{recipe.name}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="aspect-video relative rounded-lg overflow-hidden">
-              <img
-                src={recipe.imageUrl || ''}
-                alt={recipe.name}
-                className="object-cover w-full h-full"
-              />
+              {recipe.image_url && (
+                <img
+                  src={recipe.image_url}
+                  alt={recipe.name}
+                  className="object-cover w-full h-full"
+                />
+              )}
             </div>
 
             <div className="flex gap-2 flex-wrap">

@@ -17,7 +17,7 @@ interface RecipeCardProps {
     id: number;
     name: string;
     description?: string;
-    imageUrl?: string;
+    image_url?: string;
     prepTime?: number;
     cookTime?: number;
     servings?: number;
@@ -44,9 +44,8 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
   const { toast } = useToast();
   const { user } = useUser();
   const queryClient = useQueryClient();
-  
-  // Add null checks for optional properties
-  const imageUrl = recipe.imageUrl || '';
+
+  const imageUrl = recipe.image_url || '';
   const description = recipe.description ?? '';
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
@@ -58,7 +57,6 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         throw new Error("Must be logged in to favorite recipes");
       }
 
-      // Simple payload for favoriting
       const payload = {};
       const recipeId = recipe.id;
       const response = await fetch(`/api/recipes/${recipeId}/favorite`, {
@@ -69,12 +67,12 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         },
         body: JSON.stringify(payload)
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || "Failed to update favorite status");
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -102,11 +100,13 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
     >
       <CardHeader className="p-0">
         <div className="aspect-video relative rounded-t-lg overflow-hidden">
-          <img
-            src={recipe.imageUrl || ''}
-            alt={recipe.name}
-            className="object-cover w-full h-full"
-          />
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt={recipe.name}
+              className="object-cover w-full h-full"
+            />
+          )}
           {user && (
             <Button
               variant="ghost"
