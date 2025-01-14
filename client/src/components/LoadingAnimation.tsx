@@ -12,6 +12,7 @@ export function LoadingAnimation({
 }: LoadingAnimationProps) {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [splineError, setSplineError] = useState(false);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -31,14 +32,27 @@ export function LoadingAnimation({
     ? messages[currentMessageIndex]
     : baseMessage;
 
+  const handleSplineError = () => {
+    console.warn("Failed to load Spline animation");
+    setSplineError(true);
+  };
+
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
       <div className="flex flex-col items-center space-y-6 p-8 bg-card rounded-lg shadow-lg max-w-sm mx-auto text-center">
         <div className="relative w-[300px] h-[300px]">
-          <Spline 
-            scene="https://my.spline.design/particles-ccd1c2aa4bc993ddbed3f641e178bd25/"
-            style={{ width: '100%', height: '100%' }}
-          />
+          {!splineError ? (
+            <Spline 
+              scene="https://prod.spline.design/particles-ccd1c2aa4bc993ddbed3f641e178bd25/scene.splinecode"
+              onError={handleSplineError}
+              style={{ width: '100%', height: '100%' }}
+            />
+          ) : (
+            // Fallback loading indicator
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
         </div>
         <div className="h-16 flex items-center justify-center">
           <p 
