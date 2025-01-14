@@ -62,7 +62,7 @@ export default function AuthPage() {
       <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
         <div className="absolute inset-0 bg-zinc-900" />
         <div className="relative z-20 flex items-center text-lg font-medium">
-          <img src="/logo.png" alt="Logo" className="mr-2 h-6 w-6" />
+          <img src="https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391437/samples/coffee.jpg" alt="Logo" className="mr-2 h-6 w-6" />
           Meal Planner
         </div>
         <div className="relative z-20 mt-auto">
