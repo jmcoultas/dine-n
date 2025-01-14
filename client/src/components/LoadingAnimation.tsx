@@ -13,6 +13,7 @@ export function LoadingAnimation({
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [splineError, setSplineError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -35,6 +36,12 @@ export function LoadingAnimation({
   const handleSplineError = () => {
     console.warn("Failed to load Spline animation");
     setSplineError(true);
+    setIsLoading(false);
+  };
+
+  const handleSplineLoad = () => {
+    setIsLoading(false);
+    setSplineError(false);
   };
 
   return (
@@ -42,11 +49,24 @@ export function LoadingAnimation({
       <div className="flex flex-col items-center space-y-6 p-8 bg-card rounded-lg shadow-lg max-w-sm mx-auto text-center">
         <div className="relative w-[300px] h-[300px]">
           {!splineError ? (
-            <Spline 
-              scene="https://prod.spline.design/particles-ccd1c2aa4bc993ddbed3f641e178bd25/scene.splinecode"
-              onError={handleSplineError}
-              style={{ width: '100%', height: '100%' }}
-            />
+            <>
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              <Spline 
+                scene="https://prod.spline.design/particles-ccd1c2aa4bc993ddbed3f641e178bd25/scene.splinecode"
+                onError={handleSplineError}
+                onLoad={handleSplineLoad}
+                style={{ 
+                  width: '100%', 
+                  height: '100%',
+                  opacity: isLoading ? 0 : 1,
+                  transition: 'opacity 0.3s ease-in-out'
+                }}
+              />
+            </>
           ) : (
             // Fallback loading indicator
             <div className="w-full h-full flex items-center justify-center">
