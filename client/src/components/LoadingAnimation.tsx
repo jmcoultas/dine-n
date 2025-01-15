@@ -71,12 +71,7 @@ export function LoadingAnimation({
           )}
           <spline-viewer
             url="https://prod.spline.design/hkyaYzf0pdmsGpcH/scene.splinecode"
-            style={{ 
-              width: '100%', 
-              height: '100%',
-              opacity: isLoading ? '0' : '1',
-              transition: 'opacity 0.3s ease-in-out'
-            }}
+            style={{ width: '100%', height: '100%' }}
           />
         </div>
         <div className="h-16 flex items-center justify-center">
