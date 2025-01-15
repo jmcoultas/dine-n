@@ -62,8 +62,8 @@ export function LoadingAnimation({
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="flex flex-col items-center space-y-6 p-8 bg-card rounded-lg shadow-lg max-w-sm mx-auto text-center">
-        <div className="relative w-[300px] h-[300px]">
+      <div className="flex flex-col bg-card rounded-lg shadow-lg w-full max-w-2xl mx-auto overflow-hidden">
+        <div className="relative w-full" style={{ height: '400px' }}>
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -74,18 +74,20 @@ export function LoadingAnimation({
             style={{ width: '100%', height: '100%' }}
           />
         </div>
-        <div className="h-16 flex items-center justify-center">
-          <p 
-            key={currentMessageIndex} 
-            className={`text-lg font-medium text-foreground transition-all duration-300 ${
-              isTransitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
-            }`}
-          >
-            {currentMessage}
-          </p>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          This might take a moment...
+        <div className="p-6 space-y-4">
+          <div className="h-16 flex items-center justify-center">
+            <p 
+              key={currentMessageIndex} 
+              className={`text-lg font-medium text-foreground transition-all duration-300 ${
+                isTransitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
+              }`}
+            >
+              {currentMessage}
+            </p>
+          </div>
+          <div className="text-sm text-muted-foreground text-center">
+            This might take a moment...
+          </div>
         </div>
       </div>
     </div>
