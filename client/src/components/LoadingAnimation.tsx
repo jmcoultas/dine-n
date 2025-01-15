@@ -63,11 +63,6 @@ export function LoadingAnimation({
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
       <div className="flex flex-col bg-card rounded-lg shadow-lg w-full max-w-2xl mx-auto overflow-hidden relative">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center z-20">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
         <div className="w-full" style={{ height: '500px' }}>
           <spline-viewer
             url="https://prod.spline.design/hkyaYzf0pdmsGpcH/scene.splinecode"
