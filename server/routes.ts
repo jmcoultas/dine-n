@@ -47,6 +47,11 @@ export function registerRoutes(app: express.Express) {
 
   // Use raw bodyParser for Stripe webhooks
   app.post("/api/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    console.log('Webhook received:', {
+      headers: req.headers,
+      body: req.body.toString(),
+      timestamp: new Date().toISOString()
+    });
     const signature = req.headers['stripe-signature'];
 
     if (!signature || typeof signature !== 'string') {

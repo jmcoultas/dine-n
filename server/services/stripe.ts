@@ -62,7 +62,7 @@ export const stripeService = {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${customerId}`,
+      success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${userId}`,
       cancel_url: `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}`,
       subscription_data: {
         metadata: {
