@@ -42,6 +42,16 @@ export const stripeService = {
 
   async createCheckoutSession(customerId: string) {
     console.log('Creating checkout session for customer:', customerId);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.stripe_customer_id, customerId))
+      .limit(1);
+
+    if (!user) {
+      throw new Error('User not found for customer ID');
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
@@ -62,7 +72,7 @@ export const stripeService = {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${userId}`,
+      success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}`,
       cancel_url: `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}`,
       subscription_data: {
         metadata: {
