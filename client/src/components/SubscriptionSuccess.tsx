@@ -18,17 +18,31 @@ export function SubscriptionSuccess() {
     }
 
     const checkSubscription = async () => {
-      const response = await fetch('/api/subscription/status');
-      const data = await response.json();
-      
-      if (data.isActive) {
-        // Subscription is active, invalidate queries and redirect
-        queryClient.invalidateQueries({ queryKey: ['subscription'] });
-        queryClient.invalidateQueries({ queryKey: ['user'] });
-        setTimeout(() => setLocation('/'), 1500);
-        return true;
+      console.log('Checking subscription status...');
+      try {
+        const response = await fetch('/api/subscription/status');
+        const data = await response.json();
+        
+        console.log('Subscription check response:', {
+          status: response.status,
+          data,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (data.isActive) {
+          console.log('Subscription is active, invalidating queries...');
+          queryClient.invalidateQueries({ queryKey: ['subscription'] });
+          queryClient.invalidateQueries({ queryKey: ['user'] });
+          console.log('Redirecting to homepage...');
+          setTimeout(() => setLocation('/'), 1500);
+          return true;
+        }
+        console.log('Subscription not yet active');
+        return false;
+      } catch (error) {
+        console.error('Error checking subscription:', error);
+        return false;
       }
-      return false;
     };
 
     // Check subscription status every second for up to 10 seconds
