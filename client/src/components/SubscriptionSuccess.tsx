@@ -48,7 +48,7 @@ export function SubscriptionSuccess() {
       }
     }, 1000);
 
-    return () => clearTimeout(timer);
+    return () => clearInterval(interval);
   }, [queryClient, setLocation]);
 
   return (
