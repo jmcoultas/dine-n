@@ -78,6 +78,7 @@ export function registerRoutes(app: express.Express) {
 
       // Process the webhook event
       const result = await stripeService.handleWebhook(rawBody, signature);
+      console.log('Webhook processed:', {result, timestamp: new Date().toISOString()}); //Added logging here
 
       // Send a 200 response to acknowledge receipt of the event
       res.json({

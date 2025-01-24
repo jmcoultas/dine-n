@@ -17,17 +17,36 @@ export function SubscriptionSuccess() {
       return;
     }
 
-    // Add small delay to ensure DB updates are complete
-    setTimeout(() => {
-      // Invalidate both user and subscription queries to fetch fresh data
-      queryClient.invalidateQueries({ queryKey: ['subscription'] });
-      queryClient.invalidateQueries({ queryKey: ['user'] });
-    }, 1000);
+    const checkSubscription = async () => {
+      const response = await fetch('/api/subscription/status');
+      const data = await response.json();
+      
+      if (data.isActive) {
+        // Subscription is active, invalidate queries and redirect
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        queryClient.invalidateQueries({ queryKey: ['user'] });
+        setTimeout(() => setLocation('/'), 1500);
+        return true;
+      }
+      return false;
+    };
 
-    // Redirect to home page after 3 seconds
-    const timer = setTimeout(() => {
-      setLocation('/');
-    }, 3000);
+    // Check subscription status every second for up to 10 seconds
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    const interval = setInterval(async () => {
+      attempts++;
+      const isActive = await checkSubscription();
+      
+      if (isActive || attempts >= maxAttempts) {
+        clearInterval(interval);
+        if (!isActive) {
+          console.error('Subscription not activated after maximum attempts');
+          setLocation('/');
+        }
+      }
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [queryClient, setLocation]);
