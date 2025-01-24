@@ -53,6 +53,12 @@ export function registerRoutes(app: express.Express) {
       timestamp: new Date().toISOString()
     });
     const signature = req.headers['stripe-signature'];
+    console.log('Webhook signature verification:', {
+      hasSignature: !!signature,
+      signatureType: typeof signature,
+      webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      timestamp: new Date().toISOString()
+    });
 
     if (!signature || typeof signature !== 'string') {
       console.error('Missing stripe signature in webhook request');
