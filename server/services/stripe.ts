@@ -159,6 +159,12 @@ export const stripeService = {
                 const subscriptionEndDate = new Date();
                 subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
 
+                console.log('Attempting database update for user:', {
+                  userId: customer.id,
+                  subscriptionEndDate: subscriptionEndDate,
+                  timestamp: new Date().toISOString()
+                });
+
                 const [updatedUser] = await tx
                   .update(users)
                   .set({
@@ -170,6 +176,10 @@ export const stripeService = {
                   .returning();
 
                 if (!updatedUser) {
+                  console.error('Database update failed:', {
+                    userId: customer.id,
+                    timestamp: new Date().toISOString()
+                  });
                   throw new Error(`Failed to update user ${customer.id} subscription status`);
                 }
 
