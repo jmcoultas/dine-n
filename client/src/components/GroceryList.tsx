@@ -31,13 +31,19 @@ export default function GroceryList({ items }: GroceryListProps) {
   useEffect(() => {
     return () => {
       // Cleanup WebGL context when component unmounts
-      const canvas = document.querySelector('canvas');
-      if (canvas) {
-        const gl = canvas.getContext('webgl');
+      const canvases = document.querySelectorAll('canvas');
+      canvases.forEach(canvas => {
+        const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
         if (gl) {
           gl.getExtension('WEBGL_lose_context')?.loseContext();
+          // Delete framebuffers and textures
+          const framebuffers = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+          if (framebuffers) {
+            gl.deleteFramebuffer(framebuffers);
+          }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         }
-      }
+      });
     };
   }, []);
 
