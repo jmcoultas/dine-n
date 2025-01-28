@@ -168,11 +168,7 @@ export default function GroceryList({ items }: GroceryListProps) {
               name: "Grocery List",
               recipeIngredient: Array.isArray(items) ? items
                 .filter(item => !checkedItems.has(item.name))
-                .map(item => ({
-                  name: item.name,
-                  amount: item.amount,
-                  unit: item.unit
-                })) : []
+                .map(item => `${item.amount} ${item.unit} ${item.name}`) : []
             };
             console.log('Instacart Recipe Data:', recipeData);
             return JSON.stringify(recipeData);
