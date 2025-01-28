@@ -163,18 +163,19 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_platform="recipe_widget"
           data-partner_name="mealplanner"
           data-referrer={window.location.origin}
-          data-recipe={(() => {
-            const recipeData = {
-              "@context": "https://schema.org",
-              "@type": "Recipe",
-              name: "Grocery List",
-              recipeIngredient: Array.isArray(items) ? items
-                .filter(item => !checkedItems.has(item.name))
-                .map(item => `${item.amount} ${item.unit} ${item.name}`) : []
-            };
-            console.log('Instacart Recipe Data:', recipeData);
-            return JSON.stringify(recipeData);
-          })()}
+          data-recipe={JSON.stringify({
+            name: "Grocery List",
+            ingredients: Array.isArray(items) ? items
+              .filter(item => !checkedItems.has(item.name))
+              .map(item => ({
+                name: item.name,
+                amount: item.amount,
+                unit: item.unit,
+                notes: "",
+                department: "",
+                original: `${item.amount} ${item.unit} ${item.name}`
+              })) : []
+          })}
           className="inline-flex h-10 items-center"
         />
       </div>
