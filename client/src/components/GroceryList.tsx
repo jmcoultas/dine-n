@@ -155,9 +155,8 @@ export default function GroceryList({ items }: GroceryListProps) {
             "@context": "https://schema.org",
             "@type": "Recipe",
             name: "Grocery List",
-            recipeIngredient: Array.isArray(items) ? items
-              .filter(item => !checkedItems.has(item.name))
-              .map(item => `${item.amount} ${item.unit} ${item.name}`)
+            recipeIngredient: items?.filter(item => !checkedItems.has(item.name))
+              ?.map(item => `${item.amount} ${item.unit} ${item.name}`) || []
           })}
         />
       </div>
