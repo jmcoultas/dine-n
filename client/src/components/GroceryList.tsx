@@ -29,18 +29,25 @@ export default function GroceryList({ items }: GroceryListProps) {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const loadInstacartWidget = () => {
-      const script = document.createElement('script');
-      script.src = "https://www.instacart.com/recipe/widget.js";
-      script.async = true;
-      document.body.appendChild(script);
-
-      return () => {
-        document.body.removeChild(script);
-      };
+    // Add Instacart script
+    const script = document.createElement('script');
+    script.innerHTML = `
+      (function (d, s, id, a) { 
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) { return; } 
+        js = d.createElement(s); 
+        js.id = id;
+        js.src = "https://widgets.instacart.com/widget-bundle-v2.js"; 
+        js.async = true;
+        js.dataset.source_origin = "affiliate_hub"; 
+        fjs.parentNode.insertBefore(js, fjs); 
+      })(document, "script", "standard-instacart-widget-v1");
+    `;
+    document.body.appendChild(script);
+    
+    return () => {
+      document.body.removeChild(script);
     };
-
-    return loadInstacartWidget();
   }, []);
 
   // Normalize ingredient names by removing common prefixes and preparation instructions
@@ -149,20 +156,25 @@ export default function GroceryList({ items }: GroceryListProps) {
           <Download className="h-4 w-4 mr-2" />
           Export List
         </Button>
-        <button
-          className="instacart-cart-button inline-flex h-10 items-center px-4 py-2 bg-[#0AAD0A] text-white rounded-md"
-          data-recipe={JSON.stringify({
-            name: "Grocery List",
-            ingredients: items?.filter(item => !checkedItems.has(item.name))
-              ?.map(item => ({
-                name: item.name,
-                quantity: item.amount,
-                unit: item.unit
-              })) || []
-          })}
-        >
-          Add to Instacart
-        </button>
+        <div 
+          id="shop-with-instacart-v1" 
+          data-affiliate_id="5333" 
+          data-source_origin="affiliate_hub" 
+          data-affiliate_platform="recipe_widget"
+          data-recipe={(() => {
+            const recipeData = {
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Grocery List",
+              recipeIngredient: Array.isArray(items) ? items
+                .filter(item => !checkedItems.has(item.name))
+                .map(item => `${item.amount} ${item.unit} ${item.name}`) : []
+            };
+            console.log('Instacart Recipe Data:', recipeData);
+            return JSON.stringify(recipeData);
+          })()}
+          className="inline-flex h-10 items-center"
+        />
       </div>
 
       <ScrollArea className="h-[500px] rounded-md border">
