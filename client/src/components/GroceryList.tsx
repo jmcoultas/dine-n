@@ -27,6 +27,19 @@ interface GroceryListProps {
 export default function GroceryList({ items }: GroceryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  
+  useEffect(() => {
+    return () => {
+      // Cleanup WebGL context when component unmounts
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        const gl = canvas.getContext('webgl');
+        if (gl) {
+          gl.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Add Instacart script
