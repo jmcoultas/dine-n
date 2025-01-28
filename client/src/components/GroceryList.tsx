@@ -149,16 +149,20 @@ export default function GroceryList({ items }: GroceryListProps) {
           <Download className="h-4 w-4 mr-2" />
           Export List
         </Button>
-        <div 
-          className="instacart-recipe-widget inline-flex h-10 items-center"
+        <button
+          className="instacart-cart-button inline-flex h-10 items-center px-4 py-2 bg-[#0AAD0A] text-white rounded-md"
           data-recipe={JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
             name: "Grocery List",
-            recipeIngredient: items?.filter(item => !checkedItems.has(item.name))
-              ?.map(item => `${item.amount} ${item.unit} ${item.name}`) || []
+            ingredients: items?.filter(item => !checkedItems.has(item.name))
+              ?.map(item => ({
+                name: item.name,
+                quantity: item.amount,
+                unit: item.unit
+              })) || []
           })}
-        />
+        >
+          Add to Instacart
+        </button>
       </div>
 
       <ScrollArea className="h-[500px] rounded-md border">
