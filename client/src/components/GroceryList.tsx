@@ -161,6 +161,8 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_id="5333" 
           data-source_origin="affiliate_hub" 
           data-affiliate_platform="recipe_widget"
+          data-partner_name="mealplanner"
+          data-referrer={window.location.origin}
           data-recipe={(() => {
             const recipeData = {
               "@context": "https://schema.org",
