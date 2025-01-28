@@ -152,14 +152,12 @@ export default function GroceryList({ items }: GroceryListProps) {
         <div 
           className="instacart-recipe-widget inline-flex h-10 items-center"
           data-recipe={JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Recipe",
             name: "Grocery List",
-            ingredients: Array.isArray(items) ? items
+            recipeIngredient: Array.isArray(items) ? items
               .filter(item => !checkedItems.has(item.name))
-              .map(item => ({
-                amount: item.amount,
-                unit: item.unit,
-                raw: `${item.amount} ${item.unit} ${item.name}`
-              }))
+              .map(item => `${item.amount} ${item.unit} ${item.name}`)
           })}
         />
       </div>
