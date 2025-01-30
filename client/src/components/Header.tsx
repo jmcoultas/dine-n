@@ -18,9 +18,8 @@ export default function Header() {
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center px-4">
-        <Link href="/" className="flex items-center space-x-2">
-          <Utensils className="h-6 w-6 text-primary" />
-          <span className="font-bold">Dine-N</span>
+        <Link href="/" className="flex items-center">
+          <img src="/dine-n-logo.png" alt="Dine-N" className="h-8" />
         </Link>
         <NavigationMenu className="ml-auto">
           <NavigationMenuList className="space-x-2">
