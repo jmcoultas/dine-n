@@ -142,9 +142,8 @@ You must respond with a valid recipe in this exact JSON format:
             console.log('AI Service: Saved image to Object Storage:', imageUrl);
           }
         } catch (imageError) {
-          console.error('AI Service: Error generating image:', imageError);
-          imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
-          console.log('AI Service: Using fallback image URL:', imageUrl);
+          console.error('AI Service: Error generating/storing image:', imageError);
+          throw new Error('Failed to generate or store recipe image');
         }
       }
 
