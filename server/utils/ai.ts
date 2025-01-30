@@ -114,36 +114,19 @@ You must respond with a valid recipe in this exact JSON format:
             const response = await fetch(imageResponse.data[0].url);
             const buffer = Buffer.from(await response.arrayBuffer());
 
-            // Initialize Object Storage client properly
-            const { Client } = require('@replit/object-storage');
-            const storage = new Client();
-            
-            // Save to Object Storage with proper error handling
+            // Save to Object Storage
+            const storage = require('@replit/object-storage');
             const imageName = `${Date.now()}-${recipeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
-            const { ok: uploadOk, error: uploadError } = await storage.uploadFromBuffer(
-              imageName,
-              buffer,
-              { contentType: 'image/png' }
-            );
+            await storage.put(imageName, buffer, { contentType: 'image/png' });
 
-            if (!uploadOk) {
-              console.error('Failed to upload image:', uploadError);
-              throw new Error('Failed to upload image to storage');
-            }
-
-            // Get permanent URL with proper error handling
-            const { ok: urlOk, value: url, error: urlError } = await storage.getSignedUrl(imageName);
-            if (!urlOk) {
-              console.error('Failed to get signed URL:', urlError);
-              throw new Error('Failed to get image URL');
-            }
-
-            imageUrl = url;
+            // Get permanent URL
+            imageUrl = await storage.getSignedUrl(imageName);
             console.log('AI Service: Saved image to Object Storage:', imageUrl);
           }
         } catch (imageError) {
-          console.error('AI Service: Error generating/storing image:', imageError);
-          throw new Error('Failed to generate or store recipe image');
+          console.error('AI Service: Error generating image:', imageError);
+          imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
+          console.log('AI Service: Using fallback image URL:', imageUrl);
         }
       }
 

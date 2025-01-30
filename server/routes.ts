@@ -586,32 +586,6 @@ export function registerRoutes(app: express.Express) {
 
       res.json(newGroceryList);
     } catch (error: any) {
-
-  // Test endpoint for image storage
-  app.post("/api/test-image-storage", isAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { imageUrl } = req.body;
-      
-      if (!imageUrl) {
-        return res.status(400).json({ error: "Image URL is required" });
-      }
-
-      const storedImageUrl = await downloadAndStoreImage(imageUrl);
-      
-      if (!storedImageUrl) {
-        return res.status(500).json({ error: "Failed to store image" });
-      }
-
-      res.json({ 
-        originalUrl: imageUrl,
-        storedUrl: storedImageUrl
-      });
-    } catch (error: any) {
-      console.error("Error in test-image-storage:", error);
-      res.status(500).json({ error: "Failed to process image" });
-    }
-  });
-
       console.error("Error creating grocery list:", error);
       res.status(500).json({ error: "Failed to create grocery list" });
     }
