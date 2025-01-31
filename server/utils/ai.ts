@@ -109,19 +109,7 @@ You must respond with a valid recipe in this exact JSON format:
 
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
-
-            // Download the image
-            const response = await fetch(imageResponse.data[0].url);
-            const buffer = Buffer.from(await response.arrayBuffer());
-
-            // Save to Object Storage
-            const storage = require('@replit/object-storage');
-            const imageName = `${Date.now()}-${recipeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
-            await storage.put(imageName, buffer, { contentType: 'image/png' });
-
-            // Get permanent URL
-            imageUrl = await storage.getSignedUrl(imageName);
-            console.log('AI Service: Saved image to Object Storage:', imageUrl);
+            imageUrl = imageResponse.data[0].url;
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
