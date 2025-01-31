@@ -109,7 +109,37 @@ You must respond with a valid recipe in this exact JSON format:
 
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
-            imageUrl = imageResponse.data[0].url;
+            
+            try {
+              // Download image from OpenAI
+              const imageResponse = await fetch(imageResponse.data[0].url);
+              if (!imageResponse.ok) {
+                throw new Error('Failed to download image from OpenAI');
+              }
+              const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+              
+              // Initialize object storage
+              const storage = require('@replit/object-storage');
+              
+              // Generate unique filename using recipe name and timestamp
+              const timestamp = Date.now();
+              const safeRecipeName = recipeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+              const imageName = `recipe-images/${timestamp}-${safeRecipeName}.jpg`;
+              
+              // Upload to object storage
+              await storage.put(imageName, imageBuffer, {
+                contentType: 'image/jpeg'
+              });
+              
+              // Get permanent URL
+              imageUrl = await storage.getSignedUrl(imageName);
+              console.log('AI Service: Stored image permanently:', imageUrl);
+              
+            } catch (storageError) {
+              console.error('AI Service: Storage error:', storageError);
+              // Fallback to temporary OpenAI URL if storage fails
+              imageUrl = imageResponse.data[0].url;
+            }
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
