@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
+import { db, temporaryRecipes, eq } from "./db"; // Assuming database import
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -110,6 +111,21 @@ You must respond with a valid recipe in this exact JSON format:
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
             imageUrl = imageResponse.data[0].url;
+
+            // Schedule image processing in the background
+            setTimeout(async () => {
+              try {
+                const permanentUrl = await downloadAndStoreImage(imageUrl, String(recipeData.id));
+                if (permanentUrl) {
+                  await db
+                    .update(temporaryRecipes)
+                    .set({ permanent_url: permanentUrl })
+                    .where(eq(temporaryRecipes.id, recipeData.id));
+                }
+              } catch (error) {
+                console.error('Background image processing failed:', error);
+              }
+            }, 0);
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
@@ -219,4 +235,14 @@ Consider dietary restrictions and allergies as absolute requirements - do not su
     console.error("OpenAI API Error:", error);
     throw new Error("Failed to generate ingredient substitutions");
   }
+}
+
+// Placeholder function - needs implementation for Replit object storage
+async function downloadAndStoreImage(imageUrl: string, recipeId: string): Promise<string | null> {
+  //Implementation to download from imageUrl and upload to Replit Object Storage
+  //Return the permanent URL from Object Storage
+  //For example using a library like 'node-fetch'
+  console.log("Downloading and storing image:", imageUrl, "for recipe:", recipeId);
+  // ... your code to download and upload the image ...
+  return "https://example.com/permanent_url/" + recipeId; //Replace with actual permanent URL
 }

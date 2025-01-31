@@ -18,6 +18,7 @@ interface RecipeCardProps {
     name: string;
     description?: string;
     image_url?: string;
+    permanent_url?: string; // Added permanent_url
     prepTime?: number;
     cookTime?: number;
     servings?: number;
@@ -102,7 +103,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         <div className="aspect-video relative rounded-t-lg overflow-hidden">
           {imageUrl && (
             <img
-              src={imageUrl}
+              src={recipe.permanent_url || recipe.image_url} // Updated src attribute
               alt={recipe.name}
               className="object-cover w-full h-full"
             />

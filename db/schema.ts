@@ -100,6 +100,7 @@ export const temporaryRecipes = pgTable("temporary_recipes", {
   name: text("name").notNull(),
   description: text("description"),
   image_url: text("image_url"),
+  permanent_url: text("permanent_url"),
   prep_time: integer("prep_time"),
   cook_time: integer("cook_time"),
   servings: integer("servings"),
