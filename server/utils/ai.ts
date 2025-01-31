@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { Recipe } from "@db/schema";
-import { db, temporaryRecipes, eq } from "./db"; // Assuming database import
+import { db, temporaryRecipes, eq } from "@db";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
