@@ -16,13 +16,13 @@ export async function downloadAndStoreImage(imageUrl: string, recipeId: string):
     const fileName = `recipes/${recipeId}.jpg`;
     
     // Upload to Replit Object Storage
-    await storage.uploadBuffer(fileName, buffer, {
+    await storage.putObject(fileName, buffer, {
       contentType: 'image/jpeg',
       public: true // Make the file publicly accessible
     });
     
     // Get permanent URL that doesn't expire
-    const permanentUrl = await storage.getSignedUrl(fileName, Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const permanentUrl = await storage.getPublicUrl(fileName);
     return permanentUrl;
   } catch (error) {
     console.error('Error storing image:', error);
