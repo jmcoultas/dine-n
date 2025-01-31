@@ -1,2 +1,3 @@
 
--- This migration is being removed as part of the rollback
+ALTER TABLE temporary_recipes
+ADD COLUMN permanent_url text;
