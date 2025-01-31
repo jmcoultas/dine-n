@@ -113,19 +113,7 @@ You must respond with a valid recipe in this exact JSON format:
             imageUrl = imageResponse.data[0].url;
 
             // Schedule image processing in the background
-            setTimeout(async () => {
-              try {
-                const permanentUrl = await downloadAndStoreImage(imageUrl, String(recipeData.id));
-                if (permanentUrl) {
-                  await db
-                    .update(temporaryRecipes)
-                    .set({ permanent_url: permanentUrl })
-                    .where(eq(temporaryRecipes.id, recipeData.id));
-                }
-              } catch (error) {
-                console.error('Background image processing failed:', error);
-              }
-            }, 0);
+            
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
