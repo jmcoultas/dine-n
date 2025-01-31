@@ -109,17 +109,41 @@ You must respond with a valid recipe in this exact JSON format:
 
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
+            const openAiUrl = imageResponse.data[0].url;
 
-            // Store the OpenAI temporary URL
-            imageUrl = imageResponse.data[0].url;
-
-            // Download and store permanent image
-            const imageData = await fetchImage(imageUrl);
-            const permanentUrl = await uploadToObjectStorage(imageData, recipeData.name);
-
-            // Update recipe data to include both URLs
-            recipeData.image_url = imageUrl;
-            recipeData.permanent_url = permanentUrl;
+            try {
+              // Download image from OpenAI
+              const downloadedImage = await fetch(openAiUrl);
+              if (!downloadedImage.ok) {
+                throw new Error('Failed to download image from OpenAI');
+              }
+              const imageBuffer = Buffer.from(await downloadedImage.arrayBuffer());
+              
+              // Generate unique filename using recipe name and timestamp
+              const timestamp = Date.now();
+              const safeRecipeName = recipeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+              const imageName = `recipe-images/${timestamp}-${safeRecipeName}.jpg`;
+              
+              // Initialize object storage
+              const storage = require('@replit/object-storage');
+              
+              // Upload to object storage
+              await storage.put(imageName, imageBuffer, {
+                contentType: 'image/jpeg'
+              });
+              
+              // Get permanent URL and update recipe data
+              const permanentUrl = await storage.getSignedUrl(imageName);
+              recipeData.image_url = openAiUrl;
+              recipeData.permanent_url = permanentUrl;
+              
+              console.log('AI Service: Stored image permanently:', permanentUrl);
+            } catch (storageError) {
+              console.error('AI Service: Storage error:', storageError);
+              // Fallback to OpenAI URL if storage fails
+              recipeData.image_url = openAiUrl;
+              recipeData.permanent_url = null;
+            }
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
