@@ -110,6 +110,17 @@ You must respond with a valid recipe in this exact JSON format:
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
             imageUrl = imageResponse.data[0].url;
+            
+            // Download and store image
+            try {
+              const permanentUrl = await downloadAndStoreImage(imageUrl, String(recipeData.id));
+              if (permanentUrl) {
+                recipeData.permanent_url = permanentUrl;
+              }
+            } catch (error) {
+              console.error('Failed to store image:', error);
+              // Continue with original URL if storage fails
+            }
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
