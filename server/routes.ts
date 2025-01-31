@@ -5,6 +5,7 @@ import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes,
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
+import { cleanupExpiredRecipes } from "./utils/cleanup";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -21,6 +22,20 @@ export function registerRoutes(app: express.Express) {
       next();
     } else {
       express.json()(req, res, next);
+    }
+  });
+
+  //Add cleanup endpoint
+  app.post("/api/cleanup/expired-recipes", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const deletedRecipes = await cleanupExpiredRecipes();
+      res.json({ 
+        message: "Cleanup completed successfully", 
+        deletedCount: deletedRecipes.length 
+      });
+    } catch (error: any) {
+      console.error("Error during cleanup:", error);
+      res.status(500).json({ error: "Failed to cleanup expired recipes" });
     }
   });
 
@@ -651,4 +666,5 @@ export function registerRoutes(app: express.Express) {
       res.status(500).json({ error: "Failed to update preferences" });
     }
   });
+  registerRoutes(app);
 }
