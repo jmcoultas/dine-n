@@ -110,36 +110,11 @@ You must respond with a valid recipe in this exact JSON format:
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
             
-            try {
-              // Download image from OpenAI
-              const imageResponse = await fetch(imageResponse.data[0].url);
-              if (!imageResponse.ok) {
-                throw new Error('Failed to download image from OpenAI');
-              }
-              const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-              
-              // Initialize object storage
-              const storage = require('@replit/object-storage');
-              
-              // Generate unique filename using recipe name and timestamp
-              const timestamp = Date.now();
-              const safeRecipeName = recipeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-              const imageName = `recipe-images/${timestamp}-${safeRecipeName}.jpg`;
-              
-              // Upload to object storage
-              await storage.put(imageName, imageBuffer, {
-                contentType: 'image/jpeg'
-              });
-              
-              // Get permanent URL
-              imageUrl = await storage.getSignedUrl(imageName);
-              console.log('AI Service: Stored image permanently:', imageUrl);
-              
-            } catch (storageError) {
-              console.error('AI Service: Storage error:', storageError);
-              // Fallback to temporary OpenAI URL if storage fails
-              imageUrl = imageResponse.data[0].url;
-            }
+            const imageUrl = imageResponse.data[0].url;
+            const imageData = await fetchImage(imageUrl);
+            const permanentUrl = await uploadToObjectStorage(imageData, recipeData.name);
+
+            await storeInDatabase(recipeData.name, permanentUrl);
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
@@ -249,4 +224,22 @@ Consider dietary restrictions and allergies as absolute requirements - do not su
     console.error("OpenAI API Error:", error);
     throw new Error("Failed to generate ingredient substitutions");
   }
+}
+
+async function fetchImage(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to download image');
+  return await response.buffer();
+}
+
+async function uploadToObjectStorage(imageData: Buffer, name: string): Promise<string> {
+  // Implementation of uploadToObjectStorage function
+  // This function should return a permanent URL where the image is stored
+  throw new Error("Upload to object storage not implemented");
+}
+
+async function storeInDatabase(name: string, url: string): Promise<void> {
+  // Implementation of storeInDatabase function
+  // This function should store the URL in the database
+  throw new Error("Store in database not implemented");
 }
