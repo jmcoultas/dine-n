@@ -117,31 +117,37 @@ You must respond with a valid recipe in this exact JSON format:
               if (!downloadedImage.ok) {
                 throw new Error('Failed to download image from OpenAI');
               }
-              const imageBuffer = Buffer.from(await downloadedImage.arrayBuffer());
-              
+              const imageBuffer = await downloadedImage.arrayBuffer();
+
               // Generate unique filename using recipe name and timestamp
               const timestamp = Date.now();
               const safeRecipeName = recipeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
               const imageName = `recipe-images/${timestamp}-${safeRecipeName}.jpg`;
-              
-              // Initialize object storage
-              const storage = require('@replit/object-storage');
-              
-              // Upload to object storage
-              await storage.put(imageName, imageBuffer, {
-                contentType: 'image/jpeg'
-              });
-              
-              // Get permanent URL and update recipe data
-              const permanentUrl = await storage.getSignedUrl(imageName);
-              recipeData.image_url = openAiUrl;
-              recipeData.permanent_url = permanentUrl;
-              
-              console.log('AI Service: Stored image permanently:', permanentUrl);
-            } catch (storageError) {
-              console.error('AI Service: Storage error:', storageError);
-              // Fallback to OpenAI URL if storage fails
-              recipeData.image_url = openAiUrl;
+
+              try {
+                // Initialize object storage
+                const storage = require('@replit/object-storage');
+
+                // Upload to object storage
+                await storage.put(imageName, Buffer.from(imageBuffer), {
+                  contentType: 'image/jpeg'
+                });
+
+                // Get permanent URL and update recipe data
+                const permanentUrl = `https://${process.env.REPLIT_SLUG}.repl.co/storage/${imageName}`;
+                recipeData.image_url = openAiUrl;
+                recipeData.permanent_url = permanentUrl;
+
+                console.log('AI Service: Successfully stored image with permanent URL:', permanentUrl);
+              } catch (storageError) {
+                console.error('AI Service: Storage error:', storageError);
+                // Fallback to OpenAI URL if storage fails
+                recipeData.image_url = openAiUrl;
+                recipeData.permanent_url = null;
+              }
+            } catch (error) {
+              console.error('AI Service: Error downloading or uploading image:', error);
+              recipeData.image_url = null;
               recipeData.permanent_url = null;
             }
           }
