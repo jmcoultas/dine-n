@@ -18,7 +18,6 @@ interface RecipeCardProps {
     name: string;
     description?: string;
     image_url?: string;
-    permanent_url?: string; // Added permanent_url
     prepTime?: number;
     cookTime?: number;
     servings?: number;
