@@ -109,12 +109,17 @@ You must respond with a valid recipe in this exact JSON format:
 
           if (imageResponse.data[0]?.url) {
             console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
-            
-            const imageUrl = imageResponse.data[0].url;
+
+            // Store the OpenAI temporary URL
+            imageUrl = imageResponse.data[0].url;
+
+            // Download and store permanent image
             const imageData = await fetchImage(imageUrl);
             const permanentUrl = await uploadToObjectStorage(imageData, recipeData.name);
 
-            await storeInDatabase(recipeData.name, permanentUrl);
+            // Update recipe data to include both URLs
+            recipeData.image_url = imageUrl;
+            recipeData.permanent_url = permanentUrl;
           }
         } catch (imageError) {
           console.error('AI Service: Error generating image:', imageError);
