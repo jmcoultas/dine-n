@@ -28,6 +28,9 @@ export default function GroceryList({ items }: GroceryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   
+  // Define recipeName here
+  const recipeName = items.length > 0 ? items[0].name : "Grocery List"; // Use the first item's name or a default name
+
   useEffect(() => {
     return () => {
       // Cleanup WebGL context when component unmounts
@@ -48,7 +51,7 @@ export default function GroceryList({ items }: GroceryListProps) {
   }, []);
 
   useEffect(() => {
-    // Add Instacart script
+    // Create and append the Instacart script
     const script = document.createElement('script');
     script.innerHTML = `
       (function (d, s, id, a) { 
@@ -63,11 +66,12 @@ export default function GroceryList({ items }: GroceryListProps) {
       })(document, "script", "standard-instacart-widget-v1");
     `;
     document.body.appendChild(script);
-    
+
+    // Cleanup function to remove the script when the component unmounts
     return () => {
       document.body.removeChild(script);
     };
-  }, []);
+  }, []); // Empty dependency array ensures this runs once after the component mounts
 
   // Normalize ingredient names by removing common prefixes and preparation instructions
   const normalizeIngredientName = (name: string) => {
@@ -159,6 +163,20 @@ export default function GroceryList({ items }: GroceryListProps) {
     URL.revokeObjectURL(url);
   };
 
+  const recipeData = {
+    "@context": "https://schema.org",
+    "@type": "Recipe",
+    name: recipeName,
+    recipeIngredient: Array.isArray(items) ? items
+      .filter(item => !checkedItems.has(item.name))
+      .map(item => `${item.amount} ${item.unit} ${item.name}`) : []
+  };
+
+  // Ensure the recipeData is properly formatted as a JSON string
+  const recipeDataString = JSON.stringify(recipeData);
+
+  console.log('Formatted Recipe Data for Instacart:', recipeDataString);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -182,18 +200,7 @@ export default function GroceryList({ items }: GroceryListProps) {
           data-affiliate_platform="recipe_widget"
           data-partner_name="mealplanner"
           data-referrer={window.location.origin}
-          data-recipe={(() => {
-            const recipeData = {
-              "@context": "https://schema.org",
-              "@type": "Recipe",
-              name: "Grocery List",
-              recipeIngredient: Array.isArray(items) ? items
-                .filter(item => !checkedItems.has(item.name))
-                .map(item => `${item.amount} ${item.unit} ${item.name}`) : []
-            };
-            console.log('Instacart Recipe Data:', recipeData);
-            return JSON.stringify(recipeData);
-          })()}
+          data-recipe={recipeDataString}
           className="inline-flex h-10 items-center"
         />
       </div>
