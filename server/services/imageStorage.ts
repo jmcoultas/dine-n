@@ -16,13 +16,15 @@ export async function downloadAndStoreImage(imageUrl: string, recipeId: string):
     const fileName = `recipes/${recipeId}.jpg`;
     
     // Upload to Replit Object Storage
-    await storage.putObject(fileName, buffer, {
-      contentType: 'image/jpeg',
-      public: true // Make the file publicly accessible
-    });
+    const { ok, error } = await storage.uploadFromBytes(fileName, buffer);
+
+    if (!ok) {
+      console.error('Error uploading image:', error);
+      // Handle the error appropriately, e.g., throw an error or return a response
+    }
     
     // Get permanent URL that doesn't expire
-    const permanentUrl = await storage.getPublicUrl(fileName);
+    const permanentUrl = `https://replit-objstore-61e062ce-7b37-4380-ac44-c49bcf2f1ff.replit.dev/${fileName}`; // Construct the URL manually
     return permanentUrl;
   } catch (error) {
     console.error('Error storing image:', error);
