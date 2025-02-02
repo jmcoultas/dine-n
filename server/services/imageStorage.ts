@@ -36,7 +36,7 @@ export async function downloadAndStoreImage(imageUrl: string, recipeId: string):
     console.log('Successfully uploaded to object storage');
     
     // Construct the permanent URL using the Replit Object Storage domain
-    const permanentUrl = `https://${BUCKET_NAME}.replitusercontent.com/${fileName}`;
+    const permanentUrl = `https://${BUCKET_NAME}.replitusercontent.com/recipes/${recipeId}.jpg`;
     
     // Verify the object exists after upload
     console.log('Verifying file exists in storage');
