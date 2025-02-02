@@ -18,6 +18,7 @@ interface RecipeCardProps {
     name: string;
     description?: string;
     image_url?: string;
+    permanent_url?: string;
     prepTime?: number;
     cookTime?: number;
     servings?: number;
@@ -45,7 +46,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
   const { user } = useUser();
   const queryClient = useQueryClient();
 
-  const imageUrl = recipe.image_url || '';
+  const imageUrl = recipe.permanent_url || recipe.image_url || '';
   const description = recipe.description ?? '';
   const prepTime = recipe.prepTime ?? 0;
   const cookTime = recipe.cookTime ?? 0;
@@ -102,7 +103,7 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         <div className="aspect-video relative rounded-t-lg overflow-hidden">
           {imageUrl && (
             <img
-              src={recipe.image_url}
+              src={imageUrl}
               alt={recipe.name}
               className="object-cover w-full h-full"
             />

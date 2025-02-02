@@ -19,6 +19,7 @@ interface MealPlanCardProps {
     name: string;
     description: string | null;
     image_url: string | undefined;
+    permanent_url?: string | null;
     isFavorited?: boolean;
     prepTime: number | null;
     cookTime: number | null;
@@ -107,7 +108,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const cookTime = recipe.cookTime ?? 0;
   const totalTime = prepTime + cookTime;
   const servings = recipe.servings ?? 2;
-  const imageUrl = recipe.image_url ?? '';
+  const imageUrl = recipe.permanent_url || recipe.image_url || '';
   const description = recipe.description ?? '';
 
   const nutrition = {
@@ -130,7 +131,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
         <div
           className="aspect-video relative"
           style={{
-            backgroundImage: recipe.image_url ? `url(${recipe.image_url})` : 'none',
+            backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -200,9 +201,9 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
 
           <div className="space-y-4">
             <div className="aspect-video relative rounded-lg overflow-hidden">
-              {recipe.image_url && (
+              {imageUrl && (
                 <img
-                  src={recipe.image_url}
+                  src={imageUrl}
                   alt={recipe.name}
                   className="object-cover w-full h-full"
                 />

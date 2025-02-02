@@ -5,6 +5,7 @@ import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes,
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
+import { downloadAndStoreImage } from "./services/imageStorage";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -193,7 +194,7 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/temporary-recipes", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
       const expirationDate = new Date();
-      expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
+      expirationDate.setDate(expirationDate.getDate() + 2);
 
       const recipe = req.body;
       const insertData = {
@@ -201,6 +202,7 @@ export function registerRoutes(app: express.Express) {
         name: String(recipe.name || ''),
         description: recipe.description?.toString() || null,
         image_url: recipe.image_url?.toString() || null,
+        permanent_url: null, // Start with null permanent_url
         prep_time: Math.max(0, Number(recipe.prep_time) || 0),
         cook_time: Math.max(0, Number(recipe.cook_time) || 0),
         servings: Math.max(1, Number(recipe.servings) || 2),
@@ -229,6 +231,26 @@ export function registerRoutes(app: express.Express) {
         .insert(temporaryRecipes)
         .values(parseResult.data)
         .returning();
+
+      // Now that we have a valid recipe ID, store the image if one exists
+      if (savedRecipe.image_url) {
+        try {
+          const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+          if (permanentUrl) {
+            // Update the recipe with the permanent URL
+            const [updatedRecipe] = await db
+              .update(temporaryRecipes)
+              .set({ permanent_url: permanentUrl })
+              .where(eq(temporaryRecipes.id, savedRecipe.id))
+              .returning();
+            
+            return res.json(updatedRecipe);
+          }
+        } catch (error) {
+          console.error('Failed to store image:', error);
+          // Continue with the original recipe if image storage fails
+        }
+      }
 
       res.json(savedRecipe);
     } catch (error: any) {
@@ -443,6 +465,7 @@ export function registerRoutes(app: express.Express) {
           name: String(recipe.name || ''),
           description: recipe.description?.toString() || null,
           image_url: recipe.image_url?.toString() || null,
+          permanent_url: null, // Start with null permanent_url
           prep_time: Number(recipe.prep_time) || 0,
           cook_time: Number(recipe.cook_time) || 0,
           servings: Number(recipe.servings) || 2,
@@ -465,6 +488,27 @@ export function registerRoutes(app: express.Express) {
           .insert(temporaryRecipes)
           .values([insertResult.data])
           .returning();
+
+        // Add image storage here
+        if (savedRecipe.image_url) {
+          try {
+            const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+            if (permanentUrl) {
+              // Update the recipe with the permanent URL
+              const [updatedRecipe] = await db
+                .update(temporaryRecipes)
+                .set({ permanent_url: permanentUrl })
+                .where(eq(temporaryRecipes.id, savedRecipe.id))
+                .returning();
+              
+              savedRecipes.push(updatedRecipe);
+              continue; // Skip the push at the end
+            }
+          } catch (error) {
+            console.error('Failed to store image:', error);
+            // Continue with the original recipe if image storage fails
+          }
+        }
 
         savedRecipes.push(savedRecipe);
       }
