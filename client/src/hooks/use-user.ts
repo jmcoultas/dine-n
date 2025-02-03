@@ -1,92 +1,116 @@
+import { useState, useEffect } from 'react';
+import { 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  type User as FirebaseUser
+} from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from "@db/schema";
 
-interface InsertUser {
+interface AuthUser extends Omit<User, 'password_hash'> {
+  firebaseUid: string;
+}
+
+interface AuthCredentials {
   email: string;
   password: string;
 }
 
-type RequestResult = {
-  ok: true;
-} | {
-  ok: false;
-  message: string;
-};
-
-async function handleRequest(
-  url: string,
-  method: string,
-  body?: InsertUser
-): Promise<RequestResult> {
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      if (response.status >= 500) {
-        return { ok: false, message: response.statusText };
-      }
-
-      const message = await response.text();
-      return { ok: false, message };
-    }
-
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, message: e.toString() };
-  }
-}
-
-async function fetchUser(): Promise<User | null> {
-  const response = await fetch('/api/user', {
+async function syncUserWithServer(firebaseUser: FirebaseUser): Promise<AuthUser> {
+  const idToken = await firebaseUser.getIdToken();
+  
+  const response = await fetch('/api/auth/sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`
+    },
     credentials: 'include'
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      return null;
-    }
-
-    if (response.status >= 500) {
-      throw new Error(`${response.status}: ${response.statusText}`);
-    }
-
-    throw new Error(`${response.status}: ${await response.text()}`);
+    throw new Error('Failed to sync user with server');
   }
 
   return response.json();
 }
 
+async function fetchUser(): Promise<AuthUser | null> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return null;
+
+  try {
+    return await syncUserWithServer(currentUser);
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    return null;
+  }
+}
+
 export function useUser() {
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
 
-  const { data: user, error, isLoading } = useQuery<User | null, Error>({
-    queryKey: ['user'],
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const { data: user } = useQuery<AuthUser | null>({
+    queryKey: ['user', firebaseUser?.uid],
     queryFn: fetchUser,
-    staleTime: Infinity,
-    retry: false
+    enabled: !!firebaseUser,
   });
 
-  const loginMutation = useMutation<RequestResult, Error, InsertUser>({
-    mutationFn: (userData) => handleRequest('/api/login', 'POST', userData),
+  const loginMutation = useMutation({
+    mutationFn: async ({ email, password }: AuthCredentials) => {
+      const { user: fbUser } = await signInWithEmailAndPassword(auth, email, password);
+      return syncUserWithServer(fbUser);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });
 
-  const logoutMutation = useMutation<RequestResult, Error>({
-    mutationFn: () => handleRequest('/api/logout', 'POST'),
+  const registerMutation = useMutation({
+    mutationFn: async ({ email, password }: AuthCredentials) => {
+      const { user: fbUser } = await createUserWithEmailAndPassword(auth, email, password);
+      return syncUserWithServer(fbUser);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });
 
-  const registerMutation = useMutation<RequestResult, Error, InsertUser>({
-    mutationFn: (userData) => handleRequest('/api/register', 'POST', userData),
+  const googleLoginMutation = useMutation({
+    mutationFn: async () => {
+      const provider = new GoogleAuthProvider();
+      const { user: fbUser } = await signInWithPopup(auth, provider);
+      return syncUserWithServer(fbUser);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await signOut(auth);
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
@@ -94,9 +118,9 @@ export function useUser() {
 
   return {
     user,
-    isLoading,
-    error,
+    isLoading: isLoading || loginMutation.isPending || registerMutation.isPending,
     login: loginMutation.mutateAsync,
+    loginWithGoogle: googleLoginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
     register: registerMutation.mutateAsync,
   };

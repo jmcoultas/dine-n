@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,49 +29,7 @@ export default function GroceryList({ items }: GroceryListProps) {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   
   // Define recipeName here
-  const recipeName = items.length > 0 ? items[0].name : "Grocery List"; // Use the first item's name or a default name
-
-  useEffect(() => {
-    return () => {
-      // Cleanup WebGL context when component unmounts
-      const canvases = document.querySelectorAll('canvas');
-      canvases.forEach(canvas => {
-        const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
-        if (gl) {
-          gl.getExtension('WEBGL_lose_context')?.loseContext();
-          // Delete framebuffers and textures
-          const framebuffers = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-          if (framebuffers) {
-            gl.deleteFramebuffer(framebuffers);
-          }
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        }
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    // Create and append the Instacart script
-    const script = document.createElement('script');
-    script.innerHTML = `
-      (function (d, s, id, a) { 
-        var js, fjs = d.getElementsByTagName(s)[0];
-        if (d.getElementById(id)) { return; } 
-        js = d.createElement(s); 
-        js.id = id;
-        js.src = "https://widgets.instacart.com/widget-bundle-v2.js"; 
-        js.async = true;
-        js.dataset.source_origin = "affiliate_hub"; 
-        fjs.parentNode.insertBefore(js, fjs); 
-      })(document, "script", "standard-instacart-widget-v1");
-    `;
-    document.body.appendChild(script);
-
-    // Cleanup function to remove the script when the component unmounts
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []); // Empty dependency array ensures this runs once after the component mounts
+  const recipeName = items.length > 0 ? items[0].name : "Grocery List";
 
   // Normalize ingredient names by removing common prefixes and preparation instructions
   const normalizeIngredientName = (name: string) => {
@@ -163,20 +121,6 @@ export default function GroceryList({ items }: GroceryListProps) {
     URL.revokeObjectURL(url);
   };
 
-  const recipeData = {
-    "@context": "https://schema.org",
-    "@type": "Recipe",
-    name: recipeName,
-    recipeIngredient: Array.isArray(items) ? items
-      .filter(item => !checkedItems.has(item.name))
-      .map(item => `${item.amount} ${item.unit} ${item.name}`) : []
-  };
-
-  // Ensure the recipeData is properly formatted as a JSON string
-  const recipeDataString = JSON.stringify(recipeData);
-
-  console.log('Formatted Recipe Data for Instacart:', recipeDataString);
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -193,16 +137,6 @@ export default function GroceryList({ items }: GroceryListProps) {
           <Download className="h-4 w-4 mr-2" />
           Export List
         </Button>
-        <div 
-          id="shop-with-instacart-v1" 
-          data-affiliate_id="5333" 
-          data-source_origin="affiliate_hub" 
-          data-affiliate_platform="recipe_widget"
-          data-partner_name="mealplanner"
-          data-referrer={window.location.origin}
-          data-recipe={recipeDataString}
-          className="inline-flex h-10 items-center"
-        />
       </div>
 
       <ScrollArea className="h-[500px] rounded-md border">

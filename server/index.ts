@@ -5,6 +5,11 @@ import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
+import authRoutes from './routes/auth';
+import { verifyAuth } from './middleware/auth';
+import recipeRoutes from './routes/recipes';
+import mealPlanRoutes from './routes/meal-plans';
+import groceryListRoutes from './routes/grocery-lists';
 
 const app = express();
 const server = createServer(app);
@@ -55,6 +60,14 @@ async function startServer() {
 
     // Register routes
     registerRoutes(app);
+
+    // Use the new auth routes
+    app.use('/api', authRoutes);
+
+    // Protected routes should use verifyAuth middleware
+    app.use('/api/recipes', verifyAuth, recipeRoutes);
+    app.use('/api/meal-plans', verifyAuth, mealPlanRoutes);
+    app.use('/api/grocery-lists', verifyAuth, groceryListRoutes);
 
     // Setup Vite in development mode
     if (process.env.NODE_ENV !== 'production') {

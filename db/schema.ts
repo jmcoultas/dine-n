@@ -41,7 +41,7 @@ export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   email: text("email").notNull().unique(),
   name: text("name"),
-  password_hash: text("password_hash").notNull(),
+  firebase_uid: text("firebase_uid").notNull().unique(),
   preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
   stripe_customer_id: text("stripe_customer_id"),
   stripe_subscription_id: text("stripe_subscription_id"),

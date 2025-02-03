@@ -5,7 +5,7 @@ import { Response } from 'node-fetch';
 const storage = new Client();
 
 // The base URL for the storage bucket
-const BUCKET_NAME = process.env.BUCKET_NAME || '61e062ce-7b37-4380-ac44-c49bcf2f1ff';
+const BUCKET_NAME = process.env.BUCKET_NAME || 'replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff';
 
 export async function downloadAndStoreImage(imageUrl: string, recipeId: string): Promise<string> {
   try {
@@ -36,7 +36,7 @@ export async function downloadAndStoreImage(imageUrl: string, recipeId: string):
     console.log('Successfully uploaded to object storage');
     
     // Construct the permanent URL using the Replit Object Storage domain
-    const permanentUrl = `https://${BUCKET_NAME}.replitusercontent.com/recipes/${recipeId}.jpg`;
+    const permanentUrl = `https://${BUCKET_NAME}.replit.dev/${fileName}`;
     
     // Verify the object exists after upload
     console.log('Verifying file exists in storage');
