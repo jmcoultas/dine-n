@@ -140,7 +140,10 @@ export default function RecipeCard({ recipe, isFavorited = false, onClick }: Rec
         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <Clock className="w-4 h-4 mr-1" />
-            {prepTime + cookTime} min
+            <div className="flex gap-2">
+              {prepTime > 0 && <span>Prep: {prepTime}m</span>}
+              {cookTime > 0 && <span>Cook: {cookTime}m</span>}
+            </div>
           </div>
           <div className="flex items-center">
             <Users className="w-4 h-4 mr-1" />

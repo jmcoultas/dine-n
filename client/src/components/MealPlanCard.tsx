@@ -2,11 +2,15 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { ChefHat, Heart } from "lucide-react";
-import { useState } from "react";
+import { ChefHat, Heart, Wand2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { getIngredientSubstitutions } from "@/lib/api";
+import { useSubscription } from "@/hooks/use-subscription";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
+import type { Preferences } from "@db/schema";
 
 type ComplexityLevel = 1 | 2 | 3;
 
@@ -56,11 +60,162 @@ const mealColors: Record<MealPlanCardProps["meal"], string> = {
   dinner: "bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100",
 };
 
+interface IngredientSubstitutionProps {
+  ingredient: string;
+  amount: number;
+  unit: string;
+  preferences: Partial<Preferences>;
+  onClose: () => void;
+  onSwap: (oldIngredient: string, newIngredient: string) => void;
+}
+
+function IngredientSubstitution({ 
+  ingredient, 
+  amount, 
+  unit, 
+  preferences,
+  onClose, 
+  onSwap 
+}: IngredientSubstitutionProps) {
+  const [substitutions, setSubstitutions] = useState<string[]>([]);
+  const [reasoning, setReasoning] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const fetchSubstitutions = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await getIngredientSubstitutions(ingredient, {
+        dietary: preferences.dietary || [],
+        allergies: preferences.allergies || []
+      });
+      setSubstitutions(result.substitutions);
+      setReasoning(result.reasoning);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to get substitutions");
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to get substitutions",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubstitutions();
+  }, [ingredient, preferences]);
+
+  const handleSwap = (newIngredient: string) => {
+    onSwap(ingredient, newIngredient);
+    toast({
+      title: "Ingredient Swapped",
+      description: `Replaced ${amount} ${unit} ${ingredient} with ${amount} ${unit} ${newIngredient}`,
+    });
+    onClose();
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Substitutions for {amount} {unit} {ingredient}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {isLoading ? (
+            <div className="text-center py-4">Loading substitutions...</div>
+          ) : error ? (
+            <div className="text-center text-destructive py-4">{error}</div>
+          ) : (
+            <>
+              <div>
+                <h3 className="font-semibold mb-2">Alternatives:</h3>
+                <ul className="space-y-2">
+                  {substitutions.map((sub, index) => (
+                    <li key={index} className="flex items-center justify-between group p-2 rounded-lg hover:bg-muted">
+                      <span className="text-muted-foreground">{sub}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSwap(sub)}
+                      >
+                        Use Instead
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {reasoning && (
+                <div>
+                  <h3 className="font-semibold mb-2">Why these work:</h3>
+                  <p className="text-muted-foreground">{reasoning}</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [selectedIngredient, setSelectedIngredient] = useState<{name: string; amount: number; unit: string} | null>(null);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [localIngredients, setLocalIngredients] = useState(recipe.ingredients ?? []);
   const { toast } = useToast();
   const { user } = useUser();
+  const { subscription } = useSubscription();
   const queryClient = useQueryClient();
+
+  // Fetch user preferences
+  const { data: userPreferences } = useQuery({
+    queryKey: ['userPreferences'],
+    queryFn: async () => {
+      if (!user) return null;
+      const response = await fetch('/api/user/profile', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch user preferences');
+      }
+      const data = await response.json();
+      return data.preferences as Preferences;
+    },
+    enabled: !!user
+  });
+
+  // Initialize local ingredients when recipe changes
+  useEffect(() => {
+    setLocalIngredients(recipe.ingredients ?? []);
+  }, [recipe.ingredients]);
+
+  const handleIngredientSwap = (oldIngredient: string, newIngredient: string) => {
+    const updatedIngredients = localIngredients.map(ing => 
+      ing.name === oldIngredient
+        ? { ...ing, name: newIngredient }
+        : ing
+    );
+    setLocalIngredients(updatedIngredients);
+    
+    // Update the grocery list in the parent component
+    queryClient.setQueryData(['groceryList'], (oldData: any) => {
+      if (!oldData) return oldData;
+      
+      const updatedList = oldData.map((item: any) => {
+        if (item.name === oldIngredient) {
+          return { ...item, name: newIngredient };
+        }
+        return item;
+      });
+      
+      return updatedList;
+    });
+  };
 
   const toggleFavorite = useMutation({
     mutationFn: async () => {
@@ -231,9 +386,27 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
               <div>
                 <h3 className="font-semibold mb-2">Ingredients</h3>
                 <ul className="list-disc list-inside space-y-1">
-                  {ingredients.map((ingredient, i) => (
-                    <li key={i}>
-                      {ingredient.amount} {ingredient.unit} {ingredient.name}
+                  {localIngredients.map((ingredient, i) => (
+                    <li key={i} className="flex items-center justify-between group">
+                      <span>
+                        {ingredient.amount} {ingredient.unit} {ingredient.name}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (subscription?.tier !== 'premium') {
+                            setShowSubscriptionModal(true);
+                          } else {
+                            setSelectedIngredient(ingredient);
+                          }
+                        }}
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        <span className="sr-only">Find substitutes</span>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -286,6 +459,23 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
           </div>
         </DialogContent>
       </Dialog>
+
+      {selectedIngredient && (
+        <IngredientSubstitution
+          ingredient={selectedIngredient.name}
+          amount={selectedIngredient.amount}
+          unit={selectedIngredient.unit}
+          preferences={userPreferences || {}}
+          onClose={() => setSelectedIngredient(null)}
+          onSwap={handleIngredientSwap}
+        />
+      )}
+
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        feature="ingredient substitution"
+      />
     </>
   );
 }
