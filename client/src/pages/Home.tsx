@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@/hooks/use-user";
+import { useUser, type AuthUser } from "@/hooks/use-user";
 import { useSubscription } from "@/hooks/use-subscription";
 import PreferenceModal from "@/components/PreferenceModal";
-import { generateMealPlan } from "@/lib/api";
+import { generateMealPlan, type GenerateMealPlanResponse } from "@/lib/api";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
 import { RecipeResponseSchema } from "@/lib/types";
@@ -19,7 +19,7 @@ const HERO_IMAGES = [
 ];
 
 export default function Home() {
-  const { user } = useUser();
+  const userQuery = useUser();
   const { subscription } = useSubscription();
   const [showPreferences, setShowPreferences] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -30,6 +30,7 @@ export default function Home() {
     cuisine: [],
     meatTypes: [],
   });
+  const { toast } = useToast();
 
   const handlePreferencesSave = (newPreferences: Preferences) => {
     const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
@@ -46,17 +47,15 @@ export default function Home() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (user?.preferences) {
-      const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
+    if (userQuery.data?.preferences) {
+      const parsedPrefs = PreferenceSchema.safeParse(userQuery.data.preferences);
       if (parsedPrefs.success) {
         setPreferences(parsedPrefs.data);
       }
     }
-  }, [user]);
+  }, [userQuery.data?.preferences]);
 
-  const { toast } = useToast();
-
-  const generateMutation = useMutation({
+  const generateMutation = useMutation<GenerateMealPlanResponse, Error, Preferences>({
     mutationFn: async (prefs: Preferences) => {
       const cleanPreferences = {
         dietary: prefs.dietary.filter(Boolean),
@@ -68,23 +67,13 @@ export default function Home() {
       const response = await generateMealPlan(cleanPreferences, 2);
       console.log('Received response:', response);
 
-      // Move the parsing after storing recipes
       if (Array.isArray(response.recipes)) {
-        await localStorage.setItem('generatedRecipes', JSON.stringify(response.recipes));
-      }
-
-      const result = RecipeResponseSchema.safeParse(response);
-      if (!result.success) {
-        console.warn('Response format validation failed:', result.error);
-        // Continue if we have recipes despite schema validation failure
-        if (!Array.isArray(response.recipes)) {
-          throw new Error('Invalid response format from server');
-        }
+        localStorage.setItem('generatedRecipes', JSON.stringify(response.recipes));
       }
 
       return response;
     },
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       if (Array.isArray(data.recipes)) {
         setShowPreferences(false);
         // Small delay to ensure state updates are processed
@@ -103,10 +92,8 @@ export default function Home() {
         });
       }
     },
-    onError: (error: unknown) => {
-      const err = error as Error;
-
-      if (err.message === 'FREE_PLAN_LIMIT_REACHED') {
+    onError: (error: Error) => {
+      if (error.message === 'FREE_PLAN_LIMIT_REACHED') {
         setShowPreferences(false);
         setFeatureContext("Meal plan generation");
         setShowSubscriptionModal(true);
@@ -114,10 +101,10 @@ export default function Home() {
       }
 
       // Only show error toast for non-subscription related errors
-      if (!err.message?.includes('subscription')) {
+      if (!error.message?.includes('subscription')) {
         toast({
           title: "Error",
-          description: err.message || "Failed to generate meal plan. Please try again.",
+          description: error.message || "Failed to generate meal plan. Please try again.",
           variant: "destructive",
         });
       }
@@ -150,7 +137,7 @@ export default function Home() {
             Generate personalized meal plans, discover new recipes, and simplify
             your grocery shopping with our intelligent cooking companion.
           </p>
-          {user ? (
+          {userQuery.data ? (
             <Button
               size="lg"
               className="bg-primary hover:bg-primary/90"
@@ -215,9 +202,9 @@ export default function Home() {
         onUpdatePreferences={handlePreferencesSave}
         isGenerating={generateMutation.isPending}
         onGenerate={handleGenerate}
-        user={user ? {
-          subscription_tier: user.subscription_tier,
-          meal_plans_generated: user.meal_plans_generated
+        user={userQuery.data ? {
+          subscription_tier: userQuery.data.subscription_tier,
+          meal_plans_generated: userQuery.data.meal_plans_generated
         } : undefined}
       />
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useUser } from "@/hooks/use-user";
+import { useUser, useLogout } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,11 @@ const sections: Section[] = [
 ];
 
 export default function UserProfile() {
-  const { user, isLoading, logout } = useUser();
+  const { 
+    data: user,
+    isLoading
+  } = useUser();
+  const { mutateAsync: logout } = useLogout();
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("profile");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -55,7 +59,6 @@ export default function UserProfile() {
         name: user.name || '',
         email: user.email || '',
       });
-
       if (user.preferences) {
         const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
         if (parsedPrefs.success) {
@@ -84,6 +87,20 @@ export default function UserProfile() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      queryClient.setQueryData(['user'], null);
+      window.location.href = '/';
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,14 +262,7 @@ export default function UserProfile() {
                 <Button
                   variant="destructive"
                   className="w-full"
-                  onClick={() => {
-                    logout().then(() => {
-                      toast({
-                        title: "Success",
-                        description: "You have been logged out",
-                      });
-                    });
-                  }}
+                  onClick={handleLogout}
                 >
                   <LogOut className="w-4 h-4 mr-2" />
                   Log Out

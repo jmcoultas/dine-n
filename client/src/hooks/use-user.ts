@@ -1,115 +1,142 @@
-import { useState, useEffect } from 'react';
-import { 
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  type User as FirebaseUser
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type { User } from "@db/schema";
+import { initializeFirebaseAuth, createFirebaseUser, signInWithEmail } from '../lib/firebase';
 
-interface AuthUser extends Omit<User, 'password_hash'> {
-  firebaseUid: string;
-}
-
-interface AuthCredentials {
+interface InsertUser {
   email: string;
   password: string;
+  name?: string;
 }
 
-async function syncUserWithServer(firebaseUser: FirebaseUser): Promise<AuthUser> {
-  const idToken = await firebaseUser.getIdToken();
-  
-  const response = await fetch('/api/auth/sync', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`
-    },
+// Define a proper user type that includes Firebase token
+export interface AuthUser extends Omit<User, 'password_hash'> {
+  subscription_status: string;
+  subscription_tier: string;
+  meal_plans_generated: number;
+  firebaseToken?: string;
+}
+
+export type RequestResult = {
+  ok: true;
+  user?: AuthUser;
+} | {
+  ok: false;
+  message: string;
+};
+
+async function handleRequest(
+  url: string,
+  method: string,
+  body?: InsertUser
+): Promise<RequestResult> {
+  try {
+    let firebaseToken = null;
+
+    // Handle Firebase auth for registration and login
+    if (body?.email && body?.password) {
+      try {
+        if (url.includes('/register')) {
+          const { idToken } = await createFirebaseUser(body.email, body.password);
+          firebaseToken = idToken;
+        } else if (url.includes('/login')) {
+          const { idToken } = await signInWithEmail(body.email, body.password);
+          firebaseToken = idToken;
+        }
+      } catch (firebaseError: any) {
+        // Handle Firebase-specific errors
+        const errorMessage = firebaseError.code ? 
+          firebaseError.code.replace('auth/', '').replace(/-/g, ' ') : 
+          firebaseError.message;
+        return { ok: false, message: errorMessage };
+      }
+    }
+
+    // Add the Firebase token to the request if available
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (firebaseToken) {
+      headers["Firebase-Token"] = firebaseToken;
+    }
+
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      if (response.status >= 500) {
+        return { ok: false, message: response.statusText };
+      }
+
+      const message = await response.text();
+      return { ok: false, message };
+    }
+
+    const data = await response.json();
+    
+    // Initialize Firebase auth if token is present
+    if (data.user?.firebaseToken) {
+      await initializeFirebaseAuth(data.user.firebaseToken);
+    }
+
+    return { ok: true, user: data.user };
+  } catch (e: any) {
+    return { ok: false, message: e.toString() };
+  }
+}
+
+async function fetchUser(): Promise<AuthUser | null> {
+  const response = await fetch('/api/user', {
     credentials: 'include'
   });
 
   if (!response.ok) {
-    throw new Error('Failed to sync user with server');
+    if (response.status === 401) {
+      return null;
+    }
+    throw new Error('Failed to fetch user');
   }
 
   return response.json();
 }
 
-async function fetchUser(): Promise<AuthUser | null> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) return null;
+export type UserQueryResult = UseQueryResult<AuthUser | null, Error> & {
+  login: (credentials: { email: string; password: string }) => Promise<RequestResult>;
+  register: (credentials: { email: string; password: string }) => Promise<RequestResult>;
+};
 
-  try {
-    return await syncUserWithServer(currentUser);
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    return null;
-  }
-}
-
-export function useUser() {
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function useUser(): UserQueryResult {
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const { data: user } = useQuery<AuthUser | null>({
-    queryKey: ['user', firebaseUser?.uid],
+  const query = useQuery<AuthUser | null, Error>({
+    queryKey: ['user'],
     queryFn: fetchUser,
-    enabled: !!firebaseUser,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    retry: false, // Don't retry on auth failures
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async ({ email, password }: AuthCredentials) => {
-      const { user: fbUser } = await signInWithEmailAndPassword(auth, email, password);
-      return syncUserWithServer(fbUser);
+  const loginMutation = useMutation<RequestResult, Error, { email: string; password: string }>({
+    mutationFn: async (credentials) => {
+      const result = await handleRequest('/api/login', 'POST', credentials);
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });
 
-  const registerMutation = useMutation({
-    mutationFn: async ({ email, password }: AuthCredentials) => {
-      const { user: fbUser } = await createUserWithEmailAndPassword(auth, email, password);
-      return syncUserWithServer(fbUser);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user'] });
-    },
-  });
-
-  const googleLoginMutation = useMutation({
-    mutationFn: async () => {
-      const provider = new GoogleAuthProvider();
-      const { user: fbUser } = await signInWithPopup(auth, provider);
-      return syncUserWithServer(fbUser);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user'] });
-    },
-  });
-
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await signOut(auth);
-      await fetch('/api/auth/logout', { 
-        method: 'POST',
-        credentials: 'include'
-      });
+  const registerMutation = useMutation<RequestResult, Error, { email: string; password: string }>({
+    mutationFn: async (credentials) => {
+      const result = await handleRequest('/api/register', 'POST', credentials);
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user'] });
@@ -117,11 +144,25 @@ export function useUser() {
   });
 
   return {
-    user,
-    isLoading: isLoading || loginMutation.isPending || registerMutation.isPending,
+    ...query,
     login: loginMutation.mutateAsync,
-    loginWithGoogle: googleLoginMutation.mutateAsync,
-    logout: logoutMutation.mutateAsync,
     register: registerMutation.mutateAsync,
   };
+}
+
+export function useLogout() {
+  const queryClient = useQueryClient();
+
+  return useMutation<RequestResult, Error, void>({
+    mutationFn: async () => {
+      const result = await handleRequest('/api/logout', 'POST');
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
+  });
 }

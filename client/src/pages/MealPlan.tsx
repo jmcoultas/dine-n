@@ -122,7 +122,7 @@ export default function MealPlan() {
   const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useUser();
+  const { data: user, isLoading: isUserLoading } = useUser();
 
   useEffect(() => {
     if (temporaryRecipes && Array.isArray(temporaryRecipes)) {

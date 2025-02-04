@@ -40,7 +40,7 @@ export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
-  const { user } = useUser();
+  const { data: user } = useUser();
   const { data: recipes = [], isLoading, isError, error } = useQuery({
     queryKey: ["recipes", user?.id],
     queryFn: async () => {

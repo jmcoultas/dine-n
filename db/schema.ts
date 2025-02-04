@@ -41,15 +41,16 @@ export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   email: text("email").notNull().unique(),
   name: text("name"),
-  firebase_uid: text("firebase_uid").notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  firebase_uid: text("firebase_uid").unique(),
   preferences: jsonb("preferences").$type<z.infer<typeof PreferenceSchema>>(),
   stripe_customer_id: text("stripe_customer_id"),
   stripe_subscription_id: text("stripe_subscription_id"),
   subscription_status: text("subscription_status").$type<z.infer<typeof SubscriptionStatusEnum>>().default('inactive'),
   subscription_tier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
-  subscription_end_date: timestamp("subscription_end_date"),
+  subscription_end_date: timestamp("subscription_end_date", { mode: 'date' }),
   meal_plans_generated: integer("meal_plans_generated").default(0).notNull(),
-  created_at: timestamp("created_at").defaultNow().notNull(),
+  created_at: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 });
 
 export const recipes = pgTable("recipes", {

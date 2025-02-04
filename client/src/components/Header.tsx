@@ -1,4 +1,3 @@
-
 import { Link } from "wouter";
 import {
   NavigationMenu,
@@ -13,7 +12,7 @@ import { useUser } from "@/hooks/use-user";
 
 export default function Header() {
   const { theme, setTheme } = useTheme();
-  const { user } = useUser();
+  const { data: user } = useUser();
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -51,7 +50,7 @@ export default function Header() {
         <Button
           variant="ghost"
           size="icon"
-          className="ml-4"
+          className="ml-2"
           onClick={() => setTheme(theme === "light" ? "dark" : "light")}
         >
           {theme === "light" ? (

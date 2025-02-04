@@ -16,7 +16,7 @@ import UserProfile from "./pages/UserProfile";
 import Header from "./components/Header";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useUser();
+  const { data: user, isLoading } = useUser();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -41,7 +41,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function Router() {
-  const { user, isLoading } = useUser();
+  const { data: user, isLoading } = useUser();
 
   if (isLoading) {
     return (

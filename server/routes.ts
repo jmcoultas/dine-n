@@ -6,6 +6,9 @@ import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
 import { downloadAndStoreImage } from "./services/imageStorage";
+import auth from './services/firebase';
+import { createFirebaseToken } from './services/firebase';
+import { type PublicUser } from "./types";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -693,6 +696,63 @@ export function registerRoutes(app: express.Express) {
     } catch (error: any) {
       console.error("Error updating preferences:", error);
       res.status(500).json({ error: "Failed to update preferences" });
+    }
+  });
+
+  app.post('/api/auth/google', async (req, res) => {
+    try {
+      const { idToken } = req.body;
+      
+      // Verify the Firebase ID token
+      const decodedToken = await auth.verifyIdToken(idToken);
+      const email = decodedToken.email;
+      
+      if (!email) {
+        return res.status(400).json({ message: 'No email found in Google account' });
+      }
+      
+      // Check if user exists
+      let [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1);
+      
+      if (!user) {
+        // Create new user if they don't exist
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            email: email.toLowerCase(),
+            password_hash: '', // No password for Google auth users
+            name: decodedToken.name || null,
+            created_at: new Date(),
+          })
+          .returning();
+        user = newUser;
+      }
+      
+      // Create a custom token for Firebase
+      const firebaseToken = await createFirebaseToken(user.id.toString());
+      
+      // Log the user in
+      const publicUser: PublicUser = {
+        ...user,
+        subscription_status: user.subscription_status || 'inactive',
+        subscription_tier: user.subscription_tier || 'free',
+        meal_plans_generated: user.meal_plans_generated || 0,
+        firebaseToken
+      };
+      
+      req.login(publicUser, (err) => {
+        if (err) {
+          return res.status(500).json({ message: 'Error logging in' });
+        }
+        return res.json(publicUser);
+      });
+    } catch (error) {
+      console.error('Error in Google auth:', error);
+      res.status(500).json({ message: 'Authentication failed' });
     }
   });
 }

@@ -8,7 +8,7 @@ import {
 import { Clock, Users, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@/hooks/use-user";
+import { useUser, type AuthUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Recipe } from "@db/schema";
 
@@ -43,7 +43,7 @@ interface RecipeCardProps {
 
 export default function RecipeCard({ recipe, isFavorited = false, onClick }: RecipeCardProps) {
   const { toast } = useToast();
-  const { user } = useUser();
+  const { data: user } = useUser();
   const queryClient = useQueryClient();
 
   const imageUrl = recipe.permanent_url || recipe.image_url || '';

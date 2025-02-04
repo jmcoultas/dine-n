@@ -168,7 +168,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [localIngredients, setLocalIngredients] = useState(recipe.ingredients ?? []);
   const { toast } = useToast();
-  const { user } = useUser();
+  const { data: user } = useUser();
   const { subscription } = useSubscription();
   const queryClient = useQueryClient();
 

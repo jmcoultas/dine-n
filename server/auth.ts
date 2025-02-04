@@ -10,6 +10,8 @@ import { z } from "zod";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
 import { type User, type PublicUser } from "./types";
+import { createFirebaseToken } from "./services/firebase";
+import auth from "./services/firebase";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -88,6 +90,10 @@ export function setupAuth(app: Express) {
           meal_plans_generated: foundUser.meal_plans_generated || 0
         };
 
+        // Create Firebase custom token after successful authentication
+        const firebaseToken = await createFirebaseToken(user.id.toString());
+        user.firebaseToken = firebaseToken;
+
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -127,6 +133,7 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const { email, password, name } = req.body;
+      const firebaseToken = req.headers['firebase-token'];
 
       if (!email?.trim() || !password?.trim()) {
         return res.status(400).json({ 
@@ -169,6 +176,21 @@ export function setupAuth(app: Express) {
         });
       }
 
+      // Verify Firebase token if provided
+      let firebaseUid;
+      if (firebaseToken) {
+        try {
+          const decodedToken = await auth.verifyIdToken(firebaseToken as string);
+          firebaseUid = decodedToken.uid;
+        } catch (error) {
+          console.error('Error verifying Firebase token:', error);
+          return res.status(401).json({
+            error: "Authentication Error",
+            message: "Invalid Firebase token",
+          });
+        }
+      }
+
       const [existingUser] = await db
         .select()
         .from(users)
@@ -191,9 +213,11 @@ export function setupAuth(app: Express) {
           email: normalizedEmail,
           password_hash: hashedPassword,
           name: name?.trim() || normalizedEmail.split('@')[0],
+          firebase_uid: firebaseUid || null,
           subscription_status: 'inactive' as const,
           subscription_tier: 'free' as const,
           meal_plans_generated: 0,
+          created_at: new Date()
         })
         .returning();
 
@@ -205,19 +229,17 @@ export function setupAuth(app: Express) {
         meal_plans_generated: newUser.meal_plans_generated || 0
       };
 
+      // Create a custom token for Firebase authentication
+      const customToken = await createFirebaseToken(publicUser.id.toString());
+      publicUser.firebaseToken = customToken;
+
       req.login(publicUser, (err) => {
         if (err) {
           return next(err);
         }
         return res.json({
           message: "Registration successful",
-          user: {
-            id: publicUser.id,
-            email: publicUser.email,
-            name: publicUser.name,
-            subscription_tier: publicUser.subscription_tier,
-            subscription_status: publicUser.subscription_status,
-          }
+          user: publicUser
         });
       });
     } catch (error) {
