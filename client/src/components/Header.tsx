@@ -5,13 +5,11 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils, Moon, Sun, User } from "lucide-react";
+import { Utensils, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "@/hooks/use-theme";
 import { useUser } from "@/hooks/use-user";
 
 export default function Header() {
-  const { theme, setTheme } = useTheme();
   const { data: user } = useUser();
 
   return (
@@ -47,19 +45,6 @@ export default function Header() {
             </Link>
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-2"
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-        >
-          {theme === "light" ? (
-            <Moon className="h-5 w-5" />
-          ) : (
-            <Sun className="h-5 w-5" />
-          )}
-          <span className="sr-only">Toggle theme</span>
-        </Button>
       </div>
     </header>
   );

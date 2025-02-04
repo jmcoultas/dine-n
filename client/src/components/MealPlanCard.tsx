@@ -25,8 +25,10 @@ interface MealPlanCardProps {
     image_url: string | undefined;
     permanent_url?: string | null;
     isFavorited?: boolean;
-    prepTime: number | null;
-    cookTime: number | null;
+    prepTime?: number | null;
+    cookTime?: number | null;
+    prep_time?: number | null;
+    cook_time?: number | null;
     servings: number | null;
     ingredients: Array<{
       name: string;
@@ -167,6 +169,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const [selectedIngredient, setSelectedIngredient] = useState<{name: string; amount: number; unit: string} | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [localIngredients, setLocalIngredients] = useState(recipe.ingredients ?? []);
+  const [isFavorited, setIsFavorited] = useState(recipe.isFavorited ?? false);
   const { toast } = useToast();
   const { data: user } = useUser();
   const { subscription } = useSubscription();
@@ -224,7 +227,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       }
 
       const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
-        method: 'POST',
+        method: isFavorited ? 'DELETE' : 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
@@ -240,10 +243,13 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       return response.json();
     },
     onSuccess: () => {
+      setIsFavorited(!isFavorited);
       queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
       toast({
-        title: "Recipe added to favorites",
-        description: "The recipe has been added to your collection",
+        title: isFavorited ? "Recipe removed from favorites" : "Recipe added to favorites",
+        description: isFavorited ? 
+          "The recipe has been removed from your collection" : 
+          "The recipe has been added to your collection",
       });
     },
     onError: (error: Error) => {
@@ -259,8 +265,8 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     ? recipe.complexity
     : 1;
 
-  const prepTime = recipe.prepTime ?? 0;
-  const cookTime = recipe.cookTime ?? 0;
+  const prepTime = recipe.prepTime ?? recipe.prep_time ?? 0;
+  const cookTime = recipe.cookTime ?? recipe.cook_time ?? 0;
   const totalTime = prepTime + cookTime;
   const servings = recipe.servings ?? 2;
   const imageUrl = recipe.permanent_url || recipe.image_url || '';
@@ -310,8 +316,16 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                     toggleFavorite.mutate();
                   }}
                 >
-                  <Heart className="h-5 w-5 text-gray-500 hover:text-red-500 transition-colors" />
-                  <span className="sr-only">Add to favorites</span>
+                  <Heart 
+                    className={`h-5 w-5 transition-colors ${
+                      isFavorited 
+                        ? 'fill-red-500 text-red-500 scale-110' 
+                        : 'text-gray-500 hover:text-red-400'
+                    }`}
+                  />
+                  <span className="sr-only">
+                    {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                  </span>
                 </Button>
               )}
               {onRemove && (
@@ -338,12 +352,17 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
               <ChefHat className="w-4 h-4" />
               {complexityNames[complexity]}
             </span>
+            <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
+              {totalTime} min
+            </span>
+            <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
+              {servings} servings
+            </span>
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{totalTime} min</span>
-            <span>{servings} servings</span>
+          <div className="text-sm text-muted-foreground">
+            {description}
           </div>
         </CardContent>
       </Card>
@@ -366,7 +385,8 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">
+              <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
+                <ChefHat className="w-4 h-4" />
                 {complexityNames[complexity]}
               </span>
               <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm">

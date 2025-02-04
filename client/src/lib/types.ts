@@ -6,8 +6,12 @@ export const RecipeSchema = z.object({
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
   image_url: z.string().nullable(),
+  permanentUrl: z.string().nullable(),
+  permanent_url: z.string().nullable(),
   prepTime: z.number().nullable(),
+  prep_time: z.number().nullable(),
   cookTime: z.number().nullable(),
+  cook_time: z.number().nullable(),
   servings: z.number().nullable(),
   ingredients: z.array(z.object({
     name: z.string(),
@@ -29,7 +33,10 @@ export const RecipeSchema = z.object({
   expiresAt: z.coerce.date().optional()
 }).transform((data) => ({
   ...data,
-  imageUrl: data.imageUrl || data.image_url
+  imageUrl: data.imageUrl || data.image_url,
+  permanentUrl: data.permanentUrl || data.permanent_url,
+  prepTime: data.prepTime ?? data.prep_time,
+  cookTime: data.cookTime ?? data.cook_time
 }));
 
 export type Recipe = z.infer<typeof RecipeSchema>;

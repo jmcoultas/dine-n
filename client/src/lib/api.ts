@@ -23,6 +23,17 @@ export interface GenerateMealPlanResponse {
   remaining_free_plans: number;
 }
 
+// Transform snake_case to camelCase for recipe data
+function transformRecipeData(recipe: any): Recipe {
+  return {
+    ...recipe,
+    prepTime: recipe.prep_time,
+    cookTime: recipe.cook_time,
+    imageUrl: recipe.image_url,
+    permanentUrl: recipe.permanent_url,
+  };
+}
+
 export async function generateMealPlan(
   preferences: MealPlanPreferences,
   days: number,
@@ -68,7 +79,8 @@ export async function generateMealPlan(
 
 export async function fetchRecipes(): Promise<Recipe[]> {
   const response = await fetch(`${API_BASE}/recipes`);
-  return response.json();
+  const data = await response.json();
+  return Array.isArray(data) ? data.map(transformRecipeData) : [];
 }
 
 export async function getTemporaryRecipes(): Promise<Recipe[]> {
@@ -79,7 +91,7 @@ export async function getTemporaryRecipes(): Promise<Recipe[]> {
     throw new Error("Failed to fetch temporary recipes");
   }
   const data = await response.json();
-  return Array.isArray(data) ? data : [];
+  return Array.isArray(data) ? data.map(transformRecipeData) : [];
 }
 
 export async function createMealPlan(mealPlan: Partial<MealPlan>): Promise<MealPlan> {

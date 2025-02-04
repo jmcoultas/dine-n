@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Loader2, Settings, User, CreditCard, LogOut } from "lucide-react";
+import { Loader2, Settings, User, CreditCard, LogOut, Palette, Moon, Sun } from "lucide-react";
 import PreferenceModal from "@/components/PreferenceModal";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
 import { SubscriptionManager } from "@/components/SubscriptionManager";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 
 interface ProfileFormData {
   name: string;
@@ -27,6 +28,7 @@ interface Section {
 const sections: Section[] = [
   { id: "profile", title: "Profile", icon: <User className="h-4 w-4" /> },
   { id: "preferences", title: "Preferences", icon: <Settings className="h-4 w-4" /> },
+  { id: "themes", title: "Themes", icon: <Palette className="h-4 w-4" /> },
   { id: "subscription", title: "Subscription", icon: <CreditCard className="h-4 w-4" /> },
 ];
 
@@ -35,6 +37,7 @@ export default function UserProfile() {
     data: user,
     isLoading
   } = useUser();
+  const { theme, setTheme } = useTheme();
   const { mutateAsync: logout } = useLogout();
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("profile");
@@ -105,7 +108,6 @@ export default function UserProfile() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-
     try {
       const normalizedEmail = formData.email.trim().toLowerCase();
       const normalizedName = formData.name.trim();
@@ -400,6 +402,45 @@ export default function UserProfile() {
               </div>
 
               <div className="space-y-6 md:col-span-1">
+                <section
+                  ref={(el) => (sectionRefs.current.themes = el)}
+                  id="themes"
+                  className="scroll-mt-16"
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Theme Settings</CardTitle>
+                      <CardDescription>
+                        Customize the appearance of your application
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Dark Mode</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Switch between light and dark themes
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                          >
+                            {theme === "light" ? (
+                              <Moon className="h-5 w-5" />
+                            ) : (
+                              <Sun className="h-5 w-5" />
+                            )}
+                            <span className="sr-only">Toggle theme</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </section>
+
                 <section
                   ref={(el) => (sectionRefs.current.subscription = el)}
                   id="subscription"
