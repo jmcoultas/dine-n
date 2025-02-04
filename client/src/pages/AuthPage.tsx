@@ -154,7 +154,7 @@ export default function AuthPage() {
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url('https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg')`
+            backgroundImage: `url('https://res.cloudinary.com/dxiknlpty/image/upload/v1738681929/cld-sample-4.jpg')`
           }}
         />
         <div className="relative z-20 flex items-center text-lg font-medium">
