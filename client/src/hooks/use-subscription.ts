@@ -32,8 +32,9 @@ export function useSubscription() {
       }
       return response.json() as Promise<SubscriptionStatus>;
     },
-    // Reduce staleTime to ensure we get fresh data after subscription changes
-    staleTime: 0,
+    // Increased staleTime to 5 minutes and disabled refetch on window focus to prevent constant polling
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
   // Create checkout session mutation

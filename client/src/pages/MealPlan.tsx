@@ -114,9 +114,8 @@ export default function MealPlan() {
         }
         throw new Error('Failed to fetch recipes');
       }
-      return response.json() as Promise<Recipe[]>;
-    },
-    refetchInterval: 60000,
+      return response.json();
+    }
   });
 
   const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);

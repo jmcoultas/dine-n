@@ -1,5 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { eq, and, gt, or } from "drizzle-orm";
+import { eq, and, gt, or, sql, inArray, desc } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
@@ -276,95 +276,235 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  // Favorite Recipes Routes - Protected Routes
-  app.get("/api/recipes/favorites", isAuthenticated, async (req: Request, res: Response) => {
+  // Recipe Routes
+  app.get("/api/recipes/community", async (req: Request, res: Response) => {
     try {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ error: "Authentication required" });
+      // First get the top 5 recipe names by favorites count
+      const topRecipeNames = await db
+        .select({
+          name: temporaryRecipes.name,
+          total_favorites: sql<number>`MAX(${temporaryRecipes.favorites_count})`
+        })
+        .from(temporaryRecipes)
+        .where(gt(temporaryRecipes.favorites_count, 0))
+        .groupBy(temporaryRecipes.name)
+        .orderBy(sql`MAX(${temporaryRecipes.favorites_count}) DESC`)
+        .limit(5);
+
+      if (topRecipeNames.length === 0) {
+        return res.json([]);
       }
 
-      const favoriteRecipes = await db
-        .select()
+      // Then get the full recipe details for these names
+      const communityRecipes = await db
+        .select({
+          id: temporaryRecipes.id,
+          name: temporaryRecipes.name,
+          description: temporaryRecipes.description,
+          image_url: temporaryRecipes.image_url,
+          permanent_url: temporaryRecipes.permanent_url,
+          prep_time: temporaryRecipes.prep_time,
+          cook_time: temporaryRecipes.cook_time,
+          servings: temporaryRecipes.servings,
+          ingredients: temporaryRecipes.ingredients,
+          instructions: temporaryRecipes.instructions,
+          tags: temporaryRecipes.tags,
+          nutrition: temporaryRecipes.nutrition,
+          complexity: temporaryRecipes.complexity,
+          favorites_count: temporaryRecipes.favorites_count,
+          created_at: temporaryRecipes.created_at
+        })
         .from(temporaryRecipes)
         .where(
           and(
-            eq(temporaryRecipes.user_id, req.user.id),
+            gt(temporaryRecipes.favorites_count, 0),
+            inArray(temporaryRecipes.name, topRecipeNames.map(r => r.name))
+          )
+        )
+        .orderBy(desc(temporaryRecipes.favorites_count))
+        .limit(5);
+
+      res.json(communityRecipes);
+    } catch (error) {
+      console.error("Error fetching community recipes:", error);
+      res.status(500).json({ error: "Failed to fetch community recipes" });
+    }
+  });
+
+  app.get("/api/recipes/favorites", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const favoriteRecipes = await db
+        .select({
+          id: temporaryRecipes.id,
+          name: temporaryRecipes.name,
+          description: temporaryRecipes.description,
+          image_url: temporaryRecipes.image_url,
+          permanent_url: temporaryRecipes.permanent_url,
+          prep_time: temporaryRecipes.prep_time,
+          cook_time: temporaryRecipes.cook_time,
+          servings: temporaryRecipes.servings,
+          ingredients: temporaryRecipes.ingredients,
+          instructions: temporaryRecipes.instructions,
+          tags: temporaryRecipes.tags,
+          nutrition: temporaryRecipes.nutrition,
+          complexity: temporaryRecipes.complexity,
+          favorites_count: temporaryRecipes.favorites_count,
+          created_at: temporaryRecipes.created_at
+        })
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.user_id, req.user!.id),
             eq(temporaryRecipes.favorited, true)
           )
         );
 
-      res.setHeader('Content-Type', 'application/json');
-      return res.json(favoriteRecipes);
-    } catch (error: any) {
+      res.json(favoriteRecipes);
+    } catch (error) {
       console.error("Error fetching favorite recipes:", error);
-      return res.status(500).json({
-        error: "Failed to fetch favorite recipes",
-        message: error.message
-      });
+      res.status(500).json({ error: "Failed to fetch favorite recipes" });
     }
   });
 
-  app.post("/api/recipes/:id/favorite", isAuthenticated, async (req: Request, res: Response) => {
+  app.post("/api/recipes/:recipeId/favorite", isAuthenticated, async (req: Request, res: Response) => {
+    const recipeId = parseInt(req.params.recipeId);
+    if (isNaN(recipeId)) {
+      return res.status(400).json({ error: "Invalid recipe ID" });
+    }
+
     try {
-      const recipeId = parseInt(req.params.id);
-      if (isNaN(recipeId)) {
-        return res.status(400).json({ error: "Invalid recipe ID" });
-      }
+      // Start a transaction to ensure data consistency
+      await db.transaction(async (tx) => {
+        // Get the recipe to favorite
+        const recipe = await tx
+          .select()
+          .from(temporaryRecipes)
+          .where(eq(temporaryRecipes.id, recipeId))
+          .limit(1);
 
-      const [updatedRecipe] = await db
-        .update(temporaryRecipes)
-        .set({ favorited: true })
-        .where(
-          and(
-            eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.user_id, req.user!.id)
+        if (recipe.length === 0) {
+          throw new Error("Recipe not found");
+        }
+
+        // Create a new temporary recipe for this user if it doesn't exist
+        const existingFavorite = await tx
+          .select()
+          .from(temporaryRecipes)
+          .where(
+            and(
+              eq(temporaryRecipes.user_id, req.user!.id),
+              eq(temporaryRecipes.name, recipe[0].name)
+            )
           )
-        )
-        .returning();
+          .limit(1);
 
-      if (!updatedRecipe) {
-        return res.status(404).json({ error: "Recipe not found" });
-      }
+        if (existingFavorite.length === 0) {
+          // Create a new entry for this user
+          await tx.insert(temporaryRecipes).values({
+            name: recipe[0].name,
+            description: recipe[0].description,
+            image_url: recipe[0].image_url,
+            permanent_url: recipe[0].permanent_url,
+            prep_time: recipe[0].prep_time,
+            cook_time: recipe[0].cook_time,
+            servings: recipe[0].servings,
+            ingredients: recipe[0].ingredients,
+            instructions: recipe[0].instructions,
+            tags: recipe[0].tags,
+            nutrition: recipe[0].nutrition,
+            complexity: recipe[0].complexity,
+            favorites_count: recipe[0].favorites_count || 0,
+            user_id: req.user!.id,
+            favorited: true,
+            created_at: new Date(),
+            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // Set expiry to 1 year
+          });
 
-      return res.json({
-        message: "Recipe marked as favorite",
-        recipe: updatedRecipe
+          // Update favorites count for all recipes with this name
+          await tx
+            .update(temporaryRecipes)
+            .set({ 
+              favorites_count: sql`COALESCE(${temporaryRecipes.favorites_count} + 1, 1)` 
+            })
+            .where(eq(temporaryRecipes.name, recipe[0].name));
+        } else if (!existingFavorite[0].favorited) {
+          // Update existing entry to be favorited
+          await tx
+            .update(temporaryRecipes)
+            .set({ 
+              favorited: true,
+              expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // Extend expiry to 1 year
+            })
+            .where(eq(temporaryRecipes.id, existingFavorite[0].id));
+
+          // Update favorites count for all recipes with this name
+          await tx
+            .update(temporaryRecipes)
+            .set({ 
+              favorites_count: sql`COALESCE(${temporaryRecipes.favorites_count} + 1, 1)` 
+            })
+            .where(eq(temporaryRecipes.name, recipe[0].name));
+        }
       });
+
+      res.json({ message: "Recipe favorited successfully" });
     } catch (error: any) {
-      console.error("Error adding recipe to favorites:", error);
-      res.status(500).json({ error: "Failed to add recipe to favorites" });
+      console.error("Error favoriting recipe:", error);
+      res.status(500).json({ error: "Failed to favorite recipe" });
     }
   });
 
-  app.delete("/api/recipes/:id/favorite", isAuthenticated, async (req: Request, res: Response) => {
+  app.delete("/api/recipes/:recipeId/favorite", isAuthenticated, async (req: Request, res: Response) => {
+    const recipeId = parseInt(req.params.recipeId);
+    if (isNaN(recipeId)) {
+      return res.status(400).json({ error: "Invalid recipe ID" });
+    }
+
     try {
-      const recipeId = parseInt(req.params.id);
-      if (isNaN(recipeId)) {
-        return res.status(400).json({ error: "Invalid recipe ID" });
-      }
-
-      const [updatedRecipe] = await db
-        .update(temporaryRecipes)
-        .set({ favorited: false })
-        .where(
-          and(
-            eq(temporaryRecipes.id, recipeId),
-            eq(temporaryRecipes.user_id, req.user!.id)
+      // Start a transaction to ensure data consistency
+      await db.transaction(async (tx) => {
+        // Get the recipe to unfavorite
+        const recipe = await tx
+          .select()
+          .from(temporaryRecipes)
+          .where(
+            and(
+              eq(temporaryRecipes.id, recipeId),
+              eq(temporaryRecipes.user_id, req.user!.id)
+            )
           )
-        )
-        .returning();
+          .limit(1);
 
-      if (!updatedRecipe) {
-        return res.status(404).json({ error: "Recipe not found" });
-      }
+        if (recipe.length === 0) {
+          throw new Error("Recipe not found or not favorited");
+        }
 
-      return res.json({
-        message: "Recipe removed from favorites",
-        recipe: updatedRecipe
+        if (!recipe[0].favorited) {
+          throw new Error("Recipe not favorited");
+        }
+
+        // Update the recipe to be unfavorited
+        await tx
+          .update(temporaryRecipes)
+          .set({ 
+            favorited: false,
+            expires_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) // Reset expiry to 2 days
+          })
+          .where(eq(temporaryRecipes.id, recipeId));
+
+        // Update favorites count for all recipes with this name
+        await tx
+          .update(temporaryRecipes)
+          .set({ 
+            favorites_count: sql`GREATEST(COALESCE(${temporaryRecipes.favorites_count} - 1, 0), 0)` 
+          })
+          .where(eq(temporaryRecipes.name, recipe[0].name));
       });
+
+      res.json({ message: "Recipe unfavorited successfully" });
     } catch (error: any) {
-      console.error("Error removing recipe from favorites:", error);
-      res.status(500).json({ error: "Failed to remove recipe from favorites" });
+      console.error("Error unfavoriting recipe:", error);
+      res.status(500).json({ error: "Failed to unfavorite recipe" });
     }
   });
 

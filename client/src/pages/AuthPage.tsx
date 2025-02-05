@@ -157,26 +157,12 @@ export default function AuthPage() {
             backgroundImage: `url('https://res.cloudinary.com/dxiknlpty/image/upload/v1738681929/cld-sample-4.jpg')`
           }}
         />
-        <div className="relative z-20 flex items-center text-lg font-medium">
-          <img src="/logo.svg" alt="Logo" className="mr-2 h-6 w-6 object-cover rounded-sm" />
-          Meal Planner
-        </div>
-        <div className="relative z-20 mt-auto">
-          <blockquote className="space-y-2">
-            <p className="text-lg">
-              "This app has revolutionized how I plan my meals. The AI-powered
-              suggestions are fantastic, and it's made grocery shopping so much
-              easier!"
-            </p>
-            <footer className="text-sm">Sofia Davis</footer>
-          </blockquote>
-        </div>
       </div>
       <div className="lg:p-8">
         <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
           <div className="flex flex-col space-y-2 text-center">
             <h1 className="text-2xl font-semibold tracking-tight">
-              Welcome to Meal Planner
+              Welcome to Dine-N
             </h1>
             <p className="text-sm text-muted-foreground">
               Sign in to your account or create a new one

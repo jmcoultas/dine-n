@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface RecipeNutrition {
   calories: number;
@@ -34,6 +35,7 @@ interface Recipe {
   tags?: string[];
   nutrition?: RecipeNutrition;
   complexity: 1 | 2 | 3;
+  favorites_count?: number;
 }
 
 export default function Recipes() {
@@ -41,47 +43,89 @@ export default function Recipes() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   const { data: user } = useUser();
-  const { data: recipes = [], isLoading, isError, error } = useQuery({
-    queryKey: ["recipes", user?.id],
+  
+  // Query for user's favorite recipes
+  const { data: favoriteRecipes = [], isLoading: isLoadingFavorites } = useQuery({
+    queryKey: ["recipes", "favorites", user?.id],
     queryFn: async () => {
       const response = await fetch('/api/recipes/favorites', {
         credentials: 'include'
       });
       if (!response.ok) {
-        throw new Error('Failed to fetch recipes');
+        throw new Error('Failed to fetch favorite recipes');
       }
       return response.json();
     },
     enabled: !!user,
-  }) as { data: Recipe[]; isLoading: boolean; isError: boolean; error: Error | null };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">Loading recipes...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <div className="text-center space-y-4">
-          <p className="text-lg text-red-500">Error loading recipes</p>
-          <p className="text-muted-foreground">{(error as Error)?.message || 'Please try again later'}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const filteredRecipes = recipes.filter((recipe: Recipe) => {
-    const isMatch = recipe.name.toLowerCase().includes(searchTerm.toLowerCase());
-    // Include both regular and temporary favorited recipes
-    return isMatch;
   });
+
+  // Query for community recipes (most favorited)
+  const { data: communityRecipes = [], isLoading: isLoadingCommunity } = useQuery({
+    queryKey: ["recipes", "community"],
+    queryFn: async () => {
+      const response = await fetch('/api/recipes/community', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch community recipes');
+      }
+      return response.json();
+    },
+  });
+
+  // Create a Set of favorited recipe IDs for easy lookup
+  const favoritedRecipeIds = new Set(favoriteRecipes.map((recipe: Recipe) => recipe.id));
+
+  const filterRecipes = (recipes: Recipe[]) => {
+    return recipes.filter((recipe: Recipe) => 
+      recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  };
+
+  const filteredFavoriteRecipes = filterRecipes(favoriteRecipes);
+  const filteredCommunityRecipes = filterRecipes(communityRecipes);
+
+  const renderRecipeGrid = (recipes: Recipe[], isLoading: boolean, isFavoritesTab: boolean = false) => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-[50vh]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto" />
+            <p className="text-muted-foreground">Loading recipes...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (recipes.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-[40vh]">
+          <div className="text-center space-y-4">
+            <p className="text-lg text-muted-foreground">
+              {searchTerm 
+                ? 'No recipes found matching your search' 
+                : isFavoritesTab 
+                  ? 'No favorite recipes yet' 
+                  : 'No community recipes available'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {recipes.map((recipe) => (
+          <RecipeCard
+            key={recipe.id}
+            recipe={recipe}
+            isFavorited={favoritedRecipeIds.has(recipe.id)}
+            onClick={() => setSelectedRecipe(recipe)}
+          />
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -98,33 +142,34 @@ export default function Recipes() {
         </div>
       </div>
 
-      {filteredRecipes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRecipes.map((recipe) => (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              isFavorited={true}
-              onClick={() => setSelectedRecipe(recipe)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center justify-center h-[40vh]">
-          <div className="text-center space-y-4">
-            <p className="text-lg text-muted-foreground">
-              {searchTerm ? 'No recipes found matching your search' : 'No recipes available'}
-            </p>
-          </div>
-        </div>
-      )}
+      <Tabs defaultValue="community" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="community">Community Recipes</TabsTrigger>
+          <TabsTrigger value="favorites">My Recipes</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="community" className="space-y-6">
+          {renderRecipeGrid(filteredCommunityRecipes, isLoadingCommunity)}
+        </TabsContent>
+
+        <TabsContent value="favorites" className="space-y-6">
+          {renderRecipeGrid(filteredFavoriteRecipes, isLoadingFavorites, true)}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={!!selectedRecipe} onOpenChange={() => setSelectedRecipe(null)}>
         {selectedRecipe && (
           <DialogContent className="max-w-2xl max-h-[90vh]">
             <ScrollArea className="h-full w-full">
               <div className="space-y-4 p-6">
-                <DialogTitle className="text-2xl font-bold">{selectedRecipe.name}</DialogTitle>
+                <DialogTitle className="text-2xl font-bold">
+                  {selectedRecipe.name}
+                  {selectedRecipe.favorites_count !== undefined && (
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      {selectedRecipe.favorites_count} {selectedRecipe.favorites_count === 1 ? 'favorite' : 'favorites'}
+                    </span>
+                  )}
+                </DialogTitle>
                 <DialogDescription className="text-muted-foreground">
                   {selectedRecipe.description}
                 </DialogDescription>

@@ -67,6 +67,7 @@ export const recipes = pgTable("recipes", {
   tags: jsonb("tags").$type<string[]>(),
   nutrition: jsonb("nutrition").$type<z.infer<typeof RecipeNutritionSchema>>(),
   complexity: integer("complexity").notNull(),
+  favorites_count: integer("favorites_count").default(0).notNull(),
   created_at: timestamp("created_at").defaultNow().notNull()
 });
 
@@ -111,6 +112,7 @@ export const temporaryRecipes = pgTable("temporary_recipes", {
   tags: jsonb("tags"),
   nutrition: jsonb("nutrition"),
   complexity: integer("complexity").notNull(),
+  favorites_count: integer("favorites_count").default(0).notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
   expires_at: timestamp("expires_at").notNull(),
 });
@@ -151,7 +153,8 @@ export const insertTemporaryRecipeSchema = z.object({
   complexity: z.number(),
   created_at: z.date(),
   expires_at: z.date(),
-  favorited: z.boolean()
+  favorited: z.boolean(),
+  favorites_count: z.number().default(0)
 });
 
 export const selectTemporaryRecipeSchema = createSelectSchema(temporaryRecipes);

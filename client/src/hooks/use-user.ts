@@ -113,7 +113,7 @@ export function useUser(): UserQueryResult {
   const query = useQuery<AuthUser | null, Error>({
     queryKey: ['user'],
     queryFn: fetchUser,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 300000, // Consider data fresh for 5 minutes
     retry: false, // Don't retry on auth failures
   });
 
