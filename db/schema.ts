@@ -9,9 +9,9 @@ export const SubscriptionStatusEnum = z.enum(["active", "inactive", "cancelled"]
 // Define preference types
 export const ChefPreferencesSchema = z.object({
   difficulty: z.enum(["Easy", "Moderate", "Advanced"]),
-  mealType: z.enum(["Breakfast", "Lunch", "Dinner", "Any"]),
   cookTime: z.enum(["15 minutes or less", "15-30 minutes", "30-60 minutes", "60+ minutes"]),
-  servingSize: z.enum(["1", "2", "3", "4", "5", "6", "7", "8"])
+  servingSize: z.enum(["1", "2", "3", "4", "5", "6", "7", "8"]),
+  mealPlanDuration: z.enum(["1", "2", "3", "4", "5", "6", "7"])
 }).optional();
 
 export const PreferenceSchema = z.object({
@@ -36,6 +36,12 @@ export const RecipeNutritionSchema = z.object({
   fat: z.number()
 });
 
+// Define tag-related schemas
+export const MealTypeEnum = z.enum(["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"]);
+export const CuisineTypeEnum = z.enum(["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French", "Other"]);
+export const DietaryTypeEnum = z.enum(["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb", "Other"]);
+export const DifficultyEnum = z.enum(["Easy", "Moderate", "Advanced"]);
+
 // Define all tables
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -50,6 +56,7 @@ export const users = pgTable("users", {
   subscription_tier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
   subscription_end_date: timestamp("subscription_end_date", { mode: 'date' }),
   meal_plans_generated: integer("meal_plans_generated").default(0).notNull(),
+  ingredient_recipes_generated: integer("ingredient_recipes_generated").default(0).notNull(),
   created_at: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 });
 
@@ -109,6 +116,12 @@ export const temporaryRecipes = pgTable("temporary_recipes", {
   servings: integer("servings"),
   ingredients: jsonb("ingredients"),
   instructions: jsonb("instructions"),
+  // Separate tag columns
+  meal_type: text("meal_type").$type<z.infer<typeof MealTypeEnum>>(),
+  cuisine_type: text("cuisine_type").$type<z.infer<typeof CuisineTypeEnum>>(),
+  dietary_restrictions: jsonb("dietary_restrictions").$type<z.infer<typeof DietaryTypeEnum>[]>(),
+  difficulty: text("difficulty").$type<z.infer<typeof DifficultyEnum>>(),
+  // Keep original tags for backward compatibility and miscellaneous tags
   tags: jsonb("tags"),
   nutrition: jsonb("nutrition"),
   complexity: integer("complexity").notNull(),
@@ -148,6 +161,10 @@ export const insertTemporaryRecipeSchema = z.object({
   servings: z.number(),
   ingredients: z.array(RecipeIngredientSchema),
   instructions: z.array(z.string()),
+  meal_type: MealTypeEnum.nullable(),
+  cuisine_type: CuisineTypeEnum.nullable(),
+  dietary_restrictions: z.array(DietaryTypeEnum).nullable(),
+  difficulty: DifficultyEnum.nullable(),
   tags: z.array(z.string()),
   nutrition: RecipeNutritionSchema,
   complexity: z.number(),

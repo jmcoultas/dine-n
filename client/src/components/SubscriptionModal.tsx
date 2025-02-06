@@ -21,9 +21,17 @@ export function SubscriptionModal({ open, onOpenChange, feature }: SubscriptionM
     }
   };
 
+  // Prevent closing the modal by clicking outside or pressing escape
+  const handleOpenChange = (newOpen: boolean) => {
+    // Only allow closing through the Cancel button
+    if (newOpen === false && !isLoading) {
+      onOpenChange(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
-      <DialogContent className="sm:max-w-md z-50">
+    <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
+      <DialogContent className="sm:max-w-md z-50" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Premium Feature</DialogTitle>
           <DialogDescription>
@@ -46,10 +54,18 @@ export function SubscriptionModal({ open, onOpenChange, feature }: SubscriptionM
               <li>✓ Priority support</li>
             </ul>
           </CardContent>
-          <CardFooter className="px-0">
+          <CardFooter className="px-0 flex gap-2">
+            <Button 
+              onClick={() => onOpenChange(false)}
+              variant="outline"
+              className="flex-1"
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
             <Button 
               onClick={handleUpgrade}
-              className="w-full"
+              className="flex-1"
               disabled={isLoading}
             >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

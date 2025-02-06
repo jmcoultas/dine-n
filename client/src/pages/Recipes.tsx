@@ -2,14 +2,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchRecipes } from "@/lib/api";
 import { useUser } from "@/hooks/use-user";
+import { useSubscription } from "@/hooks/use-subscription";
 import RecipeCard from "@/components/RecipeCard";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Search } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
 
 interface RecipeNutrition {
   calories: number;
@@ -41,7 +44,8 @@ interface Recipe {
 export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const { subscription } = useSubscription();
   const { data: user } = useUser();
   
   // Query for user's favorite recipes
@@ -56,7 +60,7 @@ export default function Recipes() {
       }
       return response.json();
     },
-    enabled: !!user,
+    enabled: !!user && subscription?.tier === 'premium',
   });
 
   // Query for community recipes (most favorited)
@@ -113,6 +117,59 @@ export default function Recipes() {
       );
     }
 
+    if (!isFavoritesTab) {
+      // Horizontal scrolling for community recipes
+      return (
+        <div className="relative">
+          <ScrollArea className="w-full whitespace-nowrap rounded-md">
+            <div className="flex w-max space-x-6 p-4">
+              {recipes.map((recipe) => (
+                <div key={recipe.id} className="w-[300px] shrink-0 animate-slide-left">
+                  <RecipeCard
+                    recipe={recipe}
+                    isFavorited={favoritedRecipeIds.has(recipe.id)}
+                    onClick={() => setSelectedRecipe(recipe)}
+                  />
+                </div>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+          <div className="absolute left-2 top-1/2 -translate-y-1/2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
+              onClick={() => {
+                const scrollArea = document.querySelector('.scroll-area');
+                if (scrollArea) {
+                  scrollArea.scrollBy({ left: -300, behavior: 'smooth' });
+                }
+              }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
+              onClick={() => {
+                const scrollArea = document.querySelector('.scroll-area');
+                if (scrollArea) {
+                  scrollArea.scrollBy({ left: 300, behavior: 'smooth' });
+                }
+              }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Regular grid for favorites tab
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {recipes.map((recipe) => (
@@ -127,8 +184,22 @@ export default function Recipes() {
     );
   };
 
+  const handleTabChange = (value: string) => {
+    if (value === "favorites" && subscription?.tier !== "premium") {
+      setShowSubscriptionModal(true);
+      return false; // Prevent tab change
+    }
+    return true;
+  };
+
   return (
     <div className="space-y-6">
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        feature="My Recipes"
+      />
+
       <div className="flex flex-col gap-4">
         <h1 className="text-4xl font-bold">Recipe Collection</h1>
         <div className="relative">
@@ -142,18 +213,65 @@ export default function Recipes() {
         </div>
       </div>
 
-      <Tabs defaultValue="community" className="space-y-6">
+      <Tabs 
+        defaultValue="community" 
+        className="space-y-6"
+        onValueChange={handleTabChange}
+      >
         <TabsList>
           <TabsTrigger value="community">Community Recipes</TabsTrigger>
-          <TabsTrigger value="favorites">My Recipes</TabsTrigger>
+          <TabsTrigger value="favorites" className="flex items-center gap-2">
+            My Recipes
+            {subscription?.tier !== "premium" && (
+              <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] px-1 py-0 h-4">
+                PRO
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="community" className="space-y-6">
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+                @keyframes slide-left {
+                  from {
+                    opacity: 0;
+                    transform: translateX(20px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateX(0);
+                  }
+                }
+                .animate-slide-left {
+                  animation: slide-left 0.3s ease-out forwards;
+                  animation-delay: calc(var(--animation-order) * 0.1s);
+                }
+              `
+            }}
+          />
           {renderRecipeGrid(filteredCommunityRecipes, isLoadingCommunity)}
         </TabsContent>
 
         <TabsContent value="favorites" className="space-y-6">
-          {renderRecipeGrid(filteredFavoriteRecipes, isLoadingFavorites, true)}
+          {subscription?.tier === "premium" ? (
+            renderRecipeGrid(filteredFavoriteRecipes, isLoadingFavorites, true)
+          ) : (
+            <div className="flex items-center justify-center h-[40vh]">
+              <div className="text-center space-y-4">
+                <p className="text-lg text-muted-foreground">
+                  Upgrade to Premium to access My Recipes
+                </p>
+                <Button 
+                  onClick={() => setShowSubscriptionModal(true)}
+                  className="mt-4"
+                >
+                  Upgrade Now
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

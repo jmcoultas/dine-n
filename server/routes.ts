@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, sql, inArray, desc } from "drizzle-orm";
-import { generateRecipeRecommendation, generateIngredientSubstitution } from "./utils/ai";
+import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
@@ -9,6 +9,8 @@ import { downloadAndStoreImage } from "./services/imageStorage";
 import auth from './services/firebase';
 import { createFirebaseToken } from './services/firebase';
 import { type PublicUser } from "./types";
+import { z } from "zod";
+import { MealTypeEnum, CuisineTypeEnum, DietaryTypeEnum, DifficultyEnum } from "@db/schema";
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -603,33 +605,69 @@ export function registerRoutes(app: express.Express) {
       for (const recipe of suggestedRecipes) {
         if (!recipe) continue;
 
-        const insertResult = insertTemporaryRecipeSchema.safeParse({
+        const insertData = {
           user_id: req.user!.id,
           name: String(recipe.name || ''),
           description: recipe.description?.toString() || null,
           image_url: recipe.image_url?.toString() || null,
-          permanent_url: null, // Start with null permanent_url
-          prep_time: Number(recipe.prep_time) || 0,
-          cook_time: Number(recipe.cook_time) || 0,
-          servings: Number(recipe.servings) || 2,
-          ingredients: recipe.ingredients || [],
-          instructions: recipe.instructions || [],
-          tags: recipe.tags || [],
-          nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-          complexity: Number(recipe.complexity) || 1,
+          permanent_url: null,
+          prep_time: Math.max(0, Number(recipe.prep_time) || 0),
+          cook_time: Math.max(0, Number(recipe.cook_time) || 0),
+          servings: Math.max(1, Number(recipe.servings) || 2),
+          ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+          instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+          meal_type: (Array.isArray(recipe.tags) 
+            ? (recipe.tags.find((tag): tag is z.infer<typeof MealTypeEnum> => 
+                ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"].includes(tag as string)
+              ) || "Dinner")
+            : "Dinner"),
+          cuisine_type: (Array.isArray(recipe.tags)
+            ? (recipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+                ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+              ) || "Other")
+            : "Other"),
+          dietary_restrictions: (Array.isArray(recipe.tags)
+            ? recipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+                ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+              )
+            : []),
+          difficulty: (() => {
+            switch(recipe.complexity) {
+              case 1: return "Easy" as const;
+              case 2: return "Moderate" as const;
+              case 3: return "Advanced" as const;
+              default: return "Moderate" as const;
+            }
+          })(),
+          tags: (Array.isArray(recipe.tags)
+            ? recipe.tags.filter((tag): tag is string => 
+                typeof tag === 'string' && ![
+                  "Breakfast", "Lunch", "Dinner", "Snack", "Dessert",
+                  "Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French",
+                  "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"
+                ].includes(tag)
+              )
+            : []),
+          nutrition: recipe.nutrition && typeof recipe.nutrition === 'object'
+            ? recipe.nutrition
+            : { calories: 0, protein: 0, carbs: 0, fat: 0 },
+          complexity: Math.min(3, Math.max(1, Number(recipe.complexity) || 1)),
           created_at: new Date(),
           expires_at: expirationDate,
-          favorited: false
-        });
+          favorited: false,
+          favorites_count: 0
+        };
 
-        if (!insertResult.success) {
-          console.error('Invalid recipe data:', insertResult.error.issues);
+        const parseResult = insertTemporaryRecipeSchema.safeParse(insertData);
+
+        if (!parseResult.success) {
+          console.error('Invalid recipe data:', parseResult.error.issues);
           continue;
         }
 
         const [savedRecipe] = await db
           .insert(temporaryRecipes)
-          .values([insertResult.data])
+          .values([parseResult.data])
           .returning();
 
         // Add image storage here
@@ -893,6 +931,160 @@ export function registerRoutes(app: express.Express) {
     } catch (error) {
       console.error('Error in Google auth:', error);
       res.status(500).json({ message: 'Authentication failed' });
+    }
+  });
+
+  // Generate recipe suggestions from ingredients
+  app.post("/api/generate-recipe-suggestions", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { ingredients, dietary, allergies } = req.body;
+
+      // Validate input
+      if (!Array.isArray(ingredients) || ingredients.length === 0) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Must provide at least one ingredient"
+        });
+      }
+
+      // Check if user has active subscription for more than 3 ingredients
+      const isFreeTier = user.subscription_tier === 'free';
+      if (isFreeTier && ingredients.length > 3) {
+        return res.status(403).json({
+          error: "Free plan limit reached",
+          message: "Free tier is limited to 3 ingredients. Please upgrade to premium for unlimited ingredients.",
+          code: "UPGRADE_REQUIRED"
+        });
+      }
+
+      const suggestions = await generateRecipeSuggestionsFromIngredients({
+        ingredients,
+        dietary: Array.isArray(dietary) ? dietary : undefined,
+        allergies: Array.isArray(allergies) ? allergies : undefined
+      });
+
+      res.json({ suggestions });
+    } catch (error: any) {
+      console.error("Error generating recipe suggestions:", error);
+      res.status(500).json({
+        error: "Failed to generate recipe suggestions",
+        details: error.message
+      });
+    }
+  });
+
+  // Generate a complete recipe from a title
+  app.post("/api/generate-recipe", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+    try {
+      const { title } = req.body;
+
+      if (!title) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Recipe title is required"
+        });
+      }
+
+      // Generate the recipe using the title-specific function
+      const recipeData = await generateRecipeFromTitleAI(title);
+
+      // Save as a temporary recipe
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 2);
+
+      const insertData = {
+        user_id: req.user!.id,
+        name: String(recipeData.name || ''),
+        description: recipeData.description?.toString() || null,
+        image_url: recipeData.image_url?.toString() || null,
+        permanent_url: null,
+        prep_time: Math.max(0, Number(recipeData.prep_time) || 0),
+        cook_time: Math.max(0, Number(recipeData.cook_time) || 0),
+        servings: Math.max(1, Number(recipeData.servings) || 2),
+        ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
+        instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
+        meal_type: (Array.isArray(recipeData.tags) 
+          ? (recipeData.tags.find((tag): tag is z.infer<typeof MealTypeEnum> => 
+              ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"].includes(tag as string)
+            ) || "Dinner")
+          : "Dinner"),
+        cuisine_type: (Array.isArray(recipeData.tags)
+          ? (recipeData.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+              ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+            ) || "Other")
+          : "Other"),
+        dietary_restrictions: (Array.isArray(recipeData.tags)
+          ? recipeData.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+              ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+            )
+          : []),
+        difficulty: (() => {
+          switch(recipeData.complexity) {
+            case 1: return "Easy" as const;
+            case 2: return "Moderate" as const;
+            case 3: return "Advanced" as const;
+            default: return "Moderate" as const;
+          }
+        })(),
+        tags: (Array.isArray(recipeData.tags)
+          ? recipeData.tags.filter((tag): tag is string => 
+              typeof tag === 'string' && ![
+                "Breakfast", "Lunch", "Dinner", "Snack", "Dessert",
+                "Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French",
+                "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"
+              ].includes(tag)
+            )
+          : []),
+        nutrition: recipeData.nutrition && typeof recipeData.nutrition === 'object'
+          ? recipeData.nutrition
+          : { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        complexity: Math.min(3, Math.max(1, Number(recipeData.complexity) || 1)),
+        created_at: new Date(),
+        expires_at: expirationDate,
+        favorited: false,
+        favorites_count: 0
+      };
+
+      const parseResult = insertTemporaryRecipeSchema.safeParse(insertData);
+
+      if (!parseResult.success) {
+        return res.status(400).json({
+          error: "Invalid recipe data",
+          details: parseResult.error.errors
+        });
+      }
+
+      const [savedRecipe] = await db
+        .insert(temporaryRecipes)
+        .values(parseResult.data)
+        .returning();
+
+      // Add image storage
+      if (savedRecipe.image_url) {
+        try {
+          const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+          if (permanentUrl) {
+            const [updatedRecipe] = await db
+              .update(temporaryRecipes)
+              .set({ permanent_url: permanentUrl })
+              .where(eq(temporaryRecipes.id, savedRecipe.id))
+              .returning();
+            
+            return res.json({ recipe: updatedRecipe });
+          }
+        } catch (error) {
+          console.error('Failed to store image:', error);
+        }
+      }
+
+      res.json({ recipe: savedRecipe });
+    } catch (error: any) {
+      console.error("Error generating recipe:", error);
+      res.status(500).json({
+        error: "Failed to generate recipe",
+        details: error.message
+      });
     }
   });
 }

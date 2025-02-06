@@ -15,12 +15,12 @@ import auth from "./services/firebase";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
-  hash: async (password: string) => {
+  hash: async (password: string): Promise<string> => {
     const salt = randomBytes(16).toString("hex");
     const buf = (await scryptAsync(password, salt, 64)) as Buffer;
     return `${buf.toString("hex")}.${salt}`;
   },
-  compare: async (suppliedPassword: string, storedPassword: string) => {
+  compare: async (suppliedPassword: string, storedPassword: string): Promise<boolean> => {
     const [hashedPassword, salt] = storedPassword.split(".");
     const hashedPasswordBuf = Buffer.from(hashedPassword, "hex");
     const suppliedPasswordBuf = (await scryptAsync(
@@ -29,7 +29,7 @@ const crypto = {
       64
     )) as Buffer;
     return timingSafeEqual(hashedPasswordBuf, suppliedPasswordBuf);
-  },
+  }
 };
 
 // Extend Express.User interface to match our PublicUser type
@@ -87,7 +87,9 @@ export function setupAuth(app: Express) {
           ...foundUser,
           subscription_status: foundUser.subscription_status || 'inactive',
           subscription_tier: foundUser.subscription_tier || 'free',
-          meal_plans_generated: foundUser.meal_plans_generated || 0
+          meal_plans_generated: foundUser.meal_plans_generated || 0,
+          ingredient_recipes_generated: foundUser.ingredient_recipes_generated || 0,
+          firebase_uid: foundUser.firebase_uid || null
         };
 
         // Create Firebase custom token after successful authentication
@@ -121,7 +123,9 @@ export function setupAuth(app: Express) {
         ...foundUser,
         subscription_status: foundUser.subscription_status || 'inactive',
         subscription_tier: foundUser.subscription_tier || 'free',
-        meal_plans_generated: foundUser.meal_plans_generated || 0
+        meal_plans_generated: foundUser.meal_plans_generated || 0,
+        ingredient_recipes_generated: foundUser.ingredient_recipes_generated || 0,
+        firebase_uid: foundUser.firebase_uid || null
       };
 
       done(null, user);
@@ -226,7 +230,9 @@ export function setupAuth(app: Express) {
         ...newUser,
         subscription_status: newUser.subscription_status || 'inactive',
         subscription_tier: newUser.subscription_tier || 'free',
-        meal_plans_generated: newUser.meal_plans_generated || 0
+        meal_plans_generated: newUser.meal_plans_generated || 0,
+        ingredient_recipes_generated: newUser.ingredient_recipes_generated || 0,
+        firebase_uid: newUser.firebase_uid || null
       };
 
       // Create a custom token for Firebase authentication

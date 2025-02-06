@@ -246,10 +246,15 @@ export const stripeService = {
                   }
                 };
 
+                // Always set status to active for valid subscription states
+                const status = subscription.status === 'active' || subscription.status === 'trialing' 
+                  ? 'active' as const 
+                  : getSubscriptionStatus(subscription.status);
+
                 const updateData = {
                   stripe_subscription_id: subscription.id,
-                  subscription_status: getSubscriptionStatus(subscription.status) as 'active' | 'inactive' | 'cancelled',
-                  subscription_tier: 'premium' as const,
+                  subscription_status: status,
+                  subscription_tier: status === 'active' ? 'premium' as const : 'free' as const,
                   subscription_end_date: new Date(subscription.current_period_end * 1000)
                 };
 
@@ -262,6 +267,13 @@ export const stripeService = {
                 if (!updatedUser) {
                   throw new Error(`Failed to update user ${customer.id} subscription status`);
                 }
+
+                console.log('Successfully updated subscription status:', {
+                  userId: customer.id,
+                  status,
+                  tier: updateData.subscription_tier,
+                  endDate: updateData.subscription_end_date
+                });
 
                 return { 
                   success: true, 

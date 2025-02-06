@@ -1,211 +1,210 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { useUser, type AuthUser } from "@/hooks/use-user";
-import { useSubscription } from "@/hooks/use-subscription";
+import { useUser } from "@/hooks/use-user";
+import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock, CookingPot } from "lucide-react";
 import PreferenceModal from "@/components/PreferenceModal";
-import { generateMealPlan, type GenerateMealPlanResponse } from "@/lib/api";
-import { PreferenceSchema } from "@db/schema";
-import type { Preferences } from "@db/schema";
-import { RecipeResponseSchema } from "@/lib/types";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
-
-const HERO_IMAGES = [
-  "https://images.unsplash.com/photo-1494859802809-d069c3b71a8a",
-  "https://images.unsplash.com/photo-1470338950318-40320a722782",
-  "https://images.unsplash.com/photo-1414235077428-338989a2e8c0",
-];
+import type { Preferences } from "@db/schema";
+import { generateMealPlan } from "@/lib/api";
+import type { ChefPreferences } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
+  const [, setLocation] = useLocation();
   const userQuery = useUser();
-  const { subscription } = useSubscription();
   const [showPreferences, setShowPreferences] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState("Meal plan generation");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
   const [preferences, setPreferences] = useState<Preferences>({
     dietary: [],
     allergies: [],
     cuisine: [],
     meatTypes: [],
   });
-  const { toast } = useToast();
-
-  const handlePreferencesSave = (newPreferences: Preferences) => {
-    const parsedPrefs = PreferenceSchema.safeParse(newPreferences);
-    if (!parsedPrefs.success) {
-      toast({
-        title: "Error",
-        description: "Invalid preferences format",
-        variant: "destructive",
-      });
-      return;
-    }
-    setPreferences(parsedPrefs.data);
-  };
-  const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (userQuery.data?.preferences) {
-      const parsedPrefs = PreferenceSchema.safeParse(userQuery.data.preferences);
-      if (parsedPrefs.success) {
-        setPreferences(parsedPrefs.data);
-      }
+      const userPreferences = userQuery.data.preferences as Preferences;
+      setPreferences(userPreferences);
     }
-  }, [userQuery.data?.preferences]);
+  }, [userQuery.data]);
 
-  const generateMutation = useMutation<GenerateMealPlanResponse, Error, Preferences>({
-    mutationFn: async (prefs: Preferences) => {
-      const cleanPreferences = {
-        dietary: prefs.dietary.filter(Boolean),
-        allergies: prefs.allergies.filter(Boolean),
-        cuisine: prefs.cuisine.filter(Boolean),
-        meatTypes: prefs.meatTypes.filter(Boolean)
-      };
-      console.log('Generating meal plan with preferences:', cleanPreferences);
-      const response = await generateMealPlan(cleanPreferences, 2);
-      console.log('Received response:', response);
+  const handleShowPreferences = () => {
+    if (!userQuery.data) {
+      setLocation("/auth");
+      return;
+    }
 
-      if (Array.isArray(response.recipes)) {
-        localStorage.setItem('generatedRecipes', JSON.stringify(response.recipes));
-      }
+    const hasExistingPreferences = Object.entries(preferences).some(([key, value]) =>
+      key !== 'chefPreferences' && Array.isArray(value) && value.length > 0
+    );
 
-      return response;
-    },
-    onSuccess: (data) => {
-      if (Array.isArray(data.recipes)) {
-        setShowPreferences(false);
-        // Small delay to ensure state updates are processed
-        setTimeout(() => {
-          setLocation("/meal-plan");
+    setShowPreferences(true);
+  };
+
+  const handleGenerateMealPlan = async (chefPreferences: ChefPreferences, updatedPreferences: Preferences) => {
+    try {
+      setIsGenerating(true);
+      await generateMealPlan(updatedPreferences, parseInt(chefPreferences.mealPlanDuration));
+      setLocation("/meal-plan");
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'FREE_PLAN_LIMIT_REACHED') {
+          setFeatureContext("Meal plan generation");
+          setShowSubscriptionModal(true);
+        } else {
           toast({
-            title: "Success!",
-            description: "Your meal plan has been generated.",
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
           });
-        }, 100);
-      } else {
-        toast({
-          title: "Error",
-          description: "No recipes were generated",
-          variant: "destructive",
-        });
+        }
       }
-    },
-    onError: (error: Error) => {
-      if (error.message === 'FREE_PLAN_LIMIT_REACHED') {
-        setShowPreferences(false);
-        setFeatureContext("Meal plan generation");
-        setShowSubscriptionModal(true);
-        return;
-      }
-
-      // Only show error toast for non-subscription related errors
-      if (!error.message?.includes('subscription')) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to generate meal plan. Please try again.",
-          variant: "destructive",
-        });
-      }
-    },
-  });
-
-  const handleGenerate = () => {
-    generateMutation.mutate(preferences);
+    } finally {
+      setIsGenerating(false);
+      setShowPreferences(false);
+    }
   };
 
   return (
-    <div className="space-y-16">
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <SubscriptionModal
         open={showSubscriptionModal}
         onOpenChange={setShowSubscriptionModal}
         feature={featureContext}
       />
-      <section
-        className="relative h-[600px] rounded-lg overflow-hidden bg-cover bg-center"
-        style={{
-          backgroundImage: `url(${HERO_IMAGES[0]})`,
-        }}
-      >
-        <div className="absolute inset-0 bg-black/50" />
-        <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-4">
-          <h1 className="text-5xl font-bold mb-4">
-            Dine-N
-          </h1>
-          <p className="text-xl mb-8 max-w-2xl">
-            Generate personalized meal plans, discover new recipes, and simplify
-            your grocery shopping with our intelligent cooking companion.
-          </p>
-          {userQuery.data ? (
-            <Button
-              size="lg"
-              className="bg-primary hover:bg-primary/90"
-              onClick={() => setShowPreferences(true)}
-            >
-              Start Planning
-            </Button>
-          ) : (
-            <Button
-              size="lg"
-              className="bg-primary hover:bg-primary/90"
-              onClick={() => setLocation("/auth")}
-            >
-              Sign in to Start Planning
-            </Button>
-          )}
-        </div>
-      </section>
 
-      <section className="grid md:grid-cols-3 gap-8">
-        <div className="space-y-4">
-          <img
-            src="https://images.unsplash.com/photo-1660652379705-223db5a4e13f"
-            alt="Fresh ingredients"
-            className="rounded-lg h-48 w-full object-cover"
-          />
-          <h3 className="text-2xl font-semibold">Smart Recipe Suggestions</h3>
+      {/* Logo and Title */}
+      <div className="text-center mb-12 animate-fadeIn">
+        <div className="w-32 h-32 mx-auto mb-4 pt-4">
+          <ChefHat className="w-full h-full text-primary animate-bounce" />
+        </div>
+        <h1 className="text-5xl font-bold mb-4 text-primary">
+          Dine-N
+        </h1>
+        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          Choose your culinary adventure
+        </p>
+      </div>
+
+      {/* Adventure Choices */}
+      <div className="grid md:grid-cols-2 gap-8 w-full max-w-5xl mb-16">
+        {/* Generate Meal Plan Path */}
+        <div className="animate-slideInLeft relative group">
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02]">
+            <CookingPot className="w-16 h-16 text-primary mb-4" />
+            <h2 className="text-2xl font-bold mb-4">Generate Meal Plan</h2>
+            <p className="text-muted-foreground mb-6">
+              Let our AI chef craft a personalized meal plan tailored to your preferences and dietary needs.
+            </p>
+            <Button
+              size="lg"
+              className="w-full bg-primary hover:bg-primary/90"
+              onClick={handleShowPreferences}
+            >
+              {userQuery.data ? "Start Planning" : "Sign in to Start"}
+            </Button>
+          </div>
+          <div className="absolute inset-0 bg-primary/5 rounded-xl -z-10 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-300" />
+        </div>
+
+        {/* Find Recipes Path */}
+        <div className="animate-slideInRight relative group">
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02]">
+            <UtensilsCrossed className="w-16 h-16 text-primary mb-4" />
+            <h2 className="text-2xl font-bold mb-4">Find Recipes by Ingredients</h2>
+            <p className="text-muted-foreground mb-6">
+              Transform your available ingredients into delicious meals with our smart recipe finder.
+            </p>
+            <Button
+              size="lg"
+              className="w-full bg-primary hover:bg-primary/90"
+              onClick={() => setLocation("/ingredient-recipes")}
+            >
+              Discover Recipes
+            </Button>
+          </div>
+          <div className="absolute inset-0 bg-primary/5 rounded-xl -z-10 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-300" />
+        </div>
+      </div>
+
+      {/* Recipe Features Section */}
+      <div className="w-full max-w-5xl animate-fadeIn">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 mx-auto mb-4">
+            <BookOpen className="w-full h-full text-primary animate-pulse" />
+          </div>
+          <h2 className="text-3xl font-bold mb-2">Discover Our Recipe Features</h2>
           <p className="text-muted-foreground">
-            Get personalized recipe recommendations based on your preferences and
-            dietary requirements.
+            Explore a world of culinary possibilities with our smart recipe system
           </p>
         </div>
-        <div className="space-y-4">
-          <img
-            src="https://images.unsplash.com/photo-1722498257014-26efa8b75c7a"
-            alt="Fresh ingredients"
-            className="rounded-lg h-48 w-full object-cover"
-          />
-          <h3 className="text-2xl font-semibold">Automated Grocery Lists</h3>
-          <p className="text-muted-foreground">
-            Generate comprehensive shopping lists from your meal plans with one
-            click.
-          </p>
+
+        <div className="grid md:grid-cols-3 gap-8 mb-8">
+          <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border border-primary/10">
+            <Search className="w-10 h-10 text-primary mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Smart Search</h3>
+            <p className="text-muted-foreground">
+              Find recipes by ingredients, cuisine type, or dietary preferences
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border border-primary/10">
+            <Heart className="w-10 h-10 text-primary mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Save Favorites</h3>
+            <p className="text-muted-foreground">
+              Build your personal collection of go-to recipes
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border border-primary/10">
+            <Clock className="w-10 h-10 text-primary mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Quick Access</h3>
+            <p className="text-muted-foreground">
+              View cooking times, servings, and nutrition info at a glance
+            </p>
+          </div>
         </div>
-        <div className="space-y-4">
-          <img
-            src="https://images.unsplash.com/photo-1660652377925-d615178531db"
-            alt="Fresh ingredients"
-            className="rounded-lg h-48 w-full object-cover"
-          />
-          <h3 className="text-2xl font-semibold">Flexible Meal Planning</h3>
-          <p className="text-muted-foreground">
-            Create, save, and modify meal plans that fit your schedule and taste.
-          </p>
+
+        <div className="text-center">
+          <Button
+            size="lg"
+            className="bg-primary hover:bg-primary/90"
+            onClick={() => setLocation("/recipes")}
+          >
+            <BookOpen className="w-5 h-5 mr-2" />
+            View My Recipes
+          </Button>
         </div>
-      </section>
+      </div>
+
+      {/* Decorative Elements */}
+      <div 
+        className="absolute inset-0 pointer-events-none animate-fadeIn opacity-10"
+        style={{
+          backgroundImage: `radial-gradient(circle at 20% 20%, var(--primary) 1px, transparent 1px),
+                           radial-gradient(circle at 80% 80%, var(--secondary) 1px, transparent 1px)`,
+          backgroundSize: '60px 60px',
+        }}
+      />
 
       <PreferenceModal
         open={showPreferences}
         onOpenChange={setShowPreferences}
         preferences={preferences}
-        onUpdatePreferences={handlePreferencesSave}
-        isGenerating={generateMutation.isPending}
-        onGenerate={handleGenerate}
+        onUpdatePreferences={setPreferences}
+        isGenerating={isGenerating}
+        onGenerate={handleGenerateMealPlan}
         user={userQuery.data ? {
           subscription_tier: userQuery.data.subscription_tier,
           meal_plans_generated: userQuery.data.meal_plans_generated
         } : undefined}
+        skipToChefPreferences={Object.entries(preferences).some(([key, value]) =>
+          key !== 'chefPreferences' && Array.isArray(value) && value.length > 0
+        )}
       />
     </div>
   );

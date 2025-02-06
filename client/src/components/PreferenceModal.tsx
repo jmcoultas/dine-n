@@ -31,9 +31,9 @@ function isPreferenceArray(value: unknown): value is string[] {
 
 const CHEF_PREFERENCES = {
   difficulty: ChefPreferencesSchema.shape.difficulty.options,
-  mealType: ChefPreferencesSchema.shape.mealType.options,
   cookTime: ChefPreferencesSchema.shape.cookTime.options,
-  servingSize: ChefPreferencesSchema.shape.servingSize.options
+  servingSize: ChefPreferencesSchema.shape.servingSize.options,
+  mealPlanDuration: ChefPreferencesSchema.shape.mealPlanDuration.options
 } as const;
 
 const STEPS = [
@@ -81,18 +81,19 @@ interface PreferenceModalProps {
   preferences: Preferences;
   onUpdatePreferences: (preferences: Preferences) => void;
   isGenerating?: boolean;
-  onGenerate?: (chefPreferences: ChefPreferences) => void;
+  onGenerate?: (chefPreferences: ChefPreferences, updatedPreferences: Preferences) => void;
   user?: {
     subscription_tier: string | null;
     meal_plans_generated: number | undefined;
   };
+  skipToChefPreferences?: boolean;
 }
 
 const defaultChefPreferences: ChefPreferences = {
   difficulty: 'Moderate',
-  mealType: 'Any',
   cookTime: '30-60 minutes',
-  servingSize: '4'
+  servingSize: '4',
+  mealPlanDuration: '2'
 };
 
 export default function PreferenceModal({
@@ -102,7 +103,8 @@ export default function PreferenceModal({
   onUpdatePreferences,
   isGenerating = false,
   onGenerate,
-  user
+  user,
+  skipToChefPreferences = false
 }: PreferenceModalProps) {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(-1);
@@ -117,10 +119,17 @@ export default function PreferenceModal({
     const hasValues = Object.entries(preferences).some(([key, value]) =>
       key !== 'chefPreferences' && isPreferenceArray(value) && value.length > 0
     );
-    setCurrentStep(hasValues ? -1 : 0);
+    
+    // If skipToChefPreferences is true and we have existing preferences, go to chef preferences step
+    if (skipToChefPreferences && hasValues && !isEditMode) {
+      setCurrentStep(STEPS.length - 2); // Chef preferences step
+    } else {
+      setCurrentStep(hasValues ? -1 : 0);
+    }
+    
     setIsEditMode(false);
     setChefPreferences(preferences.chefPreferences || defaultChefPreferences);
-  }, [preferences, open]);
+  }, [preferences, open, skipToChefPreferences, isEditMode]);
 
   const currentStepConfig = currentStep >= 0 ? STEPS[currentStep] : null;
   const isLastStep = currentStep === STEPS.length - 1;
@@ -133,19 +142,18 @@ export default function PreferenceModal({
   const handleNext = async () => {
     if (isLastStep) {
       try {
-        const updatedPreferences = {
-          ...tempPreferences,
-          chefPreferences
-        };
-        await handleSavePreferences();
         if (onGenerate) {
-          onGenerate(chefPreferences);
+          const updatedPreferences = {
+            ...tempPreferences,
+            chefPreferences
+          };
+          onGenerate(chefPreferences, updatedPreferences);
           onOpenChange(false);
         }
       } catch (error) {
         toast({
           title: "Error",
-          description: error instanceof Error ? error.message : "Failed to update preferences",
+          description: error instanceof Error ? error.message : "Failed to generate meal plan",
           variant: "destructive",
         });
       }
@@ -251,7 +259,11 @@ export default function PreferenceModal({
 
   const handleGenerateClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
-    onGenerate?.(chefPreferences);
+    const updatedPreferences = {
+      ...tempPreferences,
+      chefPreferences
+    };
+    onGenerate?.(chefPreferences, updatedPreferences);
   };
 
   const handleSavePreferences = async () => {
@@ -417,27 +429,6 @@ export default function PreferenceModal({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Meal Type</label>
-                      <Select
-                        value={chefPreferences.mealType}
-                        onValueChange={(value: typeof CHEF_PREFERENCES.mealType[number]) =>
-                          setChefPreferences(prev => ({ ...prev, mealType: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CHEF_PREFERENCES.mealType.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
                       <label className="text-sm font-medium">Cooking Time</label>
                       <Select
                         value={chefPreferences.cookTime}
@@ -478,6 +469,29 @@ export default function PreferenceModal({
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {user?.subscription_tier === 'premium' && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Meal Plan Duration</label>
+                        <Select
+                          value={chefPreferences.mealPlanDuration}
+                          onValueChange={(value: typeof CHEF_PREFERENCES.mealPlanDuration[number]) =>
+                            setChefPreferences(prev => ({ ...prev, mealPlanDuration: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CHEF_PREFERENCES.mealPlanDuration.map((days) => (
+                              <SelectItem key={days} value={days}>
+                                {days} {parseInt(days) === 1 ? 'day' : 'days'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : isLastStep ? (
@@ -522,10 +536,6 @@ export default function PreferenceModal({
                           <span className="text-sm font-medium">{chefPreferences.difficulty}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-sm">Meal Type:</span>
-                          <span className="text-sm font-medium">{chefPreferences.mealType}</span>
-                        </div>
-                        <div className="flex justify-between">
                           <span className="text-sm">Cooking Time:</span>
                           <span className="text-sm font-medium">{chefPreferences.cookTime}</span>
                         </div>
@@ -535,6 +545,14 @@ export default function PreferenceModal({
                             {chefPreferences.servingSize} {parseInt(chefPreferences.servingSize) === 1 ? 'person' : 'people'}
                           </span>
                         </div>
+                        {user?.subscription_tier === 'premium' && (
+                          <div className="flex justify-between">
+                            <span className="text-sm">Duration:</span>
+                            <span className="text-sm font-medium">
+                              {chefPreferences.mealPlanDuration} {parseInt(chefPreferences.mealPlanDuration) === 1 ? 'day' : 'days'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

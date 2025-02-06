@@ -12,9 +12,9 @@ interface MealPlanPreferences {
 
 interface ChefPreferences {
   difficulty: string;
-  mealType: string;
   cookTime: string;
   servingSize: string;
+  mealPlanDuration: string;
 }
 
 export interface GenerateMealPlanResponse {
@@ -160,4 +160,46 @@ export async function getIngredientSubstitutions(
   }
 
   return response.json();
+}
+
+export async function generateRecipeFromTitle(title: string): Promise<Recipe> {
+  const response = await fetch(`${API_BASE}/generate-recipe`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({ title }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to generate recipe");
+  }
+
+  const data = await response.json();
+  const recipe = data.recipe;
+
+  // Transform the data to include both snake_case and camelCase fields
+  return {
+    ...recipe,
+    // Add camelCase versions of fields
+    imageUrl: recipe.permanent_url || recipe.image_url || null,
+    permanentUrl: recipe.permanent_url || null,
+    prepTime: recipe.prep_time,
+    cookTime: recipe.cook_time,
+    // Keep snake_case versions for compatibility
+    image_url: recipe.image_url || null,
+    permanent_url: recipe.permanent_url || null,
+    prep_time: recipe.prep_time,
+    cook_time: recipe.cook_time,
+    // Ensure required fields have default values
+    ingredients: recipe.ingredients || [],
+    instructions: recipe.instructions || [],
+    tags: recipe.tags || [],
+    nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    // Add favorite-related fields
+    favorited: false,
+    favorites_count: 0
+  };
 }

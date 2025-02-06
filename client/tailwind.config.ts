@@ -102,6 +102,14 @@ export default {
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" }
+        },
+        "slide-in-left": {
+          "0%": { opacity: "0", transform: "translateX(-100px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" }
+        },
+        "slide-in-right": {
+          "0%": { opacity: "0", transform: "translateX(100px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" }
         }
       },
       animation: {
@@ -114,7 +122,9 @@ export default {
         "steam-1": "steam-1 2s ease-in-out infinite",
         "steam-2": "steam-2 2.2s ease-in-out infinite",
         "steam-3": "steam-3 1.8s ease-in-out infinite",
-        "fade-in": "fade-in 0.5s ease-out"
+        "fade-in": "fade-in 0.5s ease-out",
+        "slideInLeft": "slide-in-left 0.5s ease-out forwards",
+        "slideInRight": "slide-in-right 0.5s ease-out forwards"
       },
     },
   },

@@ -11,18 +11,19 @@ import PreferenceModal from "@/components/PreferenceModal";
 import MealPlanCard from "@/components/MealPlanCard";
 import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import { createMealPlan, createGroceryList, generateMealPlan } from "@/lib/api";
+import { createMealPlan, createGroceryList, generateMealPlan, getTemporaryRecipes } from "@/lib/api";
 import type { Recipe, ChefPreferences } from "@/lib/types";
 import type { Preferences, MealPlan } from "@db/schema";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
+import { Wand2 } from "lucide-react";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
 const defaultChefPreferences: ChefPreferences = {
   difficulty: 'Moderate',
-  mealType: 'Any',
   cookTime: '30-60 minutes',
-  servingSize: '4'
+  servingSize: '4',
+  mealPlanDuration: '2'
 };
 
 const calculateNutritionTotals = (recipes: Recipe[]) => {
@@ -100,21 +101,30 @@ export default function MealPlan() {
     };
   });
 
-  const { data: temporaryRecipes, isLoading, refetch } = useQuery({
-    queryKey: ['temporaryRecipes'],
+  const { data: temporaryRecipes, isLoading: isLoadingRecipes } = useQuery({
+    queryKey: ['temporary-recipes', 'mealplan'],
     queryFn: async () => {
       const response = await fetch('/api/temporary-recipes?source=mealplan', {
         credentials: 'include'
       });
       if (!response.ok) {
-        if (response.status === 403) {
-          setFeatureContext("Meal plan viewing");
-          setShowSubscriptionModal(true);
-          return [];
-        }
-        throw new Error('Failed to fetch recipes');
+        throw new Error('Failed to fetch temporary recipes');
       }
-      return response.json();
+      const data = await response.json();
+      return data.map((recipe: any) => ({
+        ...recipe,
+        imageUrl: recipe.image_url || null,
+        permanentUrl: recipe.permanent_url || null,
+        prepTime: recipe.prep_time || null,
+        cookTime: recipe.cook_time || null,
+        favorited: false,
+        ingredients: recipe.ingredients || [],
+        instructions: recipe.instructions || [],
+        tags: recipe.tags || [],
+        nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        favorites_count: 0,
+        expiresAt: recipe.expires_at
+      }));
     }
   });
 
@@ -124,10 +134,8 @@ export default function MealPlan() {
   const { data: user, isLoading: isUserLoading } = useUser();
 
   useEffect(() => {
-    if (temporaryRecipes && Array.isArray(temporaryRecipes)) {
-      setGeneratedRecipes(temporaryRecipes.filter((recipe): recipe is Recipe =>
-        recipe !== null && typeof recipe === 'object' && 'id' in recipe
-      ));
+    if (temporaryRecipes?.length > 0) {
+      setGeneratedRecipes(temporaryRecipes);
     }
   }, [temporaryRecipes]);
 
@@ -135,7 +143,7 @@ export default function MealPlan() {
     localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
   }, [preferences]);
 
-  const handleGenerateMealPlan = async (chefPreferences: ChefPreferences) => {
+  const handleGenerateMealPlan = async (chefPreferences: ChefPreferences, tempPreferences: Preferences) => {
     if (subscription?.tier !== 'premium') {
       setFeatureContext("Meal plan generation");
       setShowSubscriptionModal(true);
@@ -145,29 +153,45 @@ export default function MealPlan() {
     try {
       setIsGenerating(true);
 
-      // Update preferences with the new chef preferences and ensure arrays are initialized
+      // Use the temporary preferences directly
       const updatedPreferences = {
-        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
-        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
-        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
-        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : [],
+        dietary: Array.isArray(tempPreferences.dietary) ? tempPreferences.dietary : [],
+        allergies: Array.isArray(tempPreferences.allergies) ? tempPreferences.allergies : [],
+        cuisine: Array.isArray(tempPreferences.cuisine) ? tempPreferences.cuisine : [],
+        meatTypes: Array.isArray(tempPreferences.meatTypes) ? tempPreferences.meatTypes : [],
         chefPreferences: {
           difficulty: chefPreferences.difficulty || defaultChefPreferences.difficulty,
-          mealType: chefPreferences.mealType || defaultChefPreferences.mealType,
           cookTime: chefPreferences.cookTime || defaultChefPreferences.cookTime,
-          servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize
+          servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize,
+          mealPlanDuration: chefPreferences.mealPlanDuration || defaultChefPreferences.mealPlanDuration
         }
       };
 
       setPreferences(updatedPreferences);
       console.log('Generating meal plan with preferences:', JSON.stringify(updatedPreferences, null, 2));
 
-      const result = await generateMealPlan(updatedPreferences, 2);
+      const result = await generateMealPlan(updatedPreferences, parseInt(chefPreferences.mealPlanDuration));
       if (!result.recipes || result.recipes.length === 0) {
         throw new Error('No recipes were generated. Please try again.');
       }
 
-      await refetch();
+      // Transform and type cast the recipes
+      const transformedRecipes = result.recipes.map(recipe => ({
+        ...recipe,
+        imageUrl: recipe.image_url || null,
+        permanentUrl: recipe.permanent_url || null,
+        prepTime: recipe.prep_time || null,
+        cookTime: recipe.cook_time || null,
+        favorited: false,
+        ingredients: (recipe.ingredients || []) as { name: string; amount: number; unit: string; }[],
+        instructions: (recipe.instructions || []) as string[],
+        tags: (recipe.tags || []) as string[],
+        nutrition: (recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 }) as { calories: number; protein: number; carbs: number; fat: number; },
+        favorites_count: 0,
+        expiresAt: undefined
+      })) as Recipe[];
+
+      setGeneratedRecipes(transformedRecipes);
       toast({
         title: "Success",
         description: "Meal plan generated successfully",
@@ -269,6 +293,10 @@ export default function MealPlan() {
             </div>
           )}
 
+          <Button onClick={() => setShowPreferences(true)}>
+            <Wand2 className="mr-2 h-4 w-4" />
+            Generate Meal Plan
+          </Button>
         </div>
       </div>
 
@@ -305,31 +333,18 @@ export default function MealPlan() {
 
           <TabsContent value="meals" className="mt-6">
             <div className="grid gap-6">
-              {isLoading || isGenerating ? (
+              {isGenerating ? (
                 <LoadingAnimation
                   messages={generateLoadingMessages(preferences, preferences.chefPreferences || defaultChefPreferences)}
                 />
               ) : generatedRecipes.length > 0 ? (
                 <>
-                  {temporaryRecipes?.[0]?.expiresAt && (
-                    <div className="bg-yellow-100 dark:bg-yellow-900/20 p-4 rounded-lg mb-4">
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                        This meal plan will expire in{" "}
-                        {Math.ceil(
-                          (new Date(temporaryRecipes[0].expiresAt).getTime() - new Date().getTime()) /
-                          (1000 * 60 * 60 * 24)
-                        )}{" "}
-                        days. Save it to keep it permanently!
-                      </p>
-                    </div>
-                  )}
                   <div className="grid md:grid-cols-3 gap-6">
-                    {Array.from({ length: 6 }).map((_, index) => {
-                      const recipe = generatedRecipes[index];
+                    {generatedRecipes.map((recipe, index) => {
                       const currentDay = new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000);
                       const mealType = index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner";
 
-                      return recipe ? (
+                      return (
                         <MealPlanCard
                           key={recipe.id}
                           recipe={{
@@ -350,15 +365,6 @@ export default function MealPlan() {
                             });
                           }}
                         />
-                      ) : (
-                        <div
-                          key={`empty-${index}`}
-                          className="border-2 border-dashed rounded-lg p-4 flex items-center justify-center"
-                        >
-                          <span className="text-muted-foreground">
-                            {mealType.charAt(0).toUpperCase() + mealType.slice(1)} slot
-                          </span>
-                        </div>
                       );
                     })}
                   </div>

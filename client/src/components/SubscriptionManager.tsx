@@ -3,10 +3,25 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useSubscription } from "@/hooks/use-subscription";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function SubscriptionManager() {
   const { subscription, isLoading, createCheckoutSession, cancelSubscription } = useSubscription();
   const { toast } = useToast();
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleUpgrade = async () => {
     try {
@@ -21,9 +36,19 @@ export function SubscriptionManager() {
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancelConfirm = async () => {
     try {
+      setIsCancelling(true);
       await cancelSubscription();
+      
+      // Invalidate and refetch user and subscription queries
+      await queryClient.invalidateQueries({ queryKey: ['user'] });
+      await queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      
+      toast({
+        title: "Subscription Cancelled",
+        description: "Your subscription has been cancelled successfully. Your premium access will end at the end of your current billing period.",
+      });
     } catch (error) {
       console.error('Cancel subscription error:', error);
       toast({
@@ -31,6 +56,9 @@ export function SubscriptionManager() {
         description: error instanceof Error ? error.message : "Failed to cancel subscription",
         variant: "destructive",
       });
+    } finally {
+      setIsCancelling(false);
+      setShowCancelDialog(false);
     }
   };
 
@@ -43,61 +71,67 @@ export function SubscriptionManager() {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Subscription Status</CardTitle>
-        <CardDescription>
-          {subscription?.tier === 'premium' 
-            ? 'You currently have premium access' 
-            : 'Upgrade to premium for unlimited meal plans'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {subscription?.tier === 'premium' ? (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Subscription Status</CardTitle>
+          <CardDescription>
+            {subscription?.isActive
+              ? "You currently have an active premium subscription"
+              : "You are currently on the free plan"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
           <div className="space-y-2">
-            <p className="text-sm">Your premium subscription is active.</p>
+            <p className="text-sm">
+              <span className="font-medium">Current Plan:</span>{" "}
+              {subscription?.tier === "premium" ? "Premium" : "Free"}
+            </p>
             {subscription?.endDate && (
-              <p className="text-sm text-muted-foreground">
-                Next billing date: {new Date(subscription.endDate).toLocaleDateString()}
+              <p className="text-sm">
+                <span className="font-medium">Renewal Date:</span>{" "}
+                {new Date(subscription.endDate).toLocaleDateString()}
               </p>
             )}
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold">Premium Plan</h3>
-                <p className="text-sm text-muted-foreground">Unlimited meal plans and AI-powered recommendations</p>
-              </div>
-              <p className="text-xl font-bold">$9.99/mo</p>
-            </div>
-            <ul className="space-y-2 text-sm">
-              <li>✓ Unlimited meal plan generation</li>
-              <li>✓ Save and manage meal plans</li>
-              <li>✓ AI-powered recipe recommendations</li>
-              <li>✓ Priority support</li>
-            </ul>
-          </div>
-        )}
-      </CardContent>
-      <CardFooter>
-        {subscription?.tier === 'premium' ? (
-          <Button 
-            variant="outline" 
-            onClick={handleCancel}
-            className="w-full"
-          >
-            Cancel Subscription
-          </Button>
-        ) : (
-          <Button 
-            onClick={handleUpgrade}
-            className="w-full"
-          >
-            Upgrade to Premium
-          </Button>
-        )}
-      </CardFooter>
-    </Card>
+        </CardContent>
+        <CardFooter>
+          {subscription?.isActive ? (
+            <Button
+              variant="destructive"
+              onClick={() => setShowCancelDialog(true)}
+              disabled={isCancelling}
+            >
+              {isCancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancel Subscription
+            </Button>
+          ) : (
+            <Button onClick={handleUpgrade}>Upgrade to Premium</Button>
+          )}
+        </CardFooter>
+      </Card>
+
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel your premium subscription? You'll continue to have access to premium features until the end of your current billing period.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancelling}>Keep Subscription</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelConfirm}
+              disabled={isCancelling}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isCancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Yes, Cancel Subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
