@@ -176,32 +176,55 @@ export function setupAuth(app: Express) {
 
       const normalizedEmail = email.toLowerCase().trim();
 
+      // Check if the user already exists in the database
       const [existingUser] = await db
         .select()
         .from(users)
         .where(eq(users.email, normalizedEmail))
         .limit(1);
 
+      // If user already exists, update Firebase UID if needed but don't create a new record
       if (existingUser) {
+        console.log(`User already exists with ID ${existingUser.id} for email ${normalizedEmail}`);
+        
+        // Update the Firebase UID if needed
+        if (!existingUser.firebase_uid || existingUser.firebase_uid !== firebaseUid) {
+          await db
+            .update(users)
+            .set({ 
+              firebase_uid: firebaseUid,
+              // Mark as partial registration if it's not already set
+              is_partial_registration: true 
+            })
+            .where(eq(users.id, existingUser.id));
+          
+          console.log(`Updated Firebase UID for existing user ${existingUser.id}`);
+        }
+        
         return res.json({
           message: "User already exists",
-          partial: true
+          partial: true,
+          user_id: existingUser.id
         });
       }
 
-      const tempPasswordHash = await crypto.hash("TEMPORARY_PASSWORD_" + Math.random().toString(36).substring(2));
+      // Create a new user record with temporary password
+      console.log(`Creating new partial user record for ${normalizedEmail}`);
+      const tempPasswordHash = await crypto.hash("TEMPORARY_" + Math.random().toString(36).substring(2));
       
       const [newUser] = await db
         .insert(users)
         .values({
           email: normalizedEmail,
           password_hash: tempPasswordHash,
-          name: normalizedEmail.split('@')[0],
+          name: normalizedEmail.split('@')[0], // Default name from email
           firebase_uid: firebaseUid,
-          subscription_status: 'inactive' as const,
-          subscription_tier: 'free' as const,
+          subscription_status: 'inactive',
+          subscription_tier: 'free',
           meal_plans_generated: 0,
-          created_at: new Date()
+          ingredient_recipes_generated: 0,
+          created_at: new Date(),
+          is_partial_registration: true
         })
         .returning();
 
@@ -209,7 +232,8 @@ export function setupAuth(app: Express) {
 
       return res.json({
         message: "Partial registration successful",
-        partial: true
+        partial: true,
+        user_id: newUser.id
       });
     } catch (error) {
       console.error("Partial registration error:", error);
@@ -287,51 +311,58 @@ export function setupAuth(app: Express) {
         .where(eq(users.email, normalizedEmail))
         .limit(1);
 
+      // Check if this is an existing user
       if (existingUser) {
-        if (existingUser.password_hash.startsWith('TEMPORARY_PASSWORD_') ||
-            existingUser.password_hash.includes('TEMPORARY_PASSWORD_')) {
+        // Check if this is a partial registration that needs completion
+        if (existingUser.is_partial_registration || existingUser.password_hash.startsWith('TEMPORARY_')) {
+          console.log(`Completing partial registration for user ID ${existingUser.id} with email ${normalizedEmail}`);
+          
           const hashedPassword = await crypto.hash(password);
           
+          // Update the existing user record with the real password and name
           await db
             .update(users)
             .set({ 
               password_hash: hashedPassword,
               name: name?.trim() || existingUser.name || normalizedEmail.split('@')[0],
-              firebase_uid: firebaseUid || existingUser.firebase_uid
+              firebase_uid: firebaseUid || existingUser.firebase_uid,
+              is_partial_registration: false // Clear the partial registration flag
             })
             .where(eq(users.id, existingUser.id));
             
-          const [updatedUser] = await db
-            .select()
-            .from(users)
-            .where(eq(users.id, existingUser.id))
-            .limit(1);
+            // Get the updated user
+            const [updatedUser] = await db
+              .select()
+              .from(users)
+              .where(eq(users.id, existingUser.id))
+              .limit(1);
             
-          const publicUser: PublicUser = {
-            ...updatedUser,
-            subscription_status: updatedUser.subscription_status || 'inactive',
-            subscription_tier: updatedUser.subscription_tier || 'free',
-            meal_plans_generated: updatedUser.meal_plans_generated || 0,
-            ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
-            firebase_uid: updatedUser.firebase_uid || null
-          };
-          
-          const customToken = await createFirebaseToken(publicUser.id.toString());
-          publicUser.firebaseToken = customToken;
-          
-          req.login(publicUser, (err) => {
-            if (err) {
-              return next(err);
-            }
-            return res.json({
-              message: "Registration completed successfully",
-              user: publicUser
+            const publicUser: PublicUser = {
+              ...updatedUser,
+              subscription_status: updatedUser.subscription_status || 'inactive',
+              subscription_tier: updatedUser.subscription_tier || 'free',
+              meal_plans_generated: updatedUser.meal_plans_generated || 0,
+              ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
+              firebase_uid: updatedUser.firebase_uid || null
+            };
+            
+            const customToken = await createFirebaseToken(publicUser.id.toString());
+            publicUser.firebaseToken = customToken;
+            
+            req.login(publicUser, (err) => {
+              if (err) {
+                return next(err);
+              }
+              return res.json({
+                message: "Registration completed successfully",
+                user: publicUser
+              });
             });
-          });
-          
-          return;
+            
+            return;
         }
         
+        // If the user exists and is not a partial registration, return an error
         return res.status(400).json({
           error: "Registration Error",
           message: "This email address is already registered",

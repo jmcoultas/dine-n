@@ -58,6 +58,7 @@ export const users = pgTable("users", {
   meal_plans_generated: integer("meal_plans_generated").default(0).notNull(),
   ingredient_recipes_generated: integer("ingredient_recipes_generated").notNull().default(0),
   created_at: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
+  is_partial_registration: boolean("is_partial_registration").default(false),
 });
 
 export const recipes = pgTable("recipes", {

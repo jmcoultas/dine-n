@@ -14,6 +14,7 @@ export default function EmailVerification() {
   const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{[key: string]: string}>({});
+  const [apiResponse, setApiResponse] = useState<any>(null);
 
   useEffect(() => {
     // Extract all query parameters for debugging
@@ -71,6 +72,14 @@ export default function EmailVerification() {
         onAuthStateChanged(auth, async (user) => {
           console.log("Auth state changed. User:", user ? `${user.email} (verified: ${user.emailVerified})` : "No user");
           
+          // Set debugging info
+          setDebugInfo(prev => ({
+            ...prev,
+            userEmail: user?.email || 'no user',
+            emailVerified: user?.emailVerified ? 'true' : 'false',
+            authState: user ? 'signed in' : 'not signed in',
+          }));
+          
           if (user && user.emailVerified) {
             console.log("User is verified, proceeding to create user in database");
             
@@ -81,6 +90,7 @@ export default function EmailVerification() {
               
               // We don't know the final password yet, but we'll create the user record
               // The password will be updated later when the user completes signup
+              console.log("Sending partial registration request to backend");
               const response = await fetch('/api/register/partial', {
                 method: 'POST',
                 headers: {
@@ -92,14 +102,33 @@ export default function EmailVerification() {
                 }),
               });
               
+              const responseData = await response.json();
+              setApiResponse(responseData);
+              console.log('API response:', responseData);
+              
               if (!response.ok) {
-                console.error('Failed to create partial user record:', await response.text());
+                console.error('Failed to create partial user record:', responseData);
+                setDebugInfo(prev => ({
+                  ...prev, 
+                  apiError: JSON.stringify(responseData),
+                  apiStatus: response.status.toString()
+                }));
                 // We'll continue to the password step anyway
               } else {
                 console.log('Successfully created partial user record');
+                setDebugInfo(prev => ({
+                  ...prev, 
+                  apiSuccess: JSON.stringify(responseData),
+                  apiStatus: response.status.toString(), 
+                  userId: responseData.user_id || 'not returned'
+                }));
               }
             } catch (dbError) {
               console.error('Error creating user in database:', dbError);
+              setDebugInfo(prev => ({
+                ...prev, 
+                dbError: dbError instanceof Error ? dbError.message : String(dbError)
+              }));
               // We'll continue to the password step anyway
             }
             
@@ -181,8 +210,8 @@ export default function EmailVerification() {
             </div>
           )}
           
-          {/* Show debug information in development */}
-          {import.meta.env.DEV && Object.keys(debugInfo).length > 0 && (
+          {/* Show debug information in development or any environment for troubleshooting */}
+          {(import.meta.env.DEV || true) && Object.keys(debugInfo).length > 0 && (
             <Alert className="mt-4">
               <AlertDescription>
                 <details>
@@ -190,6 +219,14 @@ export default function EmailVerification() {
                   <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-[200px]">
                     {JSON.stringify(debugInfo, null, 2)}
                   </pre>
+                  {apiResponse && (
+                    <>
+                      <summary className="cursor-pointer font-semibold mt-2">API Response</summary>
+                      <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-[200px]">
+                        {JSON.stringify(apiResponse, null, 2)}
+                      </pre>
+                    </>
+                  )}
                 </details>
               </AlertDescription>
             </Alert>
