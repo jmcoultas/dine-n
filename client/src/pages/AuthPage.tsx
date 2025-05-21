@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useLocation, useSearch } from "wouter";
-import { AuthForm } from "@/components/AuthForm";
+import { AuthFormWrapper } from "@/components/AuthFormWrapper";
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { data: user, login, register } = useUser();
+  const { data: user } = useUser();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [newPassword, setNewPassword] = useState('');
@@ -21,13 +21,20 @@ export default function AuthPage() {
   const [isValidCode, setIsValidCode] = useState(false);
   const search = useSearch();
 
-  // Check for password reset mode and code
+  // Check for tab parameter and password reset mode/code
   useEffect(() => {
     const params = new URLSearchParams(search);
     const mode = params.get('mode');
     const code = params.get('oobCode');
+    const tab = params.get('tab');
 
-    if (mode === 'resetPassword' && code) {
+    // Set active tab if specified in URL
+    if (tab === 'register') {
+      setActiveTab('register');
+    }
+
+    // Firebase redirects with just the oobCode, so we need to check for that
+    if ((mode === 'resetPassword' && code) || (!mode && code)) {
       setOobCode(code);
       // Verify the code is valid
       verifyPasswordResetCode(auth, code)
@@ -49,15 +56,69 @@ export default function AuthPage() {
 
     setIsLoading(true);
     try {
+      console.log("Starting password reset process");
+      // Get the email from the reset code
+      const email = await verifyPasswordResetCode(auth, oobCode);
+      console.log("Email retrieved:", email);
+      
+      // First reset the password in Firebase
       await confirmPasswordReset(auth, oobCode, newPassword);
-      toast({
-        title: "Success",
-        description: "Your password has been reset successfully. Please log in with your new password.",
-      });
-      setActiveTab('login');
-      // Clear the URL parameters
-      window.history.replaceState({}, '', '/auth');
+      console.log("Firebase password reset successful");
+      
+      // Then update the password in our database
+      try {
+        console.log("Updating password in database");
+        const response = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            newPassword,
+          }),
+        });
+        
+        console.log("Database response status:", response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          console.error("Database update failed:", errorData);
+          throw new Error(`Failed to update password in database: ${errorData.message || 'Unknown error'}`);
+        }
+        
+        console.log("Password reset complete");
+        toast({
+          title: "Success",
+          description: "Your password has been reset successfully. Please log in with your new password.",
+        });
+        
+        // Clear the URL parameters and redirect to auth page with login tab active
+        window.history.replaceState({}, '', '/auth');
+        setActiveTab('login');
+        
+        // Remove the reset code and valid code state to show the login form
+        setOobCode(null);
+        setIsValidCode(false);
+      } catch (dbError) {
+        console.error("Database update error:", dbError);
+        // Still show success since Firebase password was updated
+        toast({
+          title: "Partial Success",
+          description: "Your password was reset but there was an issue syncing with our system. You may need to use the 'Forgot Password' option again if you have trouble logging in.",
+          variant: "destructive",
+        });
+        
+        // Clear the URL parameters and redirect to auth page with login tab active
+        window.history.replaceState({}, '', '/auth');
+        setActiveTab('login');
+        
+        // Remove the reset code and valid code state to show the login form
+        setOobCode(null);
+        setIsValidCode(false);
+      }
     } catch (error) {
+      console.error("Password reset error:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to reset password",
@@ -74,36 +135,6 @@ export default function AuthPage() {
       setLocation('/');
     }
   }, [user, setLocation]);
-
-  const handleSubmit = async (data: { email: string; password: string; name?: string }) => {
-    setIsLoading(true);
-
-    try {
-      const result = await (activeTab === 'login' ? login : register)(data);
-      
-      if (!result.ok) {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({
-        title: "Success",
-        description: activeTab === 'login' ? "Welcome back!" : "Account created successfully! Redirecting...",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Show password reset form if we have a valid reset code
   if (oobCode && isValidCode) {
@@ -182,10 +213,7 @@ export default function AuthPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <AuthForm
-                    mode="login"
-                    onSubmit={handleSubmit}
-                  />
+                  <AuthFormWrapper initialMode="login" />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -198,10 +226,7 @@ export default function AuthPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <AuthForm
-                    mode="register"
-                    onSubmit={handleSubmit}
-                  />
+                  <AuthFormWrapper initialMode="register" />
                 </CardContent>
               </Card>
             </TabsContent>

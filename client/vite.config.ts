@@ -15,10 +15,12 @@ console.log('Environment:', {
 export default defineConfig({
   plugins: [
     react(),
-    checker({ typescript: true }),
-    RuntimeErrorModalPlugin(),
+    // Only use checker in development
+    process.env.NODE_ENV !== 'production' && checker({ typescript: true }),
+    // Only use error modal in development
+    process.env.NODE_ENV !== 'production' && RuntimeErrorModalPlugin(),
     ShadcnThemeJSONPlugin(),
-  ],
+  ].filter(Boolean),
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -39,4 +41,31 @@ export default defineConfig({
       '@db': path.resolve(__dirname, '../db'),
     },
   },
+  // Build configuration
+  build: {
+    // Disable source maps in production
+    sourcemap: process.env.NODE_ENV !== 'production',
+    // Improve minification
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: process.env.NODE_ENV === 'production',
+        drop_debugger: process.env.NODE_ENV === 'production'
+      }
+    },
+    // Split chunks for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'wouter'],
+          ui: [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-toast',
+            // Add other UI libraries here
+          ]
+        }
+      }
+    }
+  }
 });

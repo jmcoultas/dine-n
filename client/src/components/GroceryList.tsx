@@ -11,13 +11,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Search } from "lucide-react";
+import { Download, Search, Leaf } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface GroceryItem {
   name: string;
   amount: number;
   unit: string;
   recipeIngredient?: string;
+  organic?: boolean;
 }
 
 interface GroceryListProps {
@@ -27,6 +29,7 @@ interface GroceryListProps {
 export default function GroceryList({ items }: GroceryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [organicItems, setOrganicItems] = useState<Set<string>>(new Set());
   
   // Define recipeName here
   const recipeName = items.length > 0 ? items[0].name : "Grocery List";
@@ -82,6 +85,7 @@ export default function GroceryList({ items }: GroceryListProps) {
         name: item.name,
         amount: item.amount,
         unit: standardUnit,
+        organic: item.organic || false,
         recipeIngredient: `${item.amount} ${standardUnit} ${item.name}`
       };
     } else {
@@ -105,10 +109,23 @@ export default function GroceryList({ items }: GroceryListProps) {
     setCheckedItems(newCheckedItems);
   };
 
+  const handleToggleOrganic = (itemName: string) => {
+    const newOrganicItems = new Set(organicItems);
+    if (organicItems.has(itemName)) {
+      newOrganicItems.delete(itemName);
+    } else {
+      newOrganicItems.add(itemName);
+    }
+    setOrganicItems(newOrganicItems);
+  };
+
   const exportList = () => {
     const content = Object.values(aggregatedItems)
       .filter(item => !checkedItems.has(item.name))
-      .map((item) => item.recipeIngredient)
+      .map((item) => {
+        const isOrganic = organicItems.has(item.name);
+        return `${item.amount} ${item.unit} ${isOrganic ? 'Organic ' : ''}${item.name}`;
+      })
       .join("\n");
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -147,6 +164,7 @@ export default function GroceryList({ items }: GroceryListProps) {
               <TableHead>Item</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Unit</TableHead>
+              <TableHead className="w-12">Organic</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -163,6 +181,25 @@ export default function GroceryList({ items }: GroceryListProps) {
                 </TableCell>
                 <TableCell>{item.amount}</TableCell>
                 <TableCell>{item.unit}</TableCell>
+                <TableCell>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleToggleOrganic(item.name)}
+                          className={organicItems.has(item.name) ? "text-green-600" : "text-muted-foreground"}
+                        >
+                          <Leaf className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {organicItems.has(item.name) ? "Remove organic" : "Make organic"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

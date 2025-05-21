@@ -8,11 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Loader2, Settings, User, CreditCard, LogOut, Palette, Moon, Sun } from "lucide-react";
 import PreferenceModal from "@/components/PreferenceModal";
+import PreferenceSheet from "@/components/PreferenceSheet";
 import { PreferenceSchema } from "@db/schema";
 import type { Preferences } from "@db/schema";
 import { SubscriptionManager } from "@/components/SubscriptionManager";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface ProfileFormData {
   name: string;
@@ -55,6 +57,7 @@ export default function UserProfile() {
   });
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const isMobile = useMediaQuery("(max-width: 640px)");
 
   useEffect(() => {
     if (user) {
@@ -464,16 +467,31 @@ export default function UserProfile() {
         </div>
       </div>
 
-      <PreferenceModal
-        open={showPreferences}
-        onOpenChange={setShowPreferences}
-        preferences={preferences}
-        onUpdatePreferences={handlePreferencesSave}
-        user={user ? {
-          subscription_tier: user.subscription_tier,
-          meal_plans_generated: user.meal_plans_generated
-        } : undefined}
-      />
+      {isMobile ? (
+        <PreferenceSheet
+          open={showPreferences}
+          onOpenChange={setShowPreferences}
+          preferences={preferences}
+          onUpdatePreferences={handlePreferencesSave}
+          user={user ? {
+            subscription_tier: user.subscription_tier,
+            meal_plans_generated: user.meal_plans_generated
+          } : undefined}
+          hideGenerateOption={true}
+        />
+      ) : (
+        <PreferenceModal
+          open={showPreferences}
+          onOpenChange={setShowPreferences}
+          preferences={preferences}
+          onUpdatePreferences={handlePreferencesSave}
+          user={user ? {
+            subscription_tier: user.subscription_tier,
+            meal_plans_generated: user.meal_plans_generated
+          } : undefined}
+          hideGenerateOption={true}
+        />
+      )}
     </div>
   );
 }

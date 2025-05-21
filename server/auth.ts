@@ -93,8 +93,8 @@ export function setupAuth(app: Express) {
         };
 
         // Create Firebase custom token after successful authentication
-        const firebaseToken = await createFirebaseToken(user.id.toString());
-        user.firebaseToken = firebaseToken;
+        const userFirebaseToken = await createFirebaseToken(user.id.toString());
+        user.firebaseToken = userFirebaseToken;
 
         return done(null, user);
       } catch (err) {
@@ -134,10 +134,97 @@ export function setupAuth(app: Express) {
     }
   });
 
+  app.post("/api/register/partial", async (req, res) => {
+    try {
+      const { email } = req.body;
+      const authToken = req.headers['firebase-token'];
+
+      if (!email?.trim()) {
+        return res.status(400).json({ 
+          error: "Validation Error",
+          message: "Email is required",
+          field: "email",
+          type: "REQUIRED_FIELD"
+        });
+      }
+
+      if (!authToken) {
+        return res.status(401).json({
+          error: "Authentication Error",
+          message: "Firebase token is required",
+        });
+      }
+
+      let firebaseUid;
+      try {
+        const decodedToken = await auth.verifyIdToken(authToken as string);
+        firebaseUid = decodedToken.uid;
+        
+        if (decodedToken.email !== email.trim().toLowerCase()) {
+          return res.status(401).json({
+            error: "Authentication Error",
+            message: "Email mismatch between token and request",
+          });
+        }
+      } catch (error) {
+        console.error('Error verifying Firebase token:', error);
+        return res.status(401).json({
+          error: "Authentication Error",
+          message: "Invalid Firebase token",
+        });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, normalizedEmail))
+        .limit(1);
+
+      if (existingUser) {
+        return res.json({
+          message: "User already exists",
+          partial: true
+        });
+      }
+
+      const tempPasswordHash = await crypto.hash("TEMPORARY_PASSWORD_" + Math.random().toString(36).substring(2));
+      
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          password_hash: tempPasswordHash,
+          name: normalizedEmail.split('@')[0],
+          firebase_uid: firebaseUid,
+          subscription_status: 'inactive' as const,
+          subscription_tier: 'free' as const,
+          meal_plans_generated: 0,
+          created_at: new Date()
+        })
+        .returning();
+
+      console.log(`Created partial user record for ${normalizedEmail} with ID ${newUser.id}`);
+
+      return res.json({
+        message: "Partial registration successful",
+        partial: true
+      });
+    } catch (error) {
+      console.error("Partial registration error:", error);
+      res.status(500).json({
+        error: "Server Error",
+        message: "An error occurred during partial registration. Please try again.",
+        details: error instanceof Error ? error.message : undefined
+      });
+    }
+  });
+
   app.post("/api/register", async (req, res, next) => {
     try {
       const { email, password, name } = req.body;
-      const firebaseToken = req.headers['firebase-token'];
+      const userFirebaseToken = req.headers['firebase-token'];
 
       if (!email?.trim() || !password?.trim()) {
         return res.status(400).json({ 
@@ -180,11 +267,10 @@ export function setupAuth(app: Express) {
         });
       }
 
-      // Verify Firebase token if provided
       let firebaseUid;
-      if (firebaseToken) {
+      if (userFirebaseToken) {
         try {
-          const decodedToken = await auth.verifyIdToken(firebaseToken as string);
+          const decodedToken = await auth.verifyIdToken(userFirebaseToken as string);
           firebaseUid = decodedToken.uid;
         } catch (error) {
           console.error('Error verifying Firebase token:', error);
@@ -202,6 +288,50 @@ export function setupAuth(app: Express) {
         .limit(1);
 
       if (existingUser) {
+        if (existingUser.password_hash.startsWith('TEMPORARY_PASSWORD_') ||
+            existingUser.password_hash.includes('TEMPORARY_PASSWORD_')) {
+          const hashedPassword = await crypto.hash(password);
+          
+          await db
+            .update(users)
+            .set({ 
+              password_hash: hashedPassword,
+              name: name?.trim() || existingUser.name || normalizedEmail.split('@')[0],
+              firebase_uid: firebaseUid || existingUser.firebase_uid
+            })
+            .where(eq(users.id, existingUser.id));
+            
+          const [updatedUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, existingUser.id))
+            .limit(1);
+            
+          const publicUser: PublicUser = {
+            ...updatedUser,
+            subscription_status: updatedUser.subscription_status || 'inactive',
+            subscription_tier: updatedUser.subscription_tier || 'free',
+            meal_plans_generated: updatedUser.meal_plans_generated || 0,
+            ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
+            firebase_uid: updatedUser.firebase_uid || null
+          };
+          
+          const customToken = await createFirebaseToken(publicUser.id.toString());
+          publicUser.firebaseToken = customToken;
+          
+          req.login(publicUser, (err) => {
+            if (err) {
+              return next(err);
+            }
+            return res.json({
+              message: "Registration completed successfully",
+              user: publicUser
+            });
+          });
+          
+          return;
+        }
+        
         return res.status(400).json({
           error: "Registration Error",
           message: "This email address is already registered",
@@ -225,7 +355,6 @@ export function setupAuth(app: Express) {
         })
         .returning();
 
-      // Create a PublicUser object, ensuring all required fields have default values
       const publicUser: PublicUser = {
         ...newUser,
         subscription_status: newUser.subscription_status || 'inactive',
@@ -235,7 +364,6 @@ export function setupAuth(app: Express) {
         firebase_uid: newUser.firebase_uid || null
       };
 
-      // Create a custom token for Firebase authentication
       const customToken = await createFirebaseToken(publicUser.id.toString());
       publicUser.firebaseToken = customToken;
 
@@ -268,7 +396,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
+  app.post("/api/login", async (req, res, next) => {
     const loginSchema = z.object({
       email: z.string().email(),
       password: z.string().min(1)
@@ -281,6 +409,127 @@ export function setupAuth(app: Express) {
         .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
     }
 
+    // Check for Firebase token in case user was authenticated via Firebase
+    const firebaseToken = req.headers['firebase-token'] as string | undefined;
+    if (firebaseToken) {
+      try {
+        // Verify the Firebase token
+        const decodedToken = await auth.verifyIdToken(firebaseToken);
+        const email = decodedToken.email;
+        const uid = decodedToken.uid;
+        
+        if (!email) {
+          return res.status(400).json({ 
+            error: "Authentication Error",
+            message: "No email found in Firebase token"
+          });
+        }
+        
+        // Check if user exists in our database
+        const [existingUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email.toLowerCase()))
+          .limit(1);
+        
+        // If user doesn't exist in our database but exists in Firebase,
+        // create them in our database to prevent limbo state
+        if (!existingUser) {
+          console.log(`User ${email} exists in Firebase but not in our database. Creating record.`);
+          
+          // Generate a random password hash since we don't know their password
+          // They will need to use password reset if they want to login with password later
+          const tempPasswordHash = await crypto.hash("FIREBASE_USER_" + Math.random().toString(36).substring(2));
+          
+          try {
+            // Create user in our database
+            const [newUser] = await db
+              .insert(users)
+              .values({
+                email: email.toLowerCase(),
+                password_hash: tempPasswordHash,
+                name: email.toLowerCase().split('@')[0], // Default name from email
+                firebase_uid: uid,
+                subscription_status: 'inactive' as const,
+                subscription_tier: 'free' as const,
+                meal_plans_generated: 0,
+                created_at: new Date()
+              })
+              .returning();
+              
+            const publicUser: PublicUser = {
+              ...newUser,
+              subscription_status: newUser.subscription_status || 'inactive',
+              subscription_tier: newUser.subscription_tier || 'free',
+              meal_plans_generated: newUser.meal_plans_generated || 0,
+              ingredient_recipes_generated: newUser.ingredient_recipes_generated || 0,
+              firebase_uid: newUser.firebase_uid || null
+            };
+            
+            // Create a custom token for Firebase authentication
+            const customToken = await createFirebaseToken(publicUser.id.toString());
+            publicUser.firebaseToken = customToken;
+            
+            req.login(publicUser, (err) => {
+              if (err) {
+                return next(err);
+              }
+              return res.json({
+                message: "Login successful",
+                user: publicUser
+              });
+            });
+            
+            return;
+          } catch (dbError) {
+            console.error('Error creating user in database during login:', dbError);
+            return res.status(500).json({
+              error: "Server Error",
+              message: "Failed to create user account. Please try again."
+            });
+          }
+        }
+        
+        // If user exists in our database, update their Firebase UID if needed
+        if (!existingUser.firebase_uid || existingUser.firebase_uid !== uid) {
+          await db
+            .update(users)
+            .set({ firebase_uid: uid })
+            .where(eq(users.id, existingUser.id));
+        }
+        
+        // Log the user in
+        const publicUser: PublicUser = {
+          ...existingUser,
+          subscription_status: existingUser.subscription_status || 'inactive',
+          subscription_tier: existingUser.subscription_tier || 'free',
+          meal_plans_generated: existingUser.meal_plans_generated || 0,
+          ingredient_recipes_generated: existingUser.ingredient_recipes_generated || 0,
+          firebase_uid: uid
+        };
+        
+        // Create a custom token for Firebase authentication
+        const customToken = await createFirebaseToken(publicUser.id.toString());
+        publicUser.firebaseToken = customToken;
+        
+        req.login(publicUser, (err) => {
+          if (err) {
+            return next(err);
+          }
+          return res.json({
+            message: "Login successful",
+            user: publicUser
+          });
+        });
+        
+        return;
+      } catch (error) {
+        console.error('Error verifying Firebase token during login:', error);
+        // Fall back to normal authentication
+      }
+    }
+
+    // Normal authentication via passport
     const cb = (err: any, user: Express.User | false | null | undefined, info: IVerifyOptions) => {
       if (err) {
         return next(err);

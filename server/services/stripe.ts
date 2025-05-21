@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { db } from '../../db';
 import { users } from '@db/schema';
 import { eq } from 'drizzle-orm';
+import { createFirebaseToken } from './firebase';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 if (!stripeKey || typeof stripeKey !== 'string') {
@@ -12,7 +13,7 @@ export const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
 });
 
-const baseUrl = 'https://dine-n-johncoultas.replit.app';
+const baseUrl = 'https://dine-n.replit.app';
 
 console.log('Base URL for webhooks:', baseUrl);
 
@@ -52,6 +53,9 @@ export const stripeService = {
       throw new Error('User not found for customer ID');
     }
 
+    // Create a custom token for Firebase authentication
+    const firebaseToken = await createFirebaseToken(user.id.toString());
+    
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
@@ -72,8 +76,8 @@ export const stripeService = {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}`,
-      cancel_url: `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}&auth_token=${encodeURIComponent(firebaseToken)}`,
+      cancel_url: `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}`,
       subscription_data: {
         metadata: {
           tier: 'premium'
@@ -307,7 +311,7 @@ export const stripeService = {
                   .set({
                     subscription_status: 'cancelled' as const,
                     subscription_tier: 'free' as const,
-                    subscription_end_date: new Date()
+                    subscription_end_date: new Date(subscription.current_period_end * 1000)
                   })
                   .where(eq(users.id, customer.id))
                   .returning();

@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { eq, and, gt, or, sql, inArray, desc } from "drizzle-orm";
+import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
-import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { stripeService } from "./services/stripe";
@@ -11,6 +11,12 @@ import { createFirebaseToken } from './services/firebase';
 import { type PublicUser } from "./types";
 import { z } from "zod";
 import { MealTypeEnum, CuisineTypeEnum, DietaryTypeEnum, DifficultyEnum } from "@db/schema";
+import { MealPlanExpirationService } from "./services/mealPlanExpiration";
+import crypto from 'crypto';
+import { randomBytes } from 'crypto';
+import { promisify } from 'util';
+
+const scryptAsync = promisify(crypto.scrypt);
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -126,10 +132,18 @@ export function registerRoutes(app: express.Express) {
     try {
       const user = req.user!;
 
+      // Check if subscription is still valid even if cancelled
+      const isStillValid = user.subscription_end_date && new Date() <= user.subscription_end_date;
+      const hasPremiumAccess = user.subscription_tier === 'premium' && 
+        (user.subscription_status === 'active' || 
+         (user.subscription_status === 'cancelled' && isStillValid));
+
       const subscriptionData = {
-        isActive: user.subscription_status === 'active',
+        isActive: hasPremiumAccess,
         tier: user.subscription_tier,
         endDate: user.subscription_end_date,
+        status: user.subscription_status,
+        isCancelled: user.subscription_status === 'cancelled'
       };
 
       res.json(subscriptionData);
@@ -162,7 +176,6 @@ export function registerRoutes(app: express.Express) {
       console.log('Fetching temporary recipes for user:', req.user?.id);
       const now = new Date();
       const { source } = req.query;
-      const isFromMealPlan = source === 'mealplan';
 
       const activeRecipes = await db
         .select()
@@ -170,16 +183,18 @@ export function registerRoutes(app: express.Express) {
         .where(
           and(
             eq(temporaryRecipes.user_id, req.user!.id),
-            isFromMealPlan
-              ? gt(temporaryRecipes.expires_at, now)
-              : or(
-                  eq(temporaryRecipes.favorited, true),
-                  gt(temporaryRecipes.expires_at, now)
-                )
+            gt(temporaryRecipes.expires_at, now),
+            // For meal plan recipes, only return recipes with meal_type set
+            // For PantryPal recipes, only return recipes without meal_type
+            source === 'mealplan' 
+              ? isNotNull(temporaryRecipes.meal_type)
+              : isNull(temporaryRecipes.meal_type)
           )
-        );
+        )
+        .orderBy(temporaryRecipes.created_at);
 
       console.log('Found recipes:', activeRecipes.length);
+      console.log('Recipe meal types:', activeRecipes.map(r => r.meal_type));
       res.json(activeRecipes);
     } catch (error: any) {
       console.error("Error fetching temporary recipes:", error);
@@ -297,39 +312,261 @@ export function registerRoutes(app: express.Express) {
         return res.json([]);
       }
 
-      // Then get the full recipe details for these names
-      const communityRecipes = await db
-        .select({
-          id: temporaryRecipes.id,
-          name: temporaryRecipes.name,
-          description: temporaryRecipes.description,
-          image_url: temporaryRecipes.image_url,
-          permanent_url: temporaryRecipes.permanent_url,
-          prep_time: temporaryRecipes.prep_time,
-          cook_time: temporaryRecipes.cook_time,
-          servings: temporaryRecipes.servings,
-          ingredients: temporaryRecipes.ingredients,
-          instructions: temporaryRecipes.instructions,
-          tags: temporaryRecipes.tags,
-          nutrition: temporaryRecipes.nutrition,
-          complexity: temporaryRecipes.complexity,
-          favorites_count: temporaryRecipes.favorites_count,
-          created_at: temporaryRecipes.created_at
-        })
-        .from(temporaryRecipes)
-        .where(
-          and(
-            gt(temporaryRecipes.favorites_count, 0),
-            inArray(temporaryRecipes.name, topRecipeNames.map(r => r.name))
+      // Get one representative recipe for each unique recipe name
+      const communityRecipes = [];
+      
+      for (const topRecipe of topRecipeNames) {
+        // Get the recipe with the highest favorites_count for this name
+        const recipes = await db
+          .select({
+            id: temporaryRecipes.id,
+            name: temporaryRecipes.name,
+            description: temporaryRecipes.description,
+            image_url: temporaryRecipes.image_url,
+            permanent_url: temporaryRecipes.permanent_url,
+            prep_time: temporaryRecipes.prep_time,
+            cook_time: temporaryRecipes.cook_time,
+            servings: temporaryRecipes.servings,
+            ingredients: temporaryRecipes.ingredients,
+            instructions: temporaryRecipes.instructions,
+            tags: temporaryRecipes.tags,
+            nutrition: temporaryRecipes.nutrition,
+            complexity: temporaryRecipes.complexity,
+            favorites_count: temporaryRecipes.favorites_count,
+            created_at: temporaryRecipes.created_at
+          })
+          .from(temporaryRecipes)
+          .where(
+            and(
+              eq(temporaryRecipes.name, topRecipe.name),
+              gt(temporaryRecipes.favorites_count, 0)
+            )
           )
-        )
-        .orderBy(desc(temporaryRecipes.favorites_count))
-        .limit(5);
+          .orderBy(desc(temporaryRecipes.favorites_count))
+          .limit(1);
+          
+        if (recipes.length > 0) {
+          communityRecipes.push(recipes[0]);
+        }
+      }
 
       res.json(communityRecipes);
     } catch (error) {
       console.error("Error fetching community recipes:", error);
       res.status(500).json({ error: "Failed to fetch community recipes" });
+    }
+  });
+
+  // Get top breakfast recipes
+  app.get("/api/recipes/breakfast", async (req: Request, res: Response) => {
+    try {
+      // First get the top 5 breakfast recipe names by favorites count
+      const topRecipeNames = await db
+        .select({
+          name: temporaryRecipes.name,
+          total_favorites: sql<number>`MAX(${temporaryRecipes.favorites_count})`
+        })
+        .from(temporaryRecipes)
+        .where(
+          and(
+            gt(temporaryRecipes.favorites_count, 0),
+            eq(temporaryRecipes.meal_type, "Breakfast")
+          )
+        )
+        .groupBy(temporaryRecipes.name)
+        .orderBy(sql`MAX(${temporaryRecipes.favorites_count}) DESC`)
+        .limit(5);
+
+      if (topRecipeNames.length === 0) {
+        return res.json([]);
+      }
+
+      // Get one representative recipe for each unique recipe name
+      const breakfastRecipes = [];
+      
+      for (const topRecipe of topRecipeNames) {
+        // Get the recipe with the highest favorites_count for this name
+        const recipes = await db
+          .select({
+            id: temporaryRecipes.id,
+            name: temporaryRecipes.name,
+            description: temporaryRecipes.description,
+            image_url: temporaryRecipes.image_url,
+            permanent_url: temporaryRecipes.permanent_url,
+            prep_time: temporaryRecipes.prep_time,
+            cook_time: temporaryRecipes.cook_time,
+            servings: temporaryRecipes.servings,
+            ingredients: temporaryRecipes.ingredients,
+            instructions: temporaryRecipes.instructions,
+            tags: temporaryRecipes.tags,
+            nutrition: temporaryRecipes.nutrition,
+            complexity: temporaryRecipes.complexity,
+            favorites_count: temporaryRecipes.favorites_count,
+            created_at: temporaryRecipes.created_at,
+            meal_type: temporaryRecipes.meal_type
+          })
+          .from(temporaryRecipes)
+          .where(
+            and(
+              eq(temporaryRecipes.name, topRecipe.name),
+              gt(temporaryRecipes.favorites_count, 0),
+              eq(temporaryRecipes.meal_type, "Breakfast")
+            )
+          )
+          .orderBy(desc(temporaryRecipes.favorites_count))
+          .limit(1);
+          
+        if (recipes.length > 0) {
+          breakfastRecipes.push(recipes[0]);
+        }
+      }
+
+      res.json(breakfastRecipes);
+    } catch (error) {
+      console.error("Error fetching breakfast recipes:", error);
+      res.status(500).json({ error: "Failed to fetch breakfast recipes" });
+    }
+  });
+
+  // Get top lunch recipes
+  app.get("/api/recipes/lunch", async (req: Request, res: Response) => {
+    try {
+      // First get the top 5 lunch recipe names by favorites count
+      const topRecipeNames = await db
+        .select({
+          name: temporaryRecipes.name,
+          total_favorites: sql<number>`MAX(${temporaryRecipes.favorites_count})`
+        })
+        .from(temporaryRecipes)
+        .where(
+          and(
+            gt(temporaryRecipes.favorites_count, 0),
+            eq(temporaryRecipes.meal_type, "Lunch")
+          )
+        )
+        .groupBy(temporaryRecipes.name)
+        .orderBy(sql`MAX(${temporaryRecipes.favorites_count}) DESC`)
+        .limit(5);
+
+      if (topRecipeNames.length === 0) {
+        return res.json([]);
+      }
+
+      // Get one representative recipe for each unique recipe name
+      const lunchRecipes = [];
+      
+      for (const topRecipe of topRecipeNames) {
+        // Get the recipe with the highest favorites_count for this name
+        const recipes = await db
+          .select({
+            id: temporaryRecipes.id,
+            name: temporaryRecipes.name,
+            description: temporaryRecipes.description,
+            image_url: temporaryRecipes.image_url,
+            permanent_url: temporaryRecipes.permanent_url,
+            prep_time: temporaryRecipes.prep_time,
+            cook_time: temporaryRecipes.cook_time,
+            servings: temporaryRecipes.servings,
+            ingredients: temporaryRecipes.ingredients,
+            instructions: temporaryRecipes.instructions,
+            tags: temporaryRecipes.tags,
+            nutrition: temporaryRecipes.nutrition,
+            complexity: temporaryRecipes.complexity,
+            favorites_count: temporaryRecipes.favorites_count,
+            created_at: temporaryRecipes.created_at,
+            meal_type: temporaryRecipes.meal_type
+          })
+          .from(temporaryRecipes)
+          .where(
+            and(
+              eq(temporaryRecipes.name, topRecipe.name),
+              gt(temporaryRecipes.favorites_count, 0),
+              eq(temporaryRecipes.meal_type, "Lunch")
+            )
+          )
+          .orderBy(desc(temporaryRecipes.favorites_count))
+          .limit(1);
+          
+        if (recipes.length > 0) {
+          lunchRecipes.push(recipes[0]);
+        }
+      }
+
+      res.json(lunchRecipes);
+    } catch (error) {
+      console.error("Error fetching lunch recipes:", error);
+      res.status(500).json({ error: "Failed to fetch lunch recipes" });
+    }
+  });
+
+  // Get top dinner recipes
+  app.get("/api/recipes/dinner", async (req: Request, res: Response) => {
+    try {
+      // First get the top 5 dinner recipe names by favorites count
+      const topRecipeNames = await db
+        .select({
+          name: temporaryRecipes.name,
+          total_favorites: sql<number>`MAX(${temporaryRecipes.favorites_count})`
+        })
+        .from(temporaryRecipes)
+        .where(
+          and(
+            gt(temporaryRecipes.favorites_count, 0),
+            eq(temporaryRecipes.meal_type, "Dinner")
+          )
+        )
+        .groupBy(temporaryRecipes.name)
+        .orderBy(sql`MAX(${temporaryRecipes.favorites_count}) DESC`)
+        .limit(5);
+
+      if (topRecipeNames.length === 0) {
+        return res.json([]);
+      }
+
+      // Get one representative recipe for each unique recipe name
+      const dinnerRecipes = [];
+      
+      for (const topRecipe of topRecipeNames) {
+        // Get the recipe with the highest favorites_count for this name
+        const recipes = await db
+          .select({
+            id: temporaryRecipes.id,
+            name: temporaryRecipes.name,
+            description: temporaryRecipes.description,
+            image_url: temporaryRecipes.image_url,
+            permanent_url: temporaryRecipes.permanent_url,
+            prep_time: temporaryRecipes.prep_time,
+            cook_time: temporaryRecipes.cook_time,
+            servings: temporaryRecipes.servings,
+            ingredients: temporaryRecipes.ingredients,
+            instructions: temporaryRecipes.instructions,
+            tags: temporaryRecipes.tags,
+            nutrition: temporaryRecipes.nutrition,
+            complexity: temporaryRecipes.complexity,
+            favorites_count: temporaryRecipes.favorites_count,
+            created_at: temporaryRecipes.created_at,
+            meal_type: temporaryRecipes.meal_type
+          })
+          .from(temporaryRecipes)
+          .where(
+            and(
+              eq(temporaryRecipes.name, topRecipe.name),
+              gt(temporaryRecipes.favorites_count, 0),
+              eq(temporaryRecipes.meal_type, "Dinner")
+            )
+          )
+          .orderBy(desc(temporaryRecipes.favorites_count))
+          .limit(1);
+          
+        if (recipes.length > 0) {
+          dinnerRecipes.push(recipes[0]);
+        }
+      }
+
+      res.json(dinnerRecipes);
+    } catch (error) {
+      console.error("Error fetching dinner recipes:", error);
+      res.status(500).json({ error: "Failed to fetch dinner recipes" });
     }
   });
 
@@ -388,7 +625,7 @@ export function registerRoutes(app: express.Express) {
           throw new Error("Recipe not found");
         }
 
-        // Create a new temporary recipe for this user if it doesn't exist
+        // Check if the user already has this recipe (by name) in their favorites
         const existingFavorite = await tx
           .select()
           .from(temporaryRecipes)
@@ -401,26 +638,16 @@ export function registerRoutes(app: express.Express) {
           .limit(1);
 
         if (existingFavorite.length === 0) {
-          // Create a new entry for this user
-          await tx.insert(temporaryRecipes).values({
-            name: recipe[0].name,
-            description: recipe[0].description,
-            image_url: recipe[0].image_url,
-            permanent_url: recipe[0].permanent_url,
-            prep_time: recipe[0].prep_time,
-            cook_time: recipe[0].cook_time,
-            servings: recipe[0].servings,
-            ingredients: recipe[0].ingredients,
-            instructions: recipe[0].instructions,
-            tags: recipe[0].tags,
-            nutrition: recipe[0].nutrition,
-            complexity: recipe[0].complexity,
-            favorites_count: recipe[0].favorites_count || 0,
-            user_id: req.user!.id,
-            favorited: true,
-            created_at: new Date(),
-            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // Set expiry to 1 year
-          });
+          // If the user doesn't have this recipe at all, update the existing recipe
+          // to be associated with this user and mark it as favorited
+          await tx
+            .update(temporaryRecipes)
+            .set({ 
+              favorited: true,
+              user_id: req.user!.id,
+              expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // Set expiry to 1 year
+            })
+            .where(eq(temporaryRecipes.id, recipeId));
 
           // Update favorites count for all recipes with this name
           await tx
@@ -557,44 +784,112 @@ export function registerRoutes(app: express.Express) {
       console.log('Normalized preferences:', JSON.stringify(normalizedPreferences, null, 2));
 
       const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
-      const suggestedRecipes = [];
       const usedRecipeNames = new Set<string>();
+      const missingMeals: Array<{ day: number; meal: string }> = [];
 
-      // Generate recipes
+      // Track cuisine usage to ensure variety
+      const cuisineUsage: Record<string, number> = {};
+      normalizedPreferences.cuisine.forEach((cuisine: string) => {
+        cuisineUsage[cuisine] = 0;
+      });
+
+      // Count existing cuisines to prioritize less-used ones
+      const allUserRecipes = await db.query.temporaryRecipes.findMany({
+        where: eq(temporaryRecipes.user_id, user.id)
+      });
+      
+      allUserRecipes.forEach(recipe => {
+        if (recipe.cuisine_type && normalizedPreferences.cuisine.includes(recipe.cuisine_type)) {
+          cuisineUsage[recipe.cuisine_type] = (cuisineUsage[recipe.cuisine_type] || 0) + 1;
+        }
+      });
+
+      // Generate recipes in parallel for each day and meal
+      const recipePromises = [];
+      const expectedRecipeCount = days * 3; // 3 meals per day
+
+      // Prepare cuisine preference for each meal to ensure variety
+      const cuisinesByMeal: Array<string[]> = [];
+      for (let i = 0; i < expectedRecipeCount; i++) {
+        // Get cuisines sorted by least used
+        const prioritizedCuisines = [...normalizedPreferences.cuisine].sort((a, b) => 
+          (cuisineUsage[a] || 0) - (cuisineUsage[b] || 0)
+        );
+        
+        // Always include all cuisines, but prioritize least used ones
+        cuisinesByMeal.push(prioritizedCuisines);
+      }
+
+      let mealIndex = 0;
       for (let day = 0; day < days; day++) {
         for (const mealType of mealTypes) {
-          console.log(`Generating recipe for day ${day + 1}, meal ${mealType}`);
-          try {
-            const existingNames = Array.from(usedRecipeNames);
-            const recipeData = await generateRecipeRecommendation({
-              dietary: normalizedPreferences.dietary,
-              allergies: normalizedPreferences.allergies,
-              cuisine: normalizedPreferences.cuisine,
-              meatTypes: normalizedPreferences.meatTypes,
-              mealType,
-              excludeNames: existingNames,
-            });
-
-            if (!recipeData?.name || typeof recipeData !== 'object') {
-              console.error('Invalid recipe data received:', recipeData);
-              throw new Error('Invalid recipe data received from API');
-            }
-
-            if (!usedRecipeNames.has(recipeData.name)) {
-              const generatedRecipe: Partial<Recipe> = {
-                ...recipeData,
-                id: -(suggestedRecipes.length + 1), // Using negative IDs for temporary recipes
-              };
-
-              console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
-              usedRecipeNames.add(recipeData.name);
-              suggestedRecipes.push(generatedRecipe);
-            }
-          } catch (error) {
+          console.log(`Queuing recipe generation for day ${day + 1}, meal ${mealType}`);
+          const existingNames = Array.from(usedRecipeNames);
+          
+          // Use prioritized cuisines for this meal
+          const cuisinesForThisMeal = cuisinesByMeal[mealIndex] || normalizedPreferences.cuisine;
+          mealIndex++;
+          
+          const promise = generateRecipeRecommendation({
+            dietary: normalizedPreferences.dietary,
+            allergies: normalizedPreferences.allergies,
+            cuisine: cuisinesForThisMeal,
+            meatTypes: normalizedPreferences.meatTypes,
+            mealType,
+            excludeNames: existingNames,
+            maxRetries: 3 // Allow 3 retries at each relaxation level
+          }).catch(error => {
             console.error(`Failed to generate recipe for day ${day + 1}, meal ${mealType}:`, error);
-            continue;
-          }
+            missingMeals.push({ day, meal: mealType });
+            return null;
+          });
+          recipePromises.push(promise);
         }
+      }
+
+      // Wait for all recipes to be generated
+      const generatedRecipes = await Promise.all(recipePromises);
+      const suggestedRecipes = [];
+
+      // Process the generated recipes
+      for (const recipeData of generatedRecipes) {
+        if (!recipeData?.name || typeof recipeData !== 'object') {
+          console.error('Invalid recipe data received:', recipeData);
+          continue;
+        }
+
+        if (!usedRecipeNames.has(recipeData.name)) {
+          const generatedRecipe: Partial<Recipe> = {
+            ...recipeData,
+            id: -(suggestedRecipes.length + 1), // Using negative IDs for temporary recipes
+          };
+
+          // Update cuisine usage count
+          if (Array.isArray(recipeData.tags)) {
+            const cuisineTag = recipeData.tags.find(tag => 
+              typeof tag === 'string' && normalizedPreferences.cuisine.includes(tag)
+            ) as string | undefined;
+            
+            if (cuisineTag && typeof cuisineTag === 'string') {
+              cuisineUsage[cuisineTag] = (cuisineUsage[cuisineTag] || 0) + 1;
+              console.log(`Updated cuisine usage: ${cuisineTag} used ${cuisineUsage[cuisineTag]} times`);
+            }
+          }
+
+          console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
+          usedRecipeNames.add(recipeData.name);
+          suggestedRecipes.push(generatedRecipe);
+        }
+      }
+
+      // Allow partial success if we have at least one recipe per day
+      const minimumRequired = days; // At least one meal per day
+      if (suggestedRecipes.length < minimumRequired) {
+        console.error(`Failed to generate minimum required recipes. Expected at least ${minimumRequired}, got ${suggestedRecipes.length}`);
+        return res.status(500).json({
+          error: "Failed to generate meal plan",
+          message: "Could not generate enough recipes for a viable meal plan"
+        });
       }
 
       // Save generated recipes to temporary_recipes table
@@ -602,96 +897,94 @@ export function registerRoutes(app: express.Express) {
       expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
 
       const savedRecipes = [];
-      for (const recipe of suggestedRecipes) {
+      for (let i = 0; i < suggestedRecipes.length; i++) {
+        const recipe = suggestedRecipes[i];
         if (!recipe) continue;
 
-        const insertData = {
-          user_id: req.user!.id,
-          name: String(recipe.name || ''),
-          description: recipe.description?.toString() || null,
-          image_url: recipe.image_url?.toString() || null,
-          permanent_url: null,
-          prep_time: Math.max(0, Number(recipe.prep_time) || 0),
-          cook_time: Math.max(0, Number(recipe.cook_time) || 0),
-          servings: Math.max(1, Number(recipe.servings) || 2),
-          ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-          instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
-          meal_type: (Array.isArray(recipe.tags) 
-            ? (recipe.tags.find((tag): tag is z.infer<typeof MealTypeEnum> => 
-                ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"].includes(tag as string)
-              ) || "Dinner")
-            : "Dinner"),
-          cuisine_type: (Array.isArray(recipe.tags)
-            ? (recipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
-                ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
-              ) || "Other")
-            : "Other"),
-          dietary_restrictions: (Array.isArray(recipe.tags)
-            ? recipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
-                ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
-              )
-            : []),
-          difficulty: (() => {
-            switch(recipe.complexity) {
-              case 1: return "Easy" as const;
-              case 2: return "Moderate" as const;
-              case 3: return "Advanced" as const;
-              default: return "Moderate" as const;
-            }
-          })(),
-          tags: (Array.isArray(recipe.tags)
-            ? recipe.tags.filter((tag): tag is string => 
-                typeof tag === 'string' && ![
-                  "Breakfast", "Lunch", "Dinner", "Snack", "Dessert",
-                  "Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French",
-                  "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"
-                ].includes(tag)
-              )
-            : []),
-          nutrition: recipe.nutrition && typeof recipe.nutrition === 'object'
-            ? recipe.nutrition
-            : { calories: 0, protein: 0, carbs: 0, fat: 0 },
-          complexity: Math.min(3, Math.max(1, Number(recipe.complexity) || 1)),
-          created_at: new Date(),
-          expires_at: expirationDate,
-          favorited: false,
-          favorites_count: 0
-        };
+        // Calculate the current meal type based on the recipe's position
+        const currentMealType = mealTypes[i % 3];
+        const mealTypeCapitalized = currentMealType.charAt(0).toUpperCase() + currentMealType.slice(1);
 
-        const parseResult = insertTemporaryRecipeSchema.safeParse(insertData);
+        try {
+          const insertData = {
+            user_id: user.id,
+            name: recipe.name || '',
+            description: recipe.description || null,
+            image_url: recipe.image_url || null,
+            permanent_url: null,
+            prep_time: recipe.prep_time || 0,
+            cook_time: recipe.cook_time || 0,
+            servings: recipe.servings || 4,
+            ingredients: recipe.ingredients || [],
+            instructions: recipe.instructions || [],
+            meal_type: mealTypeCapitalized as z.infer<typeof MealTypeEnum>,
+            cuisine_type: (Array.isArray(recipe.tags)
+              ? (recipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+                  ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+                ) || "Other")
+              : "Other") as z.infer<typeof CuisineTypeEnum>,
+            dietary_restrictions: (Array.isArray(recipe.tags)
+              ? recipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+                  ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+                )
+              : []) as z.infer<typeof DietaryTypeEnum>[],
+            difficulty: (() => {
+              switch(recipe.complexity) {
+                case 1: return "Easy" as const;
+                case 2: return "Moderate" as const;
+                case 3: return "Advanced" as const;
+                default: return "Moderate" as const;
+              }
+            })() as z.infer<typeof DifficultyEnum>,
+            tags: recipe.tags || [],
+            nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+            complexity: recipe.complexity || 2,
+            created_at: new Date(),
+            expires_at: expirationDate,
+            favorited: false,
+            favorites_count: 0
+          };
 
-        if (!parseResult.success) {
-          console.error('Invalid recipe data:', parseResult.error.issues);
-          continue;
-        }
-
-        const [savedRecipe] = await db
-          .insert(temporaryRecipes)
-          .values([parseResult.data])
-          .returning();
-
-        // Add image storage here
-        if (savedRecipe.image_url) {
-          try {
-            const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
-            if (permanentUrl) {
-              // Update the recipe with the permanent URL
-              const [updatedRecipe] = await db
-                .update(temporaryRecipes)
-                .set({ permanent_url: permanentUrl })
-                .where(eq(temporaryRecipes.id, savedRecipe.id))
-                .returning();
-              
-              savedRecipes.push(updatedRecipe);
-              continue; // Skip the push at the end
-            }
-          } catch (error) {
-            console.error('Failed to store image:', error);
-            // Continue with the original recipe if image storage fails
+          const parseResult = insertTemporaryRecipeSchema.safeParse(insertData);
+          
+          if (!parseResult.success) {
+            console.error('Invalid recipe data:', parseResult.error.issues);
+            missingMeals.push({ 
+              day: Math.floor(i / 3), 
+              meal: currentMealType 
+            });
+            continue;
           }
-        }
 
-        savedRecipes.push(savedRecipe);
+          const [savedRecipe] = await db
+            .insert(temporaryRecipes)
+            .values(parseResult.data)
+            .returning();
+
+          if (savedRecipe.image_url) {
+            try {
+              const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+              if (permanentUrl) {
+                const [updatedRecipe] = await db
+                  .update(temporaryRecipes)
+                  .set({ permanent_url: permanentUrl })
+                  .where(eq(temporaryRecipes.id, savedRecipe.id))
+                  .returning();
+                savedRecipes.push(updatedRecipe);
+                continue;
+              }
+            } catch (error) {
+              console.error('Failed to store image:', error);
+            }
+          }
+          savedRecipes.push(savedRecipe);
+        } catch (error) {
+          console.error('Failed to save recipe:', error);
+          missingMeals.push({ 
+            day: Math.floor(i / 3), 
+            meal: currentMealType 
+          });
+        }
       }
 
       // After successfully saving recipes, increment the meal_plans_generated counter
@@ -702,9 +995,14 @@ export function registerRoutes(app: express.Express) {
           .where(eq(users.id, user.id));
       }
 
+      // Return partial success response if we have some recipes but not all
       res.json({
         recipes: savedRecipes,
-        status: savedRecipes.length === days * mealTypes.length ? 'success' : 'partial',
+        status: savedRecipes.length === days * 3 ? 'success' : 'partial',
+        missingMeals: missingMeals.length > 0 ? missingMeals : undefined,
+        message: savedRecipes.length === days * 3 
+          ? 'Successfully generated all recipes'
+          : `Generated ${savedRecipes.length} out of ${days * 3} recipes`,
         remaining_free_plans: isFreeTier ? (hasUsedFreePlan ? 0 : 1) : null
       });
     } catch (error: any) {
@@ -729,24 +1027,95 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/meal-plans", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+  app.post("/api/meal-plans", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { name, startDate, endDate } = req.body;
+      const user = req.user!;
+      const { name, start_date, end_date, expiration_date, days_generated, recipes } = req.body;
 
-      const [newMealPlan] = await db
-        .insert(mealPlans)
-        .values({
-          name,
-          user_id: req.user!.id,
-          start_date: new Date(startDate),
-          end_date: new Date(endDate),
+      // Validate days based on subscription
+      if (!MealPlanExpirationService.validateRequestedDays(days_generated, user.subscription_tier)) {
+        return res.status(400).json({
+          error: "Invalid number of days for your subscription tier"
+        });
+      }
+
+      // Create meal plan with expiration
+      const [mealPlan] = await db.insert(mealPlans).values({
+        user_id: user.id,
+        name,
+        start_date: new Date(start_date),
+        end_date: new Date(end_date),
+        expiration_date: new Date(expiration_date),
+        days_generated,
+        is_expired: false,
+        created_at: new Date()
+      }).returning();
+
+      // If recipes are provided, create meal plan recipe associations
+      if (Array.isArray(recipes) && recipes.length > 0) {
+        const startDateObj = new Date(start_date);
+        const mealPlanRecipeValues = recipes.map((recipe, index) => ({
+          meal_plan_id: mealPlan.id,
+          recipe_id: recipe.id,
+          day: new Date(startDateObj.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000),
+          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner",
+          created_at: new Date()
+        }));
+
+        console.log('Creating meal plan recipes:', JSON.stringify(mealPlanRecipeValues, null, 2));
+        await db.insert(mealPlanRecipes).values(mealPlanRecipeValues);
+      }
+
+      // Fetch the created meal plan with its recipes
+      const mealPlanRecipesList = await db
+        .select({
+          recipe_id: mealPlanRecipes.recipe_id,
+          meal: mealPlanRecipes.meal,
+          day: mealPlanRecipes.day
         })
-        .returning();
+        .from(mealPlanRecipes)
+        .where(eq(mealPlanRecipes.meal_plan_id, mealPlan.id));
 
-      res.json(newMealPlan);
-    } catch (error: any) {
+      // Fetch the associated temporary recipes
+      const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
+      const tempRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(inArray(temporaryRecipes.id, recipeIds));
+
+      // Combine the meal plan recipes with their full recipe data
+      const recipesWithDetails = mealPlanRecipesList.map(mpr => {
+        const recipe = tempRecipes.find(r => r.id === mpr.recipe_id);
+        return recipe ? {
+          ...recipe,
+          meal: mpr.meal,
+          day: mpr.day
+        } : null;
+      }).filter((r): r is NonNullable<typeof r> => r !== null);
+
+      // Return the meal plan with the full recipe details
+      const response = {
+        ...mealPlan,
+        recipes: recipesWithDetails
+      };
+
+      console.log('Created meal plan:', JSON.stringify(response, null, 2));
+      res.json(response);
+    } catch (error) {
       console.error("Error creating meal plan:", error);
       res.status(500).json({ error: "Failed to create meal plan" });
+    }
+  });
+
+  // Add a route to check meal plan expiration
+  app.get("/api/meal-plans/:id/check-expiration", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const mealPlanId = parseInt(req.params.id);
+      const isExpired = await MealPlanExpirationService.isExpired(mealPlanId);
+      res.json({ is_expired: isExpired });
+    } catch (error) {
+      console.error("Error checking meal plan expiration:", error);
+      res.status(500).json({ error: "Failed to check meal plan expiration" });
     }
   });
 
@@ -934,6 +1303,50 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      console.log('Password reset request received');
+      const { email, newPassword } = req.body;
+      
+      if (!email || !newPassword) {
+        console.error('Missing email or password in reset request');
+        return res.status(400).json({ message: 'Email and new password are required' });
+      }
+      
+      console.log(`Looking up user with email: ${email}`);
+      // Find the user
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1);
+      
+      if (!user) {
+        console.error(`User not found for email: ${email}`);
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      console.log(`User found, generating new password hash for user ID: ${user.id}`);
+      // Generate a new salt and hash the password
+      const salt = randomBytes(16).toString("hex");
+      const buf = (await scryptAsync(newPassword, salt, 64)) as Buffer;
+      const hashedPassword = `${buf.toString("hex")}.${salt}`;
+      
+      console.log('Updating password in database');
+      // Update the user's password in the database
+      await db
+        .update(users)
+        .set({ password_hash: hashedPassword })
+        .where(eq(users.id, user.id));
+      
+      console.log('Password updated successfully');
+      res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+      console.error('Error updating password:', error);
+      res.status(500).json({ message: 'Failed to update password' });
+    }
+  });
+
   // Generate recipe suggestions from ingredients
   app.post("/api/generate-recipe-suggestions", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -975,9 +1388,10 @@ export function registerRoutes(app: express.Express) {
   });
 
   // Generate a complete recipe from a title
-  app.post("/api/generate-recipe", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+  app.post("/api/generate-recipe", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { title } = req.body;
+      const user = req.user!;
+      const { title, allergies } = req.body;
 
       if (!title) {
         return res.status(400).json({
@@ -986,8 +1400,27 @@ export function registerRoutes(app: express.Express) {
         });
       }
 
+      // Check if free user has reached their limit
+      if (user.subscription_tier === 'free') {
+        if (user.ingredient_recipes_generated >= 3) {
+          return res.status(403).json({
+            error: "Free plan limit reached",
+            message: "You have used all your free recipe generations. Please upgrade to premium for unlimited recipes.",
+            code: "UPGRADE_REQUIRED"
+          });
+        }
+
+        // Increment the counter
+        await db
+          .update(users)
+          .set({ 
+            ingredient_recipes_generated: (user.ingredient_recipes_generated || 0) + 1 
+          })
+          .where(eq(users.id, user.id));
+      }
+
       // Generate the recipe using the title-specific function
-      const recipeData = await generateRecipeFromTitleAI(title);
+      const recipeData = await generateRecipeFromTitleAI(title, Array.isArray(allergies) ? allergies : []);
 
       // Save as a temporary recipe
       const expirationDate = new Date();
@@ -1004,11 +1437,7 @@ export function registerRoutes(app: express.Express) {
         servings: Math.max(1, Number(recipeData.servings) || 2),
         ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
         instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
-        meal_type: (Array.isArray(recipeData.tags) 
-          ? (recipeData.tags.find((tag): tag is z.infer<typeof MealTypeEnum> => 
-              ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"].includes(tag as string)
-            ) || "Dinner")
-          : "Dinner"),
+        meal_type: null, // PantryPal recipes don't have a meal type
         cuisine_type: (Array.isArray(recipeData.tags)
           ? (recipeData.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
               ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
@@ -1018,7 +1447,7 @@ export function registerRoutes(app: express.Express) {
           ? recipeData.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
               ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
             )
-          : []),
+          : []) as z.infer<typeof DietaryTypeEnum>[],
         difficulty: (() => {
           switch(recipeData.complexity) {
             case 1: return "Easy" as const;
@@ -1026,7 +1455,7 @@ export function registerRoutes(app: express.Express) {
             case 3: return "Advanced" as const;
             default: return "Moderate" as const;
           }
-        })(),
+        })() as z.infer<typeof DifficultyEnum>,
         tags: (Array.isArray(recipeData.tags)
           ? recipeData.tags.filter((tag): tag is string => 
               typeof tag === 'string' && ![
@@ -1083,6 +1512,326 @@ export function registerRoutes(app: express.Express) {
       console.error("Error generating recipe:", error);
       res.status(500).json({
         error: "Failed to generate recipe",
+        details: error.message
+      });
+    }
+  });
+
+  // Recipe view endpoint
+  app.get("/api/recipes/:id", async (req: Request, res: Response) => {
+    try {
+      console.log('Recipe view request received:', {
+        params: req.params,
+        url: req.url,
+        method: req.method,
+        headers: req.headers,
+        timestamp: new Date().toISOString()
+      });
+
+      const recipeId = parseInt(req.params.id);
+      if (isNaN(recipeId)) {
+        console.log('Invalid recipe ID:', {
+          id: req.params.id,
+          parsed: recipeId,
+          timestamp: new Date().toISOString()
+        });
+        return res.status(400).json({ error: "Invalid recipe ID" });
+      }
+
+      // Search in temporary recipes only
+      console.log('Searching in temporary recipes:', { recipeId });
+      const tempRecipeResults = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(eq(temporaryRecipes.id, recipeId));
+
+      if (tempRecipeResults.length > 0) {
+        console.log('Found in temporary recipes:', {
+          recipe: tempRecipeResults[0].id,
+          timestamp: new Date().toISOString()
+        });
+        const tempRecipe = tempRecipeResults[0];
+        // Transform temporary recipe to match permanent recipe structure
+        const transformedRecipe = {
+          id: tempRecipe.id,
+          name: tempRecipe.name,
+          description: tempRecipe.description,
+          image_url: tempRecipe.image_url,
+          permanent_url: tempRecipe.permanent_url,
+          prep_time: tempRecipe.prep_time,
+          cook_time: tempRecipe.cook_time,
+          servings: tempRecipe.servings,
+          ingredients: tempRecipe.ingredients,
+          instructions: tempRecipe.instructions,
+          tags: [
+            ...(Array.isArray(tempRecipe.tags) ? tempRecipe.tags : []),
+            tempRecipe.meal_type,
+            tempRecipe.cuisine_type,
+            ...(Array.isArray(tempRecipe.dietary_restrictions) ? tempRecipe.dietary_restrictions : []),
+          ].filter(Boolean),
+          nutrition: tempRecipe.nutrition,
+          complexity: tempRecipe.complexity,
+          favorites_count: tempRecipe.favorites_count,
+          created_at: tempRecipe.created_at
+        };
+        return res.json(transformedRecipe);
+      }
+
+      console.log('Recipe not found:', {
+        recipeId,
+        timestamp: new Date().toISOString()
+      });
+      return res.status(404).json({ error: "Recipe not found" });
+    } catch (error) {
+      console.error("Error fetching recipe:", {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        query: {
+          params: req.params,
+          url: req.url
+        },
+        timestamp: new Date().toISOString()
+      });
+      res.status(500).json({ 
+        error: "Failed to fetch recipe",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Add endpoint to get current meal plan
+  app.get("/api/meal-plans/current", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      
+      // Get the most recent non-expired meal plan
+      const currentMealPlan = await db.query.mealPlans.findFirst({
+        where: and(
+          eq(mealPlans.user_id, user.id),
+          eq(mealPlans.is_expired, false),
+          gt(mealPlans.expiration_date, new Date())
+        ),
+        orderBy: desc(mealPlans.created_at)
+      });
+
+      if (!currentMealPlan) {
+        return res.status(404).json({ message: "No active meal plan found" });
+      }
+
+      // Get associated recipes
+      const mealPlanRecipesList = await db
+        .select({
+          recipe_id: mealPlanRecipes.recipe_id,
+          meal: mealPlanRecipes.meal,
+          day: mealPlanRecipes.day
+        })
+        .from(mealPlanRecipes)
+        .where(eq(mealPlanRecipes.meal_plan_id, currentMealPlan.id));
+
+      const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
+      
+      // Get recipe details from temporary_recipes
+      const recipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(inArray(temporaryRecipes.id, recipeIds));
+
+      res.json({
+        ...currentMealPlan,
+        recipes: recipes.map(recipe => ({
+          ...recipe,
+          meal: mealPlanRecipesList.find(mpr => mpr.recipe_id === recipe.id)?.meal,
+          day: mealPlanRecipesList.find(mpr => mpr.recipe_id === recipe.id)?.day
+        }))
+      });
+    } catch (error) {
+      console.error("Error fetching current meal plan:", error);
+      res.status(500).json({ error: "Failed to fetch current meal plan" });
+    }
+  });
+
+  app.post("/api/regenerate-recipe", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { day, meal, preferences } = req.body;
+
+      if (!meal || day === undefined || !preferences) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: day, meal, and preferences"
+        });
+      }
+
+      // Normalize preferences
+      const normalizedPreferences = {
+        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
+        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
+        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : [],
+      };
+
+      // Get all recipe names to exclude (simplified approach)
+      const allUserRecipes = await db.query.temporaryRecipes.findMany({
+        where: eq(temporaryRecipes.user_id, user.id)
+      });
+      
+      const usedRecipeNames = new Set<string>();
+      allUserRecipes.forEach(recipe => {
+        if (recipe.name) {
+          usedRecipeNames.add(recipe.name);
+        }
+      });
+
+      // Track cuisine usage to ensure variety
+      const cuisineUsage: Record<string, number> = {};
+      normalizedPreferences.cuisine.forEach((cuisine: string) => {
+        cuisineUsage[cuisine] = 0;
+      });
+
+      // Count existing cuisines to prioritize less-used ones
+      allUserRecipes.forEach(recipe => {
+        if (recipe.cuisine_type && normalizedPreferences.cuisine.includes(recipe.cuisine_type)) {
+          cuisineUsage[recipe.cuisine_type] = (cuisineUsage[recipe.cuisine_type] || 0) + 1;
+        }
+      });
+
+      // Prioritize least-used cuisines
+      const prioritizedCuisines = [...normalizedPreferences.cuisine].sort((a, b) => 
+        (cuisineUsage[a] || 0) - (cuisineUsage[b] || 0)
+      );
+
+      // Generate a new recipe
+      const mealType = meal.toLowerCase() as "breakfast" | "lunch" | "dinner";
+      
+      const newRecipe = await generateRecipeRecommendation({
+        dietary: normalizedPreferences.dietary,
+        allergies: normalizedPreferences.allergies,
+        cuisine: prioritizedCuisines, // Use prioritized cuisines
+        meatTypes: normalizedPreferences.meatTypes,
+        mealType,
+        excludeNames: Array.from(usedRecipeNames),
+        maxRetries: 5 // More retries for single recipe regeneration
+      });
+
+      if (!newRecipe?.name) {
+        return res.status(500).json({
+          error: "Generation Failed",
+          message: "Failed to generate a new recipe"
+        });
+      }
+
+      // Save the new recipe
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 7); // Set expiration to 7 days from now
+
+      const mealTypeCapitalized = mealType.charAt(0).toUpperCase() + mealType.slice(1);
+      
+      const insertData = {
+        user_id: user.id,
+        name: newRecipe.name || '',
+        description: newRecipe.description || null,
+        image_url: newRecipe.image_url || null,
+        permanent_url: null,
+        prep_time: newRecipe.prep_time || 0,
+        cook_time: newRecipe.cook_time || 0,
+        servings: newRecipe.servings || 4,
+        ingredients: newRecipe.ingredients || [],
+        instructions: newRecipe.instructions || [],
+        meal_type: mealTypeCapitalized as z.infer<typeof MealTypeEnum>,
+        cuisine_type: (Array.isArray(newRecipe.tags)
+          ? (newRecipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+              ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+            ) || "Other")
+          : "Other") as z.infer<typeof CuisineTypeEnum>,
+        dietary_restrictions: (Array.isArray(newRecipe.tags)
+          ? newRecipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+              ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+            )
+          : []) as z.infer<typeof DietaryTypeEnum>[],
+        difficulty: (() => {
+          switch(newRecipe.complexity) {
+            case 1: return "Easy" as const;
+            case 2: return "Moderate" as const;
+            case 3: return "Advanced" as const;
+            default: return "Moderate" as const;
+          }
+        })() as z.infer<typeof DifficultyEnum>,
+        tags: newRecipe.tags || [],
+        nutrition: newRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        complexity: Math.min(3, Math.max(1, Number(newRecipe.complexity) || 1)),
+        created_at: new Date(),
+        expires_at: expirationDate,
+        favorited: false,
+        favorites_count: 0
+      };
+
+      const parseResult = insertTemporaryRecipeSchema.safeParse(insertData);
+      
+      if (!parseResult.success) {
+        console.error('Invalid recipe data:', parseResult.error.issues);
+        return res.status(500).json({
+          error: "Invalid Recipe",
+          message: "Generated recipe data is invalid"
+        });
+      }
+
+      const [savedRecipe] = await db
+        .insert(temporaryRecipes)
+        .values(parseResult.data)
+        .returning();
+
+      // Find the current meal plan
+      const currentMealPlan = await db.query.mealPlans.findFirst({
+        where: and(
+          eq(mealPlans.user_id, user.id),
+          eq(mealPlans.is_expired, false)
+        )
+      });
+
+      if (!currentMealPlan) {
+        return res.status(404).json({
+          error: "Not Found",
+          message: "No active meal plan found"
+        });
+      }
+
+      // Store image if available
+      let finalRecipe = savedRecipe;
+      if (savedRecipe.image_url) {
+        try {
+          const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+          if (permanentUrl) {
+            const [updatedRecipe] = await db
+              .update(temporaryRecipes)
+              .set({ permanent_url: permanentUrl })
+              .where(eq(temporaryRecipes.id, savedRecipe.id))
+              .returning();
+            
+            finalRecipe = updatedRecipe;
+          }
+        } catch (error) {
+          console.error('Failed to store image:', error);
+        }
+      }
+
+      // Add the recipe to the meal plan
+      const dayDate = new Date();
+      dayDate.setDate(dayDate.getDate() + day);
+      
+      await db.execute(sql`
+        INSERT INTO meal_plan_recipes (meal_plan_id, recipe_id, day, meal)
+        VALUES (${currentMealPlan.id}, ${finalRecipe.id}, ${dayDate}, ${mealType})
+      `);
+      
+      return res.json({
+        recipe: finalRecipe,
+        message: "Recipe regenerated successfully"
+      });
+    } catch (error: any) {
+      console.error("Error regenerating recipe:", error);
+      res.status(500).json({
+        error: "Failed to regenerate recipe",
         details: error.message
       });
     }

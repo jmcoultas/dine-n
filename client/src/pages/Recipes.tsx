@@ -77,6 +77,48 @@ export default function Recipes() {
     },
   });
 
+  // Query for top breakfast recipes
+  const { data: breakfastRecipes = [], isLoading: isLoadingBreakfast } = useQuery({
+    queryKey: ["recipes", "breakfast"],
+    queryFn: async () => {
+      const response = await fetch('/api/recipes/breakfast', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch breakfast recipes');
+      }
+      return response.json();
+    },
+  });
+
+  // Query for top lunch recipes
+  const { data: lunchRecipes = [], isLoading: isLoadingLunch } = useQuery({
+    queryKey: ["recipes", "lunch"],
+    queryFn: async () => {
+      const response = await fetch('/api/recipes/lunch', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch lunch recipes');
+      }
+      return response.json();
+    },
+  });
+
+  // Query for top dinner recipes
+  const { data: dinnerRecipes = [], isLoading: isLoadingDinner } = useQuery({
+    queryKey: ["recipes", "dinner"],
+    queryFn: async () => {
+      const response = await fetch('/api/recipes/dinner', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch dinner recipes');
+      }
+      return response.json();
+    },
+  });
+
   // Create a Set of favorited recipe IDs for easy lookup
   const favoritedRecipeIds = new Set(favoriteRecipes.map((recipe: Recipe) => recipe.id));
 
@@ -88,6 +130,9 @@ export default function Recipes() {
 
   const filteredFavoriteRecipes = filterRecipes(favoriteRecipes);
   const filteredCommunityRecipes = filterRecipes(communityRecipes);
+  const filteredBreakfastRecipes = filterRecipes(breakfastRecipes);
+  const filteredLunchRecipes = filterRecipes(lunchRecipes);
+  const filteredDinnerRecipes = filterRecipes(dinnerRecipes);
 
   const renderRecipeGrid = (recipes: Recipe[], isLoading: boolean, isFavoritesTab: boolean = false) => {
     if (isLoading) {
@@ -251,7 +296,29 @@ export default function Recipes() {
               `
             }}
           />
+          <h2 className="text-2xl font-semibold">Community Favorites!</h2>
           {renderRecipeGrid(filteredCommunityRecipes, isLoadingCommunity)}
+
+          {filteredBreakfastRecipes.length > 0 && (
+            <>
+              <h2 className="text-2xl font-semibold mt-10">Top Breakfast Recipes</h2>
+              {renderRecipeGrid(filteredBreakfastRecipes, isLoadingBreakfast)}
+            </>
+          )}
+
+          {filteredLunchRecipes.length > 0 && (
+            <>
+              <h2 className="text-2xl font-semibold mt-10">Top Lunch Recipes</h2>
+              {renderRecipeGrid(filteredLunchRecipes, isLoadingLunch)}
+            </>
+          )}
+
+          {filteredDinnerRecipes.length > 0 && (
+            <>
+              <h2 className="text-2xl font-semibold mt-10">Top Dinner Recipes</h2>
+              {renderRecipeGrid(filteredDinnerRecipes, isLoadingDinner)}
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="favorites" className="space-y-6">

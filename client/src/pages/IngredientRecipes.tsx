@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@/hooks/use-user";
+import { useUser, type AuthUser } from "@/hooks/use-user";
 import { useSubscription } from "@/hooks/use-subscription";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,122 +9,281 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
+import { AddToHomeScreen } from "@/components/AddToHomeScreen";
 import { generateRecipeFromTitle } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import { RecipeSchema } from "@/lib/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { PreferenceSchema, type Preferences } from "@db/schema";
+import RecipePreferencesModal from "@/components/RecipePreferencesModal";
+import { z } from "zod";
 
 const STORAGE_KEY = 'ingredient-recipe';
+const FREE_RECIPE_LIMIT = 3;
+
+// Add PantryPal specific recipe schema
+const PantryPalRecipeSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  image_url: z.string().nullable(),
+  permanentUrl: z.string().nullable(),
+  permanent_url: z.string().nullable(),
+  prepTime: z.number().nullable(),
+  prep_time: z.number().nullable(),
+  cookTime: z.number().nullable(),
+  cook_time: z.number().nullable(),
+  servings: z.number().nullable(),
+  ingredients: z.array(z.object({
+    name: z.string(),
+    amount: z.number(),
+    unit: z.string()
+  })).nullable().default([]),
+  instructions: z.array(z.string()).nullable().default([]),
+  tags: z.array(z.string()).nullable().default([]),
+  nutrition: z.object({
+    calories: z.number(),
+    protein: z.number(),
+    carbs: z.number(),
+    fat: z.number()
+  }).nullable().default({ calories: 0, protein: 0, carbs: 0, fat: 0 }),
+  complexity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  userId: z.number().optional(),
+  favorited: z.boolean().default(false),
+  favorites_count: z.number().default(0),
+  created_at: z.coerce.date(),
+  expiresAt: z.coerce.date().optional(),
+  recipe_id: z.number().optional()
+}).transform((data) => ({
+  ...data,
+  imageUrl: data.permanent_url || data.image_url || data.imageUrl,
+  permanentUrl: data.permanent_url || data.permanentUrl,
+  prepTime: data.prepTime ?? data.prep_time,
+  cookTime: data.cookTime ?? data.cook_time,
+  isFavorited: data.favorited
+}));
+
+type PantryPalRecipe = z.infer<typeof PantryPalRecipeSchema>;
+
+// Add preference schema
+// const PreferenceSchema = z.object({
+//   dietary: z.array(z.string()),
+//   allergies: z.array(z.string()),
+//   cuisine: z.array(z.string()),
+//   meatTypes: z.array(z.string())
+// });
+
+// type Preference = z.infer<typeof PreferenceSchema>;
 
 export default function IngredientRecipes() {
+  const { data: user } = useUser() as { data: AuthUser | null };
+  const getUserStorageKey = (key: string) => user ? `${key}-${user.id}` : null;
+
+  // Query to fetch user preferences from the backend
+  const { data: userPreferences } = useQuery({
+    queryKey: ['userPreferences'],
+    queryFn: async () => {
+      if (!user) return null;
+      const response = await fetch('/api/user/profile', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch user preferences');
+      }
+      const data = await response.json();
+      return data.preferences as Preferences;
+    },
+    enabled: !!user
+  });
+
+  // Initialize from localStorage if available
+  const getStoredSuggestions = () => {
+    if (user) {
+      const storageKey = getUserStorageKey('suggestions');
+      if (storageKey) {
+        const savedSuggestions = localStorage.getItem(storageKey);
+        if (savedSuggestions) {
+          try {
+            const parsedSuggestions = JSON.parse(savedSuggestions);
+            if (Array.isArray(parsedSuggestions) && parsedSuggestions.length > 0) {
+              console.log('Initializing with stored suggestions:', parsedSuggestions);
+              return parsedSuggestions;
+            }
+          } catch (e) {
+            console.error('Failed to parse saved suggestions during initialization', e);
+          }
+        }
+      }
+    }
+    return [];
+  };
+
   const [ingredients, setIngredients] = useState<string[]>(() => {
-    const saved = localStorage.getItem('ingredients');
+    const storageKey = getUserStorageKey('ingredients');
+    if (!storageKey) return [];
+    const saved = localStorage.getItem(storageKey);
     return saved ? JSON.parse(saved) : [];
   });
   const [inputValue, setInputValue] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>(() => {
-    const saved = localStorage.getItem('suggestions');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [suggestions, setSuggestions] = useState<string[]>(getStoredSuggestions);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState<string>("");
   const { subscription } = useSubscription();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const remainingGenerations = FREE_RECIPE_LIMIT - (user?.ingredient_recipes_generated || 0);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [tempPreferences, setTempPreferences] = useState<{ dietary: string[]; allergies: string[] }>({
+    dietary: [],
+    allergies: []
+  });
+
+  // Initialize tempPreferences from user account
+  useEffect(() => {
+    if (userPreferences) {
+      setTempPreferences({
+        dietary: userPreferences.dietary || [],
+        allergies: userPreferences.allergies || []
+      });
+    }
+  }, [userPreferences]);
+
+  // Save preferences to user account
+  const savePreferencesToAccount = async (updatedPreferences: Partial<Preferences>) => {
+    if (!user) return;
+    
+    try {
+      // Merge with existing preferences to maintain other preference values
+      const mergedPreferences = userPreferences 
+        ? { ...userPreferences, ...updatedPreferences }
+        : { 
+            dietary: [],
+            allergies: [],
+            cuisine: [],
+            meatTypes: []
+          };
+      
+      // Validate the preferences using the schema
+      const parsedPrefs = PreferenceSchema.safeParse(mergedPreferences);
+      if (!parsedPrefs.success) {
+        console.error('Invalid preferences format:', parsedPrefs.error);
+        throw new Error('Invalid preferences format');
+      }
+      
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          preferences: parsedPrefs.data
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save preferences to account');
+      }
+
+      // Invalidate the user query to ensure it has the latest preferences
+      await queryClient.invalidateQueries({ queryKey: ['userPreferences'] });
+      await queryClient.invalidateQueries({ queryKey: ['user'] });
+    } catch (error) {
+      console.error('Error saving preferences to account:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save preferences",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Clear data when user changes or logs out
+  useEffect(() => {
+    if (!user) {
+      setIngredients([]);
+      setSuggestions([]);
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+  }, [user?.id]);
+
+  // Check and clear reload flag on component mount and restore suggestions if needed
+  useEffect(() => {
+    // If we've completed a reload to show suggestions, clear the flag
+    if (sessionStorage.getItem('pantrypal-needs-reload') === 'completed') {
+      console.log('Clearing reload flag after successful reload');
+      sessionStorage.removeItem('pantrypal-needs-reload');
+    }
+    
+    // Check if we have suggestions in localStorage that we should restore
+    if (user) {
+      const storageKey = getUserStorageKey('suggestions');
+      if (storageKey && suggestions.length === 0) {
+        const savedSuggestions = localStorage.getItem(storageKey);
+        if (savedSuggestions) {
+          try {
+            const parsedSuggestions = JSON.parse(savedSuggestions);
+            if (Array.isArray(parsedSuggestions) && parsedSuggestions.length > 0) {
+              console.log('Found saved suggestions in localStorage, restoring them', parsedSuggestions);
+              setSuggestions(parsedSuggestions);
+            }
+          } catch (e) {
+            console.error('Failed to parse saved suggestions', e);
+          }
+        }
+      }
+    }
+  }, [user, suggestions.length, getUserStorageKey, setSuggestions]);
+
+  // Save ingredients to localStorage whenever they change
+  useEffect(() => {
+    const storageKey = getUserStorageKey('ingredients');
+    if (storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(ingredients));
+    }
+  }, [ingredients, user?.id]);
+
+  // Save suggestions to localStorage whenever they change
+  useEffect(() => {
+    const storageKey = getUserStorageKey('suggestions');
+    if (storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(suggestions));
+    }
+  }, [suggestions, user?.id]);
 
   // Query for persisted recipe with proper error handling
-  const { data: selectedRecipe, refetch: refetchRecipe } = useQuery({
-    queryKey: ['ingredient-recipe'],
+  const { data: selectedRecipe, refetch: refetchRecipe } = useQuery<PantryPalRecipe | null>({
+    queryKey: ['ingredient-recipe', user?.id],
     queryFn: async () => {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const storageKey = getUserStorageKey(STORAGE_KEY);
+        if (!storageKey) return null;
+        const saved = localStorage.getItem(storageKey);
         if (!saved) return null;
         const parsed = JSON.parse(saved);
-        const validatedRecipe = RecipeSchema.parse(parsed);
+        const validatedRecipe = PantryPalRecipeSchema.parse(parsed);
         return validatedRecipe;
       } catch (error) {
         console.error('Error parsing saved recipe:', error);
-        localStorage.removeItem(STORAGE_KEY);
+        const storageKey = getUserStorageKey(STORAGE_KEY);
+        if (storageKey) {
+          localStorage.removeItem(storageKey);
+        }
         return null;
       }
     },
     initialData: null,
-    staleTime: Infinity, // Keep the data fresh indefinitely
-    gcTime: Infinity // Never remove from cache (formerly cacheTime)
-  });
-
-  // Save ingredients to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('ingredients', JSON.stringify(ingredients));
-  }, [ingredients]);
-
-  // Save suggestions to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('suggestions', JSON.stringify(suggestions));
-  }, [suggestions]);
-
-  const generateSuggestionsMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/generate-recipe-suggestions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ingredients }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        if (error.code === "UPGRADE_REQUIRED") {
-          setFeatureContext("recipe suggestion");
-          setShowSubscriptionModal(true);
-          return [];
-        }
-        throw new Error(error.message || "Failed to generate suggestions");
-      }
-
-      const data = await response.json();
-      return data.suggestions;
-    },
-    onSuccess: (data) => {
-      setSuggestions(data);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const generateRecipeMutation = useMutation({
-    mutationFn: async (title: string) => {
-      const recipe = await generateRecipeFromTitle(title);
-      const parsedRecipe = RecipeSchema.parse(recipe);
-      return parsedRecipe;
-    },
-    onSuccess: (recipe: Recipe) => {
-      // Save to localStorage and update React Query cache
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(recipe));
-        queryClient.setQueryData(['ingredient-recipe'], recipe);
-      } catch (error) {
-        console.error('Error saving recipe:', error);
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled: !!user
   });
 
   const handleAddIngredient = () => {
     if (inputValue.trim()) {
-      if (subscription?.tier !== "premium" && ingredients.length >= 3) {
+      if (user?.subscription_tier !== "premium" && ingredients.length >= 3) {
         setFeatureContext("adding more ingredients");
         setShowSubscriptionModal(true);
         setInputValue("");
@@ -149,29 +308,289 @@ export default function IngredientRecipes() {
       return;
     }
 
-    setSuggestions([]);
-    // Only clear the stored recipe if the user confirms
     if (selectedRecipe) {
       const shouldClear = window.confirm("Generating new suggestions will clear your current recipe. Continue?");
       if (!shouldClear) {
         return;
       }
     }
-    localStorage.removeItem(STORAGE_KEY);
-    queryClient.setQueryData(['ingredient-recipe'], null);
+
+    // Make sure tempPreferences has the latest user preferences before showing the modal
+    if (userPreferences) {
+      setTempPreferences({
+        dietary: userPreferences.dietary || [],
+        allergies: userPreferences.allergies || []
+      });
+      console.log('Using user preferences for dietary restrictions:', userPreferences.dietary);
+      console.log('Using user preferences for allergies:', userPreferences.allergies);
+    }
+
+    setShowPreferences(true);
+  };
+
+  const handleGenerateWithPreferences = async (preferences: { dietary: string[]; allergies: string[] }) => {
+    // Save the provided preferences
+    setTempPreferences(preferences);
+    setShowPreferences(false);
+    
+    // Ensure allergies from user profile are included, even if not selected in the modal
+    const combinedAllergies = [...preferences.allergies];
+    
+    // Add any allergies from the user profile that aren't already in the preferences
+    if (userPreferences?.allergies && userPreferences.allergies.length > 0) {
+      console.log('Checking for additional allergies from user profile:', userPreferences.allergies);
+      
+      // Add any missing allergies from user profile
+      userPreferences.allergies.forEach(allergy => {
+        if (!combinedAllergies.includes(allergy)) {
+          console.log(`Adding allergy from user profile: ${allergy}`);
+          combinedAllergies.push(allergy);
+        }
+      });
+    }
+    
+    // Update tempPreferences with the combined allergies
+    setTempPreferences(prev => ({
+      ...prev,
+      allergies: combinedAllergies
+    }));
+    
+    console.log('Final allergies used for recipe generation:', combinedAllergies);
+    
+    // Save the dietary and allergy preferences to user account
+    if (user) {
+      try {
+        // Filter to only include valid values from the schema enums
+        const dietaryOptions = PreferenceSchema.shape.dietary.element.enum;
+        const allergiesOptions = PreferenceSchema.shape.allergies.element.enum;
+        
+        const validatedDietary = preferences.dietary.filter(item => 
+          Object.values(dietaryOptions).includes(item as any)
+        );
+        
+        const validatedAllergies = combinedAllergies.filter(item => 
+          Object.values(allergiesOptions).includes(item as any)
+        );
+        
+        await savePreferencesToAccount({
+          dietary: validatedDietary as any,
+          allergies: validatedAllergies as any
+        });
+      } catch (error) {
+        console.error('Error validating preferences:', error);
+        // Continue with generation even if preference saving fails
+      }
+    }
+    
+    setSuggestions([]);
+    const storageKey = getUserStorageKey(STORAGE_KEY);
+    if (storageKey) {
+      localStorage.removeItem(storageKey);
+    }
+    queryClient.setQueryData(['ingredient-recipe', user?.id], null);
+    
+    // Generate suggestions with the updated preferences including all allergens
     await generateSuggestionsMutation.mutateAsync();
   };
 
+  const generateSuggestionsMutation = useMutation({
+    mutationFn: async () => {
+      console.log('Sending ingredients to generate recipe suggestions:', ingredients);
+      console.log('Using dietary restrictions:', tempPreferences.dietary);
+      console.log('Using allergy restrictions:', tempPreferences.allergies);
+      
+      const response = await fetch("/api/generate-recipe-suggestions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          ingredients,
+          dietary: tempPreferences.dietary,
+          allergies: tempPreferences.allergies
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Error response from generate-recipe-suggestions:', error);
+        if (error.code === "UPGRADE_REQUIRED") {
+          setFeatureContext("recipe suggestion");
+          setShowSubscriptionModal(true);
+          return [];
+        }
+        throw new Error(error.message || "Failed to generate suggestions");
+      }
+
+      const data = await response.json();
+      console.log('Received recipe suggestions from server:', data);
+      
+      // Validate the response format
+      if (!data.suggestions) {
+        console.error('Missing suggestions field in response:', data);
+        throw new Error("Invalid response format: missing suggestions field");
+      }
+      
+      if (!Array.isArray(data.suggestions)) {
+        console.error('Suggestions is not an array:', data.suggestions);
+        throw new Error("Invalid response format: suggestions must be an array");
+      }
+      
+      // Filter out any non-string or empty suggestions
+      const validSuggestions = (data.suggestions as any[])
+        .filter(suggestion => typeof suggestion === 'string' && suggestion.trim() !== '')
+        .map(suggestion => suggestion.trim());
+      
+      if (validSuggestions.length === 0) {
+        console.error('No valid suggestions found in response:', data.suggestions);
+        throw new Error("No valid recipe suggestions were generated");
+      }
+      
+      console.log('Validated suggestions:', validSuggestions);
+      return validSuggestions;
+    },
+    onSuccess: (data) => {
+      console.log('Setting suggestions state with:', data);
+      setSuggestions(data);
+      
+      // Store in local storage
+      const storageKey = getUserStorageKey('suggestions');
+      if (storageKey) {
+        localStorage.setItem(storageKey, JSON.stringify(data));
+      }
+      
+      // Set a flag in sessionStorage to indicate we need a reload
+      // This prevents an infinite refresh loop
+      const needsReloadFlag = sessionStorage.getItem('pantrypal-needs-reload');
+      if (needsReloadFlag !== 'completed') {
+        console.log('Setting reload flag');
+        sessionStorage.setItem('pantrypal-needs-reload', 'pending');
+        
+        // Give React a chance to render, then check if we need to reload
+        setTimeout(() => {
+          // Check if suggestions are visible in the DOM
+          const suggestionCards = document.querySelectorAll('[data-suggestion-card]');
+          console.log(`Found ${suggestionCards.length} suggestion cards in the DOM after setting state`);
+          
+          if (sessionStorage.getItem('pantrypal-needs-reload') === 'pending') {
+            console.log('Triggering page reload to ensure suggestions appear');
+            sessionStorage.setItem('pantrypal-needs-reload', 'completed');
+            window.location.reload();
+          }
+        }, 1000);
+      }
+    },
+    onError: (error: Error) => {
+      console.error('Error in generateSuggestionsMutation:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateRecipeMutation = useMutation<PantryPalRecipe, Error, string>({
+    mutationFn: async (title: string) => {
+      if (user?.subscription_tier !== "premium" && remainingGenerations <= 0) {
+        throw new Error("FREE_PLAN_LIMIT_REACHED");
+      }
+      
+      // Get allergies from user preferences
+      const userAllergies = userPreferences?.allergies || [];
+      
+      // Combine with any allergies in tempPreferences
+      const allergies = [...tempPreferences.allergies];
+      
+      // Add any allergies from user profile that aren't already included
+      userAllergies.forEach(allergy => {
+        if (!allergies.includes(allergy)) {
+          allergies.push(allergy);
+        }
+      });
+      
+      console.log('Generating recipe for title:', title);
+      console.log('Using allergies from user preferences:', allergies);
+      
+      const recipe = await generateRecipeFromTitle(title, allergies);
+      console.log('Recipe before validation:', JSON.stringify(recipe, null, 2));
+      const parsedRecipe = PantryPalRecipeSchema.parse(recipe);
+      console.log('Recipe after validation:', JSON.stringify(parsedRecipe, null, 2));
+      return parsedRecipe;
+    },
+    onSuccess: (recipe: PantryPalRecipe) => {
+      try {
+        console.log('Saving recipe to storage:', JSON.stringify(recipe, null, 2));
+        const storageKey = getUserStorageKey(STORAGE_KEY);
+        console.log('Storage key:', storageKey);
+        if (storageKey) {
+          localStorage.setItem(storageKey, JSON.stringify(recipe));
+          console.log('Recipe saved to localStorage');
+        }
+        queryClient.setQueryData(['ingredient-recipe', user?.id], recipe);
+        console.log('Recipe saved to query cache');
+        queryClient.invalidateQueries({ queryKey: ['user'] });
+      } catch (error) {
+        console.error('Error saving recipe:', error);
+      }
+    },
+    onError: (error: Error) => {
+      console.error('Recipe generation error:', error);
+      if (error.message === "FREE_PLAN_LIMIT_REACHED") {
+        setFeatureContext("recipe generation");
+        setShowSubscriptionModal(true);
+      } else {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
   const handleSelectRecipe = async (title: string) => {
-    if (subscription?.tier !== "premium") {
+    if (!title || typeof title !== 'string') {
+      console.error('Invalid recipe title:', title);
+      toast({
+        title: "Error",
+        description: "Invalid recipe selection",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('User selected recipe with title:', title);
+    console.log('Current allergies in tempPreferences:', tempPreferences.allergies);
+    console.log('User account allergies:', userPreferences?.allergies || []);
+    
+    if (user?.subscription_tier !== "premium" && remainingGenerations <= 0) {
+      console.log('Free tier limit reached, showing subscription modal');
       setFeatureContext("recipe generation");
       setShowSubscriptionModal(true);
       return;
     }
-    await generateRecipeMutation.mutateAsync(title);
+    
+    try {
+      // Clear any existing recipe first
+      if (selectedRecipe) {
+        console.log('Clearing existing recipe before generating new one');
+        const storageKey = getUserStorageKey(STORAGE_KEY);
+        if (storageKey) {
+          localStorage.removeItem(storageKey);
+        }
+        queryClient.setQueryData(['ingredient-recipe', user?.id], null);
+      }
+      
+      console.log('Generating full recipe for:', title);
+      await generateRecipeMutation.mutateAsync(title);
+    } catch (error) {
+      console.error('Error in handleSelectRecipe:', error);
+      // Error will be handled by mutation's onError
+    }
   };
 
-  const handleUpdateFavorite = async (recipe: Recipe, isFavorited: boolean) => {
+  const handleUpdateFavorite = async (recipe: PantryPalRecipe, isFavorited: boolean) => {
     try {
       await fetch(`/api/recipes/${recipe.id}/favorite`, {
         method: isFavorited ? 'DELETE' : 'POST',
@@ -186,10 +605,12 @@ export default function IngredientRecipes() {
           : (recipe.favorites_count || 0) + 1
       };
 
-      // Update both localStorage and React Query cache
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecipe));
-        queryClient.setQueryData(['ingredient-recipe'], updatedRecipe);
+        const storageKey = getUserStorageKey(STORAGE_KEY);
+        if (storageKey) {
+          localStorage.setItem(storageKey, JSON.stringify(updatedRecipe));
+        }
+        queryClient.setQueryData(['ingredient-recipe', user?.id], updatedRecipe);
       } catch (error) {
         console.error('Error saving updated recipe:', error);
       }
@@ -202,44 +623,169 @@ export default function IngredientRecipes() {
     }
   };
 
+  const handleClearSuggestions = () => {
+    setSuggestions([]);
+    const storageKey = getUserStorageKey('suggestions');
+    if (storageKey) {
+      localStorage.removeItem(storageKey);
+    }
+  };
+
   return (
-    <div className="min-h-screen">
+    <div className="container mx-auto py-8">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold mb-2">PantryPal</h1>
+        <p className="text-xl text-muted-foreground">Your friendly AI that whips up meals from what you have.</p>
+      </div>
       <SubscriptionModal
         open={showSubscriptionModal}
         onOpenChange={setShowSubscriptionModal}
         feature={featureContext}
       />
+      <RecipePreferencesModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+        userPreferences={userPreferences}
+        onGenerate={handleGenerateWithPreferences}
+        isGenerating={generateSuggestionsMutation.isPending}
+      />
+      <AddToHomeScreen daysToWait={14} isLoggedIn={!!user} />
 
-      {/* Main content container with vertical spacing */}
-      <div className="flex flex-col items-center pt-[20vh] space-y-8 px-4">
-        {/* Header section */}
-        <div className="text-center max-w-2xl">
-          <h1 className="text-4xl font-bold mb-4">Recipe Ideas from Ingredients</h1>
-          <p className="text-muted-foreground">
-            Enter the ingredients you have on hand and we'll suggest recipes you can make
-          </p>
+      {/* Main content container */}
+      <div className="flex flex-col items-center space-y-8">
+        {/* Spline Scene - Only shown when no suggestions and not generating */}
+        {suggestions.length === 0 && !generateSuggestionsMutation.isPending && (
+          <div className="w-full flex justify-center items-center my-8">
+            <div className="w-[225px] h-[180px] relative bg-background rounded-xl overflow-hidden">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <spline-viewer
+                  url="https://prod.spline.design/XCK0HAh2vliGiGxC/scene.splinecode"
+                  className="w-full h-full"
+                  style={{
+                    background: 'transparent',
+                    transform: 'scale(1.5) translateY(-10%)',
+                    transformOrigin: 'center center'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recipe Cards Section - Shown when suggestions exist or when generating */}
+        <div className="w-full flex-1 flex flex-col items-center justify-center">
+          <div className="w-full max-w-4xl">
+            {/* Free tier info and clear button */}
+            {(suggestions.length > 0 || generateSuggestionsMutation.isPending) && (
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  {user?.subscription_tier !== "premium" && (
+                    <p className="text-muted-foreground">
+                      {remainingGenerations > 0 
+                        ? `You have ${remainingGenerations} free recipe generation${remainingGenerations === 1 ? '' : 's'} remaining` 
+                        : 'You have used all your free recipe generations'}
+                    </p>
+                  )}
+                </div>
+                {suggestions.length > 0 && !generateSuggestionsMutation.isPending && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearSuggestions}
+                    className="flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear Suggestions
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Loading state */}
+            {generateSuggestionsMutation.isPending && (
+              <>
+                <h2 className="text-xl font-medium mb-4">Generating Recipe Ideas...</h2>
+                <p className="text-muted-foreground mb-6">
+                  Our AI chef is thinking of delicious recipes using your ingredients.
+                </p>
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                </div>
+              </>
+            )}
+
+            {/* Suggestions header and cards */}
+            {!generateSuggestionsMutation.isPending && suggestions.length > 0 && (
+              <>
+                <h2 className="text-xl font-medium mb-4">Recipe Suggestions</h2>
+                <p className="text-muted-foreground mb-6">
+                  Click on a recipe card to generate a complete recipe with ingredients and instructions.
+                </p>
+
+                {/* Upgrade button for free tier users */}
+                {remainingGenerations <= 1 && user?.subscription_tier !== "premium" && (
+                  <div className="text-center mb-6">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setFeatureContext("unlimited recipe generation");
+                        setShowSubscriptionModal(true);
+                      }}
+                    >
+                      Upgrade for unlimited recipes
+                    </Button>
+                  </div>
+                )}
+
+                {/* Recipe suggestion cards */}
+                <div className="grid gap-4 md:grid-cols-3">
+                  {suggestions.map((title, index) => (
+                    <Card
+                      key={index}
+                      data-suggestion-card={`suggestion-${index}`}
+                      className={cn(
+                        "cursor-pointer transition-all border-2 hover:shadow-md",
+                        generateRecipeMutation.isPending ? "opacity-50 pointer-events-none" : "",
+                        user?.subscription_tier !== "premium" && remainingGenerations <= 0
+                          ? "opacity-50 pointer-events-none"
+                          : "hover:border-primary/50 hover:bg-secondary/10"
+                      )}
+                      onClick={() => handleSelectRecipe(title)}
+                    >
+                      <CardContent className="p-6">
+                        <h3 className="font-medium text-lg mb-2">{title}</h3>
+                        <div className="flex justify-between items-center mt-4">
+                          <p className="text-sm text-muted-foreground">
+                            Click to generate full recipe
+                          </p>
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            className="h-5 w-5 text-primary" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Input section */}
-        <div className="w-full max-w-2xl space-y-4">
-          <div className="flex gap-2">
-            <Input
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddIngredient()}
-              placeholder="Enter an ingredient"
-              className="flex-1"
-            />
-            <Button onClick={handleAddIngredient}>Add</Button>
-          </div>
-
+        {/* Tags Section */}
+        <div className="w-full flex justify-center">
           {ingredients.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="w-full max-w-2xl flex flex-wrap gap-2 justify-center">
               {ingredients.map((ingredient, index) => (
                 <Badge
                   key={index}
                   variant="secondary"
-                  className="cursor-pointer"
+                  className="cursor-pointer text-base py-2"
                   onClick={() => handleRemoveIngredient(index)}
                 >
                   {ingredient} ×
@@ -247,48 +793,10 @@ export default function IngredientRecipes() {
               ))}
             </div>
           )}
-
-          <Button
-            onClick={handleGenerateSuggestions}
-            disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
-            className="w-full"
-          >
-            {generateSuggestionsMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating Ideas...
-              </>
-            ) : (
-              "Generate Recipe Ideas"
-            )}
-          </Button>
         </div>
 
-        {/* Suggestions section */}
-        {suggestions.length > 0 && (
-          <div className="w-full max-w-4xl">
-            <h2 className="text-2xl font-semibold mb-4 text-center">Suggested Recipes</h2>
-            <div className="grid gap-4 md:grid-cols-3">
-              {suggestions.map((title, index) => (
-                <Card
-                  key={index}
-                  className="cursor-pointer hover:bg-secondary/20 transition-colors"
-                  onClick={() => handleSelectRecipe(title)}
-                >
-                  <CardContent className="p-4">
-                    <p className="font-medium">{title}</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Click to generate full recipe
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recipe display section */}
-        {generateRecipeMutation.isPending ? (
+        {/* Loading Animation */}
+        {generateRecipeMutation.isPending && (
           <LoadingAnimation
             messages={[
               "Crafting your recipe...",
@@ -297,129 +805,203 @@ export default function IngredientRecipes() {
               "Finalizing nutritional information...",
             ]}
           />
-        ) : selectedRecipe && (
-          <div className="w-full max-w-4xl mt-8">
-            <div className="flex justify-between items-start mb-4">
-              <h2 className="text-2xl font-semibold">{selectedRecipe.name}</h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleUpdateFavorite(selectedRecipe, selectedRecipe.favorited);
-                }}
-              >
-                {selectedRecipe.favorited ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-5 h-5 text-red-500"
-                  >
-                    <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
-                  </svg>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
-                    />
-                  </svg>
-                )}
-                <span className="sr-only">
-                  {selectedRecipe.favorited ? "Remove from favorites" : "Add to favorites"}
-                </span>
-              </Button>
-            </div>
+        )}
+
+        {/* Selected Recipe Display */}
+        {selectedRecipe && (
+          <div className="w-full max-w-4xl">
             <Card>
               <CardContent className="p-6">
                 <div className="grid gap-6">
-                  {(selectedRecipe.imageUrl || selectedRecipe.permanent_url) && (
-                    <div className="relative aspect-video w-full overflow-hidden rounded-lg">
-                      <img
-                        src={selectedRecipe.permanent_url || selectedRecipe.imageUrl || '/placeholder-recipe.jpg'}
-                        alt={selectedRecipe.name || 'Recipe image'}
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <h3 className="font-medium mb-2">Description</h3>
-                    <p className="text-muted-foreground">{selectedRecipe.description}</p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <h3 className="font-medium mb-2">Prep Time</h3>
-                      <p>{selectedRecipe.prepTime} minutes</p>
-                    </div>
-                    <div>
-                      <h3 className="font-medium mb-2">Cook Time</h3>
-                      <p>{selectedRecipe.cookTime} minutes</p>
-                    </div>
-                    <div>
-                      <h3 className="font-medium mb-2">Servings</h3>
-                      <p>{selectedRecipe.servings}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-medium mb-2">Ingredients</h3>
-                    <ul className="list-disc pl-5 space-y-1">
-                      {selectedRecipe.ingredients?.map((ingredient, index) => (
-                        <li key={index}>
-                          {ingredient.amount} {ingredient.unit} {ingredient.name}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h3 className="font-medium mb-2">Instructions</h3>
-                    <ol className="list-decimal pl-5 space-y-2">
-                      {selectedRecipe.instructions?.map((step, index) => (
-                        <li key={index}>{step}</li>
-                      ))}
-                    </ol>
-                  </div>
-
-                  {selectedRecipe.nutrition && (
-                    <div>
-                      <h3 className="font-medium mb-2">Nutrition (per serving)</h3>
-                      <div className="grid grid-cols-4 gap-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Calories</p>
-                          <p className="font-medium">{selectedRecipe.nutrition.calories}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Protein</p>
-                          <p className="font-medium">{selectedRecipe.nutrition.protein}g</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Carbs</p>
-                          <p className="font-medium">{selectedRecipe.nutrition.carbs}g</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Fat</p>
-                          <p className="font-medium">{selectedRecipe.nutrition.fat}g</p>
-                        </div>
+                  {(selectedRecipe.permanent_url || selectedRecipe.imageUrl) && (
+                    <div className="space-y-2">
+                      <div className="relative aspect-video w-full overflow-hidden rounded-lg">
+                        <img
+                          src={selectedRecipe.permanent_url || selectedRecipe.imageUrl || '/placeholder-recipe.jpg'}
+                          alt={selectedRecipe.name || 'Recipe image'}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
+                        ⚠️ This image is generated by AI and may include ingredients that are not actually in the recipe. As with all cases, use your best reasoning and judgment.
                       </div>
                     </div>
                   )}
+
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-start">
+                      <h2 className="text-2xl font-semibold">{selectedRecipe.name}</h2>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleUpdateFavorite(selectedRecipe, selectedRecipe.favorited)}
+                      >
+                        {selectedRecipe.favorited ? (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="w-5 h-5 text-red-500"
+                          >
+                            <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+                          </svg>
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                            />
+                          </svg>
+                        )}
+                      </Button>
+                    </div>
+
+                    <p className="text-muted-foreground">{selectedRecipe.description}</p>
+
+                    {/* Show allergies that were considered */}
+                    {(() => {
+                      // Collect all allergies
+                      const userAllergies = userPreferences?.allergies || [];
+                      const allAllergies = [...userAllergies, ...tempPreferences.allergies];
+                      const hasAllergies = allAllergies.length > 0;
+                      
+                      // Return the component only if we have allergies
+                      return hasAllergies ? (
+                        <div className="rounded-md bg-yellow-50 p-3">
+                          <div className="flex">
+                            <div className="shrink-0">
+                              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <h3 className="text-sm font-medium text-yellow-800">Allergy Information</h3>
+                              <div className="mt-1 text-sm text-yellow-700">
+                                <p>
+                                  This recipe was generated to avoid the following allergens:
+                                </p>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {/* Filter out duplicate allergies */}
+                                  {allAllergies
+                                    .filter((allergy, index) => allAllergies.indexOf(allergy) === index)
+                                    .map((allergy) => (
+                                      <Badge key={allergy} variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                        {allergy}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <h3 className="font-medium mb-1">Prep Time</h3>
+                        <p>{selectedRecipe.prepTime} minutes</p>
+                      </div>
+                      <div>
+                        <h3 className="font-medium mb-1">Cook Time</h3>
+                        <p>{selectedRecipe.cookTime} minutes</p>
+                      </div>
+                      <div>
+                        <h3 className="font-medium mb-1">Servings</h3>
+                        <p>{selectedRecipe.servings}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-medium mb-2">Ingredients</h3>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {selectedRecipe.ingredients?.map((ingredient, index) => (
+                          <li key={index}>
+                            {ingredient.amount} {ingredient.unit} {ingredient.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h3 className="font-medium mb-2">Instructions</h3>
+                      <ol className="list-decimal pl-5 space-y-2">
+                        {selectedRecipe.instructions?.map((step, index) => (
+                          <li key={index}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+
+                    {selectedRecipe.nutrition && (
+                      <div>
+                        <h3 className="font-medium mb-2">Nutrition (per serving)</h3>
+                        <div className="grid grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Calories</p>
+                            <p className="font-medium">{selectedRecipe.nutrition.calories}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Protein</p>
+                            <p className="font-medium">{selectedRecipe.nutrition.protein}g</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Carbs</p>
+                            <p className="font-medium">{selectedRecipe.nutrition.carbs}g</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Fat</p>
+                            <p className="font-medium">{selectedRecipe.nutrition.fat}g</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
+
+        {/* Input Section - Non-sticky, near bottom */}
+        <div className="w-full max-w-2xl mx-auto mt-8 mb-16 bg-background p-4 rounded-lg border">
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddIngredient()}
+                placeholder="Enter an ingredient"
+                className="flex-1"
+                inputMode="text"
+                style={{ fontSize: '16px' }}
+              />
+              <Button onClick={handleAddIngredient}>Add</Button>
+            </div>
+
+            <Button
+              onClick={handleGenerateSuggestions}
+              disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
+              className="w-full"
+            >
+              {generateSuggestionsMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Ideas...
+                </>
+              ) : (
+                "Generate Recipe Ideas"
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

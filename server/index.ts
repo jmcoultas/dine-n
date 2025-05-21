@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
+import { startExpirationJob } from "./jobs/checkMealPlanExpiration";
 
 const app = express();
 const server = createServer(app);
@@ -62,6 +63,9 @@ async function startServer() {
     } else {
       serveStatic(app);
     }
+
+    // Start the expiration check job
+    startExpirationJob();
 
     // Error handling middleware
     app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

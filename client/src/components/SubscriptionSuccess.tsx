@@ -3,12 +3,14 @@ import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from "lucide-react";
+import { initializeFirebaseAuth } from '@/lib/firebase';
 
 export function SubscriptionSuccess() {
   const queryClient = useQueryClient();
   const [location, setLocation] = useLocation();
   const params = new URLSearchParams(location.split('?')[1]);
   const userId = params.get('user_id');
+  const authToken = params.get('auth_token');
 
   useEffect(() => {
     if (!userId) {
@@ -17,10 +19,28 @@ export function SubscriptionSuccess() {
       return;
     }
 
+    // Initialize Firebase auth with the token if available
+    const initAuth = async () => {
+      if (authToken) {
+        try {
+          console.log('Initializing Firebase auth with token');
+          await initializeFirebaseAuth(authToken);
+          console.log('Firebase auth initialized successfully');
+        } catch (error) {
+          console.error('Error initializing Firebase auth:', error);
+        }
+      }
+    };
+
     const checkSubscription = async () => {
+      // Initialize auth first
+      await initAuth();
+      
       console.log('Checking subscription status...');
       try {
-        const response = await fetch('/api/subscription/status');
+        const response = await fetch('/api/subscription/status', {
+          credentials: 'include' // Ensure cookies are sent
+        });
         const data = await response.json();
         
         console.log('Subscription check response:', {
@@ -63,7 +83,7 @@ export function SubscriptionSuccess() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [queryClient, setLocation]);
+  }, [queryClient, setLocation, authToken, userId]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">

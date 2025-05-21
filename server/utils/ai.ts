@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 import type { Recipe, TemporaryRecipe } from "@db/schema";
+import { MealTypeEnum } from "@db/schema";
+import { z } from "zod";
+
+type MealType = z.infer<typeof MealTypeEnum>;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,40 +16,63 @@ interface RecipeGenerationParams {
   meatTypes: string[];
   mealType: "breakfast" | "lunch" | "dinner";
   excludeNames?: string[];
+  maxRetries?: number;
 }
 
-export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<Partial<Recipe>> {
+interface RecipeGenerationResponse extends Partial<TemporaryRecipe> {
+  meal_type: MealType;
+}
+
+export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<RecipeGenerationResponse> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
 
-  try {
-    const cleanParams = {
-      dietary: Array.isArray(params.dietary) ? params.dietary.filter(Boolean) : [],
-      allergies: Array.isArray(params.allergies) ? params.allergies.filter(Boolean) : [],
-      cuisine: Array.isArray(params.cuisine) ? params.cuisine.filter(Boolean) : [],
-      meatTypes: Array.isArray(params.meatTypes) ? params.meatTypes.filter(Boolean) : [],
-      mealType: params.mealType,
-      excludeNames: Array.isArray(params.excludeNames) ? params.excludeNames.filter(Boolean) : []
-    };
+  const maxRetries = params.maxRetries || 3; // Default to 3 retries
+  let lastError: Error | null = null;
+  let relaxationLevel = 1;
 
-    console.log('AI Service: Generating recipe with cleaned params:', JSON.stringify(cleanParams, null, 2));
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const cleanParams = {
+        dietary: Array.isArray(params.dietary) ? params.dietary.filter(Boolean) : [],
+        allergies: Array.isArray(params.allergies) ? params.allergies.filter(Boolean) : [],
+        cuisine: Array.isArray(params.cuisine) ? params.cuisine.filter(Boolean) : [],
+        meatTypes: Array.isArray(params.meatTypes) ? params.meatTypes.filter(Boolean) : [],
+        mealType: params.mealType,
+        excludeNames: Array.isArray(params.excludeNames) ? params.excludeNames.filter(Boolean) : []
+      };
 
-    const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
-      ? `\nMust NOT generate any of these recipes: ${params.excludeNames.join(", ")}`
-      : "";
+      console.log(`AI Service: Generating recipe with cleaned params (attempt ${attempt}/${maxRetries}, relaxation level ${relaxationLevel}):`, JSON.stringify(cleanParams, null, 2));
 
-    // Log the actual parameters being used to generate the prompt
-    console.log('AI Service: Using dietary restrictions:', cleanParams.dietary);
-    console.log('AI Service: Using allergies:', cleanParams.allergies);
-    console.log('AI Service: Using cuisine preferences:', cleanParams.cuisine);
-    console.log('AI Service: Using meat preferences:', cleanParams.meatTypes);
-    console.log('AI Service: Meal type:', cleanParams.mealType);
+      const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
+        ? `\nMust NOT generate any of these exact recipes: ${params.excludeNames.join(", ")}`
+        : "";
 
-    const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}. Do not include recipes with Tofu unless the user chose Vegetarian or Vegan.
+      // Log the actual parameters being used to generate the prompt
+      console.log('AI Service: Using dietary restrictions:', cleanParams.dietary);
+      console.log('AI Service: Using allergies:', cleanParams.allergies);
+      console.log('AI Service: Using cuisine preferences:', cleanParams.cuisine);
+      console.log('AI Service: Using meat preferences:', cleanParams.meatTypes);
+      console.log('AI Service: Meal type:', cleanParams.mealType);
+
+      // Build the prompt based on relaxation level
+      let uniquenessConstraint = "";
+      if (relaxationLevel === 1) {
+        uniquenessConstraint = "Generate a completely unique recipe with a unique name and unique ingredients combination.";
+      } else if (relaxationLevel === 2) {
+        uniquenessConstraint = "You can use a similar recipe name but must use different main ingredients and cooking method.";
+      } else if (relaxationLevel === 3) {
+        uniquenessConstraint = "You can use a similar recipe structure but vary the main protein or primary ingredients.";
+      } else {
+        uniquenessConstraint = "You can use a similar recipe but must vary at least the sauce, seasoning, or preparation method.";
+      }
+
+      const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}. ${uniquenessConstraint}
+Do not include recipes with Tofu unless the user chose Vegetarian or Vegan.
 ${cleanParams.dietary.length > 0 ? `Must follow dietary restrictions: ${cleanParams.dietary.join(", ")}` : "No specific dietary restrictions"}
 ${cleanParams.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${cleanParams.allergies.join(", ")}` : "No allergies to consider"}
-${cleanParams.cuisine.length > 0 ? `Preferred cuisines: ${cleanParams.cuisine.join(", ")}` : "No specific cuisine preference"}
+${cleanParams.cuisine.length > 0 ? `IMPORTANT: For this specific recipe, randomly select ONE of these cuisines and create an authentic recipe from that cuisine: ${cleanParams.cuisine.join(", ")}. Make sure to include the selected cuisine in the tags field.` : "No specific cuisine preference"}
 ${cleanParams.meatTypes.length > 0 ? `Preferred meat types: ${cleanParams.meatTypes.join(", ")}` : "No specific meat preference"}
 ${excludeNamesStr}
 
@@ -58,103 +85,136 @@ You must respond with a valid recipe in this exact JSON format:
   "servings": number,
   "ingredients": [{ "name": "ingredient", "amount": number, "unit": "unit" }],
   "instructions": ["step 1", "step 2"],
+  "meal_type": "${params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1)}",
   "tags": ["tag1", "tag2"],
   "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number },
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
-}`;
+}
 
-    console.log('AI Service: Generated prompt:', prompt);
+IMPORTANT REQUIREMENTS:
+1. The meal_type field MUST be exactly "${params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1)}"
+2. The recipe MUST be appropriate for the specified meal type
+3. For breakfast: focus on breakfast-appropriate dishes (e.g., eggs, oatmeal, breakfast sandwiches)
+4. For lunch: focus on midday-appropriate meals (e.g., sandwiches, salads, light proteins)
+5. For dinner: focus on dinner-appropriate dishes (e.g., main courses, protein with sides)
+6. The recipe name MUST be unique and NOT be one of the excluded names${excludeNamesStr ? " listed above" : ""}
+7. If cuisines were provided, the selected cuisine MUST be included in the tags field`;
 
-    const completion = await openai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "You are a professional chef and nutritionist. Create detailed, healthy recipes following the dietary restrictions and allergies exactly. Always respond with complete, valid JSON containing all required fields.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: "gpt-3.5-turbo-1106",
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 1000,
-    });
+      console.log('AI Service: Generated prompt:', prompt);
 
-    if (!completion.choices?.[0]?.message?.content) {
-      throw new Error("Invalid response from OpenAI API");
-    }
+      const completion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "You are a professional chef who creates awe-inspiring recipes. Create detailed, healthy recipes following the dietary restrictions and allergies exactly. When multiple cuisine types are provided, randomly select one for each recipe to ensure variety. Always respond with complete, valid JSON containing all required fields.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        model: "gpt-4o-2024-08-06",
+        response_format: { type: "json_object" },
+        temperature: 0.7 + (attempt * 0.1) + (relaxationLevel * 0.1), // Increase temperature with each retry and relaxation level
+        max_tokens: 1000,
+      });
 
-    const content = completion.choices[0].message.content;
-    if (!content) {
-      throw new Error("Empty response from OpenAI API");
-    }
-
-    try {
-      const recipeData = JSON.parse(content) as Partial<Recipe>;
-      let imageUrl: string | null = null;
-
-      if (recipeData.name) {
-        try {
-          console.log('AI Service: Generating image for recipe:', recipeData.name);
-          const imageResponse = await openai.images.generate({
-            model: "dall-e-3",
-            prompt: `A professional, appetizing photo of ${recipeData.name}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
-            n: 1,
-            size: "1024x1024",
-            quality: "standard",
-            style: "natural"
-          });
-
-          if (imageResponse.data[0]?.url) {
-            console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
-            imageUrl = imageResponse.data[0].url;
-          }
-        } catch (imageError) {
-          console.error('AI Service: Error generating image:', imageError);
-          imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(String(recipeData.name).split(" ").join(","))}`;
-          console.log('AI Service: Using fallback image URL:', imageUrl);
-        }
+      if (!completion.choices?.[0]?.message?.content) {
+        throw new Error("Invalid response from OpenAI API");
       }
 
-      const validatedRecipe: Partial<Recipe> = {
-        name: String(recipeData.name || '').trim(),
-        description: String(recipeData.description || 'No description available').trim(),
-        image_url: imageUrl,
-        prep_time: Math.max(0, Number(recipeData.prep_time) || 0),
-        cook_time: Math.max(0, Number(recipeData.cook_time) || 0),
-        servings: Math.max(1, Number(recipeData.servings) || 2),
-        ingredients: recipeData.ingredients,
-        instructions: recipeData.instructions,
-        tags: recipeData.tags,
-        nutrition: recipeData.nutrition,
-        complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1)),
-      };
+      const content = completion.choices[0].message.content;
+      if (!content) {
+        throw new Error("Empty response from OpenAI API");
+      }
 
-      console.log('AI Service: Generated recipe:', JSON.stringify(validatedRecipe, null, 2));
-      return validatedRecipe;
-    } catch (parseError) {
-      console.error('AI Service: Error parsing OpenAI response:', parseError);
-      throw new Error("Failed to parse recipe data from OpenAI response");
+      try {
+        const recipeData = JSON.parse(content) as RecipeGenerationResponse;
+        
+        // Check if the recipe name is in the excluded names list
+        if (recipeData.name && params.excludeNames?.includes(recipeData.name)) {
+          console.log(`AI Service: Generated recipe name "${recipeData.name}" is in exclude list, relaxing constraints...`);
+          lastError = new Error("Generated recipe name is in exclude list");
+          
+          // Increase relaxation level before continuing
+          if (attempt === maxRetries) {
+            relaxationLevel++;
+            attempt = 0; // Reset attempts for the new relaxation level
+            if (relaxationLevel > 4) {
+              throw new Error("Failed to generate unique recipe after all relaxation levels");
+            }
+          }
+          continue;
+        }
+
+        let imageUrl: string | null = null;
+
+        if (recipeData.name) {
+          imageUrl = await generateRecipeImage(recipeData.name, cleanParams.allergies);
+        }
+
+        // Ensure the meal type is properly set
+        const validatedRecipe: RecipeGenerationResponse = {
+          ...recipeData,
+          name: String(recipeData.name || '').trim(),
+          description: String(recipeData.description || 'No description available').trim(),
+          image_url: imageUrl,
+          prep_time: Math.max(0, Number(recipeData.prep_time) || 0),
+          cook_time: Math.max(0, Number(recipeData.cook_time) || 0),
+          servings: Math.max(1, Number(recipeData.servings) || 2),
+          ingredients: recipeData.ingredients,
+          instructions: recipeData.instructions,
+          meal_type: recipeData.meal_type || params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
+          tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
+          nutrition: recipeData.nutrition,
+          complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1))
+        };
+
+        // Add validation check for meal type
+        if (validatedRecipe.meal_type !== (params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1))) {
+          console.error('AI Service: Generated recipe has incorrect meal type:', {
+            expected: params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
+            received: validatedRecipe.meal_type
+          });
+          lastError = new Error("Generated recipe has incorrect meal type");
+          continue;
+        }
+
+        console.log('AI Service: Generated recipe:', JSON.stringify(validatedRecipe, null, 2));
+        return validatedRecipe;
+      } catch (parseError) {
+        console.error('AI Service: Error parsing OpenAI response:', parseError);
+        lastError = new Error("Failed to parse recipe data from OpenAI response");
+        if (attempt < maxRetries) {
+          continue;
+        }
+        throw lastError;
+      }
+    } catch (error: any) {
+      console.error(`AI Service: Error in attempt ${attempt}/${maxRetries}:`, error);
+      lastError = error;
+
+      // Don't retry on these errors
+      if (error.status === 401 || error.status === 403) {
+        throw error;
+      }
+
+      // If this is not the last attempt, continue to the next retry
+      if (attempt < maxRetries) {
+        continue;
+      }
+      
+      // If we've exhausted retries at this relaxation level, try the next level
+      if (relaxationLevel < 4) {
+        relaxationLevel++;
+        attempt = 0; // Reset attempts for the new relaxation level
+        continue;
+      }
     }
-  } catch (error: any) {
-    console.error("AI Service: OpenAI API Error:", error);
-
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      throw new Error("Failed to connect to OpenAI API");
-    }
-
-    if (error.status === 401) {
-      throw new Error("Invalid OpenAI API key");
-    }
-
-    if (error.status === 429) {
-      throw new Error("OpenAI API rate limit exceeded");
-    }
-
-    throw new Error("Failed to generate recipe recommendation");
   }
+
+  // If we've exhausted all retries and relaxation levels, throw the last error
+  throw lastError || new Error("Failed to generate recipe after all retries and relaxation levels");
 }
 
 interface SubstitutionRequest {
@@ -194,7 +254,7 @@ Consider dietary restrictions and allergies as absolute requirements - do not su
           content: prompt,
         },
       ],
-      model: "gpt-3.5-turbo-1106",
+      model: "gpt-4o-2024-08-06",
       response_format: { type: "json_object" },
       temperature: 0.7,
       max_tokens: 500,
@@ -234,10 +294,13 @@ export async function generateRecipeSuggestionsFromIngredients(params: Ingredien
 
   try {
     const prompt = `Generate 3 unique recipe titles that can be made primarily using these ingredients: ${params.ingredients.join(", ")}.
-${params.dietary?.length ? `Must follow dietary restrictions: ${params.dietary.join(", ")}` : ""}
-${params.allergies?.length ? `Must avoid these allergens: ${params.allergies.join(", ")}` : ""}
+${params.dietary?.length ? `REQUIREMENT: Must strictly follow these dietary restrictions: ${params.dietary.join(", ")}` : ""}
+${params.allergies?.length ? `STRICT REQUIREMENT: Must completely avoid these allergens and any ingredients that might contain them. The recipes MUST NOT contain or use ${params.allergies.join(", ")} in any form, even as minor ingredients: ${params.allergies.join(", ")}` : ""}
 
-The recipes should be practical and make sense with the given ingredients. You may suggest a few additional common ingredients that would complement the provided ones.
+The recipes should be practical and make sense with the given ingredients. You may suggest a few additional common ingredients that would complement the provided ones, but ensure they don't violate any dietary restrictions or allergen requirements.
+
+IMPORTANT: Double check that none of the suggested recipes contain any of the specified allergens or violate dietary restrictions.
+
 Respond with exactly 3 recipe titles in this JSON format:
 {
   "recipes": ["Recipe 1", "Recipe 2", "Recipe 3"]
@@ -247,14 +310,14 @@ Respond with exactly 3 recipe titles in this JSON format:
       messages: [
         {
           role: "system",
-          content: "You are a creative chef who can suggest practical recipes based on available ingredients. Focus on recipes that primarily use the given ingredients, with minimal additional ingredients needed.",
+          content: "You are a professional chef specializing in allergen-free and dietary-restricted cooking. You are extremely careful about allergen avoidance and dietary requirements. Never suggest recipes that could contain allergens or violate dietary restrictions.",
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      model: "gpt-3.5-turbo-1106",
+      model: "gpt-4o-2024-08-06",
       response_format: { type: "json_object" },
       temperature: 0.8,
       max_tokens: 150,
@@ -350,13 +413,60 @@ function transformRecipeToSnakeCase(recipe: RecipeAPIResponse): Partial<Temporar
   };
 }
 
-export async function generateRecipeFromTitleAI(title: string): Promise<Partial<TemporaryRecipe>> {
+async function generateRecipeImage(recipeName: string, allergies: string[] = [], retries = 3): Promise<string | null> {
+  let lastError: any = null;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`AI Service: Generating image for recipe: ${recipeName} (attempt ${attempt}/${retries})`);
+      
+      const allergenWarning = allergies.length > 0 
+        ? ` STRICT REQUIREMENT - The photo must NOT show or include any ${allergies.join(", ")} or foods containing these allergens.`
+        : '';
+      
+      const imageResponse = await openai.images.generate({
+        model: "dall-e-3",
+        prompt: `Create an image of ${recipeName}. DO NOT INCLUDE any ${allergenWarning} in the photo for unlettered viewers only`,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+        style: "natural"
+      });
+
+      if (imageResponse.data[0]?.url) {
+        console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
+        return imageResponse.data[0].url;
+      }
+    } catch (error: any) {
+      lastError = error;
+      console.error(`AI Service: Error generating image (attempt ${attempt}/${retries}):`, error);
+      
+      // Don't retry on these errors
+      if (error.status === 401 || error.status === 403) {
+        break;
+      }
+      
+      // Wait before retrying (exponential backoff)
+      if (attempt < retries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // If all attempts failed, log the final error and return fallback URL
+  console.error('AI Service: All image generation attempts failed:', lastError);
+  return 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
+}
+
+export async function generateRecipeFromTitleAI(title: string, allergies: string[] = []): Promise<Partial<TemporaryRecipe>> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
 
   try {
     const prompt = `Generate a detailed recipe for "${title}".
+${allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${allergies.join(", ")}` : ""}
 
 You must respond with a valid recipe in this exact JSON format:
 {
@@ -385,7 +495,7 @@ The recipe should be practical and detailed. Include all necessary ingredients a
           content: prompt,
         },
       ],
-      model: "gpt-3.5-turbo-1106",
+      model: "gpt-4o-2024-08-06",
       response_format: { type: "json_object" },
       temperature: 0.7,
       max_tokens: 1000,
@@ -406,23 +516,10 @@ The recipe should be practical and detailed. Include all necessary ingredients a
 
       try {
         console.log('AI Service: Generating image for recipe:', title);
-        const imageResponse = await openai.images.generate({
-          model: "dall-e-3",
-          prompt: `A professional, appetizing photo of ${title}. The image should be well-lit, showing the complete dish from a top-down or 45-degree angle.`,
-          n: 1,
-          size: "1024x1024",
-          quality: "standard",
-          style: "natural"
-        });
-
-        if (imageResponse.data[0]?.url) {
-          console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
-          imageUrl = imageResponse.data[0].url;
-        }
-      } catch (imageError) {
-        console.error('AI Service: Error generating image:', imageError);
-        imageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(title.split(" ").join(","))}`;
-        console.log('AI Service: Using fallback image URL:', imageUrl);
+        imageUrl = await generateRecipeImage(title, allergies);
+      } catch (error) {
+        console.error('AI Service: Error in image generation flow:', error);
+        imageUrl = 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
       }
 
       // Transform the recipe data to snake_case

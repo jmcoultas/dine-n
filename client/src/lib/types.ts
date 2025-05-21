@@ -31,13 +31,17 @@ export const RecipeSchema = z.object({
   favorited: z.boolean().default(false),
   favorites_count: z.number().default(0),
   created_at: z.coerce.date(),
-  expiresAt: z.coerce.date().optional()
+  expiresAt: z.coerce.date().optional(),
+  meal: z.string().nullable(),
+  day: z.coerce.date().nullable(),
+  recipe_id: z.number().optional()
 }).transform((data) => ({
   ...data,
-  imageUrl: data.imageUrl || data.image_url,
-  permanentUrl: data.permanentUrl || data.permanent_url,
+  imageUrl: data.permanent_url || data.image_url || data.imageUrl,
+  permanentUrl: data.permanent_url || data.permanentUrl,
   prepTime: data.prepTime ?? data.prep_time,
-  cookTime: data.cookTime ?? data.cook_time
+  cookTime: data.cookTime ?? data.cook_time,
+  isFavorited: data.favorited
 }));
 
 export type Recipe = z.infer<typeof RecipeSchema>;
@@ -57,3 +61,27 @@ export const ChefPreferencesSchema = z.object({
 });
 
 export type ChefPreferences = z.infer<typeof ChefPreferencesSchema>;
+
+export const MealPlanRecipeSchema = z.object({
+  id: z.number(),
+  meal_plan_id: z.number(),
+  recipe_id: z.number(),
+  day: z.coerce.date(),
+  meal: z.string(),
+  created_at: z.coerce.date()
+});
+
+export const CreateMealPlanInputSchema = z.object({
+  name: z.string(),
+  start_date: z.coerce.date(),
+  end_date: z.coerce.date(),
+  expiration_date: z.coerce.date(),
+  days_generated: z.number(),
+  is_expired: z.boolean(),
+  recipes: z.array(z.object({
+    id: z.number()
+  }))
+});
+
+export type CreateMealPlanInput = z.infer<typeof CreateMealPlanInputSchema>;
+export type MealPlanRecipe = z.infer<typeof MealPlanRecipeSchema>;

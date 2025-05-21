@@ -2,9 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/transparent-logo.png" />
-    <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.59/build/spline-viewer.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+    <meta property="og:image" content="/transparent-logo.png" />
+    <meta property="og:image:type" content="image/png" />
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <!-- Apple Touch Icons with multiple sizes (no iOS styling applied) -->
+    <link rel="apple-touch-icon" href="/transparent-logo.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/transparent-logo.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/transparent-logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/transparent-logo.png" />
+    <link rel="apple-touch-icon-precomposed" href="/transparent-logo.png" />
+    <!-- iOS PWA meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Dine-N" />
+    <!-- Remove iOS Splash Screens -->
+    <!-- Theme color for browser chrome -->
+    <meta name="theme-color" content="#000000" />
+    <!-- Preload the logo to avoid multiple requests -->
+    <link rel="preload" href="/transparent-logo.png" as="image" type="image/png" />
+    <title>Dine-N</title>
+    <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.62/build/spline-viewer.js"></script>
+    <style>
+      /* Custom styling for iOS PWA */
+      @media (display-mode: standalone) {
+        html {
+          background-color: #000000;
+        }
+        body {
+          background-color: #000000;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -77,7 +77,9 @@ export function SubscriptionManager() {
           <CardTitle>Subscription Status</CardTitle>
           <CardDescription>
             {subscription?.isActive
-              ? "You currently have an active premium subscription"
+              ? subscription?.isCancelled
+                ? "Your premium access will continue until the end of your billing period"
+                : "You currently have an active premium subscription"
               : "You are currently on the free plan"}
           </CardDescription>
         </CardHeader>
@@ -89,14 +91,21 @@ export function SubscriptionManager() {
             </p>
             {subscription?.endDate && (
               <p className="text-sm">
-                <span className="font-medium">Renewal Date:</span>{" "}
+                <span className="font-medium">
+                  {subscription?.isCancelled ? "Access Until" : "Renewal Date"}:
+                </span>{" "}
                 {new Date(subscription.endDate).toLocaleDateString()}
+              </p>
+            )}
+            {subscription?.isCancelled && subscription?.isActive && (
+              <p className="text-sm text-yellow-600 dark:text-yellow-500">
+                Your subscription has been cancelled but you still have premium access until the end date.
               </p>
             )}
           </div>
         </CardContent>
         <CardFooter>
-          {subscription?.isActive ? (
+          {subscription?.isActive && !subscription?.isCancelled ? (
             <Button
               variant="destructive"
               onClick={() => setShowCancelDialog(true)}
@@ -105,6 +114,8 @@ export function SubscriptionManager() {
               {isCancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Cancel Subscription
             </Button>
+          ) : subscription?.isCancelled ? (
+            <Button onClick={handleUpgrade}>Resubscribe</Button>
           ) : (
             <Button onClick={handleUpgrade}>Upgrade to Premium</Button>
           )}

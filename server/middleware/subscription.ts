@@ -33,19 +33,23 @@ export async function requireActiveSubscription(
       });
     }
 
-    if (user.subscription_status !== 'active' || user.subscription_tier !== 'premium') {
-      return res.status(403).json({
-        error: 'Active subscription required',
-        code: 'SUBSCRIPTION_REQUIRED',
-        message: 'This feature requires an active premium subscription'
-      });
-    }
-
     if (user.subscription_end_date && new Date() > user.subscription_end_date) {
       return res.status(403).json({
         error: 'Subscription expired',
         code: 'SUBSCRIPTION_EXPIRED',
         message: 'Your subscription has expired. Please renew to continue using this feature'
+      });
+    }
+
+    const hasPremiumAccess = user.subscription_tier === 'premium' && 
+      (user.subscription_status === 'active' || 
+       (user.subscription_status === 'cancelled' && user.subscription_end_date && new Date() <= user.subscription_end_date));
+
+    if (!hasPremiumAccess) {
+      return res.status(403).json({
+        error: 'Premium subscription required',
+        code: 'SUBSCRIPTION_REQUIRED',
+        message: 'This feature requires an active premium subscription'
       });
     }
 

@@ -15,7 +15,7 @@ export const ChefPreferencesSchema = z.object({
 }).optional();
 
 export const PreferenceSchema = z.object({
-  dietary: z.array(z.enum(["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo", "Mediterranean", "Protein Heavy"])),
+  dietary: z.array(z.enum(["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo", "Mediterranean Diet", "Protein Heavy", "Organic"])),
   allergies: z.array(z.enum(["Dairy", "Eggs", "Tree Nuts", "Peanuts", "Shellfish", "Wheat", "Soy"])),
   cuisine: z.array(z.enum(["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"])),
   meatTypes: z.array(z.enum(["Chicken", "Beef", "Pork", "Fish", "Lamb", "Turkey", "None"])),
@@ -56,7 +56,7 @@ export const users = pgTable("users", {
   subscription_tier: text("subscription_tier").$type<z.infer<typeof SubscriptionTierEnum>>().default('free'),
   subscription_end_date: timestamp("subscription_end_date", { mode: 'date' }),
   meal_plans_generated: integer("meal_plans_generated").default(0).notNull(),
-  ingredient_recipes_generated: integer("ingredient_recipes_generated").default(0).notNull(),
+  ingredient_recipes_generated: integer("ingredient_recipes_generated").notNull().default(0),
   created_at: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 });
 
@@ -85,12 +85,15 @@ export const mealPlans = pgTable("meal_plans", {
   start_date: timestamp("start_date").notNull(),
   end_date: timestamp("end_date").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  expiration_date: timestamp("expiration_date"),
+  days_generated: integer("days_generated").notNull().default(2),
+  is_expired: boolean("is_expired").notNull().default(false),
 });
 
 export const mealPlanRecipes = pgTable("meal_plan_recipes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   meal_plan_id: integer("meal_plan_id").notNull().references(() => mealPlans.id),
-  recipe_id: integer("recipe_id").notNull().references(() => recipes.id),
+  recipe_id: integer("recipe_id").notNull().references(() => temporaryRecipes.id),
   day: timestamp("day").notNull(),
   meal: text("meal").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),

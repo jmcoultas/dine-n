@@ -1,72 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useUser } from "@/hooks/use-user";
 import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock, CookingPot } from "lucide-react";
-import PreferenceModal from "@/components/PreferenceModal";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
-import type { Preferences } from "@db/schema";
-import { generateMealPlan } from "@/lib/api";
-import type { ChefPreferences } from "@/lib/types";
-import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const userQuery = useUser();
-  const [showPreferences, setShowPreferences] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState("Meal plan generation");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const { toast } = useToast();
-  const [preferences, setPreferences] = useState<Preferences>({
-    dietary: [],
-    allergies: [],
-    cuisine: [],
-    meatTypes: [],
-  });
-
-  useEffect(() => {
-    if (userQuery.data?.preferences) {
-      const userPreferences = userQuery.data.preferences as Preferences;
-      setPreferences(userPreferences);
-    }
-  }, [userQuery.data]);
 
   const handleShowPreferences = () => {
     if (!userQuery.data) {
       setLocation("/auth");
       return;
     }
-
-    const hasExistingPreferences = Object.entries(preferences).some(([key, value]) =>
-      key !== 'chefPreferences' && Array.isArray(value) && value.length > 0
-    );
-
-    setShowPreferences(true);
-  };
-
-  const handleGenerateMealPlan = async (chefPreferences: ChefPreferences, updatedPreferences: Preferences) => {
-    try {
-      setIsGenerating(true);
-      await generateMealPlan(updatedPreferences, parseInt(chefPreferences.mealPlanDuration));
-      setLocation("/meal-plan");
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === 'FREE_PLAN_LIMIT_REACHED') {
-          setFeatureContext("Meal plan generation");
-          setShowSubscriptionModal(true);
-        } else {
-          toast({
-            title: "Error",
-            description: error.message,
-            variant: "destructive",
-          });
-        }
-      }
-    } finally {
-      setIsGenerating(false);
-      setShowPreferences(false);
-    }
+    setLocation("/meal-plan");
   };
 
   return (
@@ -94,9 +44,9 @@ export default function Home() {
       <div className="grid md:grid-cols-2 gap-8 w-full max-w-5xl mb-16">
         {/* Generate Meal Plan Path */}
         <div className="animate-slideInLeft relative group">
-          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02]">
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02] flex flex-col items-center text-center">
             <CookingPot className="w-16 h-16 text-primary mb-4" />
-            <h2 className="text-2xl font-bold mb-4">Generate Meal Plan</h2>
+            <h2 className="text-2xl font-bold mb-4">Generate Weekly Meal Plans</h2>
             <p className="text-muted-foreground mb-6">
               Let our AI chef craft a personalized meal plan tailored to your preferences and dietary needs.
             </p>
@@ -113,7 +63,7 @@ export default function Home() {
 
         {/* Find Recipes Path */}
         <div className="animate-slideInRight relative group">
-          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02]">
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02] flex flex-col items-center text-center">
             <UtensilsCrossed className="w-16 h-16 text-primary mb-4" />
             <h2 className="text-2xl font-bold mb-4">Find Recipes by Ingredients</h2>
             <p className="text-muted-foreground mb-6">
@@ -189,22 +139,6 @@ export default function Home() {
                            radial-gradient(circle at 80% 80%, var(--secondary) 1px, transparent 1px)`,
           backgroundSize: '60px 60px',
         }}
-      />
-
-      <PreferenceModal
-        open={showPreferences}
-        onOpenChange={setShowPreferences}
-        preferences={preferences}
-        onUpdatePreferences={setPreferences}
-        isGenerating={isGenerating}
-        onGenerate={handleGenerateMealPlan}
-        user={userQuery.data ? {
-          subscription_tier: userQuery.data.subscription_tier,
-          meal_plans_generated: userQuery.data.meal_plans_generated
-        } : undefined}
-        skipToChefPreferences={Object.entries(preferences).some(([key, value]) =>
-          key !== 'chefPreferences' && Array.isArray(value) && value.length > 0
-        )}
       />
     </div>
   );

@@ -2,20 +2,28 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
 import { useSubscription } from "@/hooks/use-subscription";
-import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import PreferenceModal from "@/components/PreferenceModal";
+import PreferenceSheet from "@/components/PreferenceSheet";
 import MealPlanCard from "@/components/MealPlanCard";
+import MissingRecipeCard from "@/components/MissingRecipeCard";
 import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import { createMealPlan, createGroceryList, generateMealPlan, getTemporaryRecipes } from "@/lib/api";
-import type { Recipe, ChefPreferences } from "@/lib/types";
+import { createMealPlan, createGroceryList, generateMealPlan, getTemporaryRecipes, getCurrentMealPlan } from "@/lib/api";
+import { downloadCalendarEvent } from "@/lib/calendar";
+import type { Recipe, ChefPreferences, CreateMealPlanInput } from "@/lib/types";
 import type { Preferences, MealPlan } from "@db/schema";
+import { PreferenceSchema } from "@db/schema";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
-import { Wand2 } from "lucide-react";
+import { Wand2, AlertCircle, Calendar, Plus } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -83,77 +91,163 @@ const generateLoadingMessages = (preferences: Preferences, chefPreferences: Chef
   return messages;
 };
 
+interface Ingredient {
+  name: string;
+  amount: number;
+  unit: string;
+}
+
+// Update the transformRecipe function with proper type handling
+const transformRecipe = (recipe: any): Recipe => {
+  // Handle dates with proper coercion
+  const created = recipe.created_at ? new Date(recipe.created_at) : new Date();
+  const recipeDay = recipe.day ? new Date(recipe.day) : null;
+  const expiresAt = recipe.expires_at ? new Date(recipe.expires_at) : undefined;
+
+  // Calculate meal type based on index if not present
+  const mealType = recipe.meal || (recipe.index !== undefined ? 
+    (recipe.index % 3 === 0 ? "breakfast" : recipe.index % 3 === 1 ? "lunch" : "dinner") : 
+    "dinner"); // Default to dinner if no index available
+
+  return {
+    ...recipe,
+    imageUrl: recipe.permanent_url || recipe.image_url || null,
+    permanentUrl: recipe.permanent_url || null,
+    prepTime: recipe.prep_time || null,
+    cookTime: recipe.cook_time || null,
+    isFavorited: recipe.favorited || false,
+    // Ensure all required properties are present
+    id: recipe.id,
+    name: recipe.name,
+    description: recipe.description,
+    ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((ingredient: Partial<Ingredient>) => ({
+      name: String(ingredient.name || ''),
+      amount: Number(ingredient.amount || 0),
+      unit: String(ingredient.unit || '')
+    })) : [],
+    instructions: recipe.instructions || [],
+    tags: recipe.tags || [],
+    nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    complexity: recipe.complexity || 1,
+    created_at: created,
+    meal: mealType,
+    day: recipeDay,
+    expiresAt,
+    // Ensure the recipe_id is included if present
+    recipe_id: recipe.recipe_id
+  };
+};
+
 export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState<string>("");
+  const [showBatchCalendarModal, setShowBatchCalendarModal] = useState(false);
+  const [selectedRecipes, setSelectedRecipes] = useState<Recipe[]>([]);
   const { subscription } = useSubscription();
-  const [preferences, setPreferences] = useState<Preferences>(() => {
-    const savedPreferences = localStorage.getItem('mealPlanPreferences');
-    return savedPreferences ? JSON.parse(savedPreferences) : {
-      dietary: [],
-      allergies: [],
-      cuisine: [],
-      meatTypes: [],
-      chefPreferences: defaultChefPreferences
-    };
-  });
-
-  const { data: temporaryRecipes, isLoading: isLoadingRecipes } = useQuery({
-    queryKey: ['temporary-recipes', 'mealplan'],
-    queryFn: async () => {
-      const response = await fetch('/api/temporary-recipes?source=mealplan', {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch temporary recipes');
-      }
-      const data = await response.json();
-      return data.map((recipe: any) => ({
-        ...recipe,
-        imageUrl: recipe.image_url || null,
-        permanentUrl: recipe.permanent_url || null,
-        prepTime: recipe.prep_time || null,
-        cookTime: recipe.cook_time || null,
-        favorited: false,
-        ingredients: recipe.ingredients || [],
-        instructions: recipe.instructions || [],
-        tags: recipe.tags || [],
-        nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-        favorites_count: 0,
-        expiresAt: recipe.expires_at
-      }));
-    }
-  });
-
-  const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: user, isLoading: isUserLoading } = useUser();
+  const isMobile = useMediaQuery("(max-width: 640px)");
 
+  // Update the currentMealPlan query to transform recipes
+  const { data: currentMealPlan, isLoading: isLoadingMealPlan } = useQuery({
+    queryKey: ['current-meal-plan'],
+    queryFn: async () => {
+      const plan = await getCurrentMealPlan();
+      if (!plan) return null;
+      return {
+        ...plan,
+        recipes: plan.recipes.map((recipe, index) => transformRecipe({ ...recipe, index }))
+      };
+    },
+  });
+
+  // Initialize preferences from user account or with default values
+  const [preferences, setPreferences] = useState<Preferences>({
+    dietary: [],
+    allergies: [],
+    cuisine: [],
+    meatTypes: [],
+    chefPreferences: defaultChefPreferences
+  });
+
+  // Set initial temp preferences
+  const [tempPreferences, setTempPreferences] = useState<Preferences>({
+    dietary: [],
+    allergies: [],
+    cuisine: [],
+    meatTypes: []
+  });
+  const [missingMeals, setMissingMeals] = useState<Array<{ day: number; meal: string }>>([]);
+
+  // Load preferences from user account when user data is loaded
   useEffect(() => {
-    if (temporaryRecipes?.length > 0) {
-      setGeneratedRecipes(temporaryRecipes);
+    if (user && user.preferences) {
+      const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
+      if (parsedPrefs.success) {
+        setPreferences(parsedPrefs.data);
+        setTempPreferences(parsedPrefs.data);
+      }
     }
-  }, [temporaryRecipes]);
+  }, [user]);
 
-  useEffect(() => {
-    localStorage.setItem('mealPlanPreferences', JSON.stringify(preferences));
-  }, [preferences]);
+  // Function to save preferences to user account
+  const savePreferencesToAccount = async (updatedPreferences: Preferences) => {
+    if (!user) return;
+    
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          preferences: updatedPreferences
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save preferences to account');
+      }
+
+      // Invalidate the user query to ensure it has the latest preferences
+      await queryClient.invalidateQueries({ queryKey: ['user'] });
+    } catch (error) {
+      console.error('Error saving preferences to account:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save preferences",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleGenerateMealPlan = async (chefPreferences: ChefPreferences, tempPreferences: Preferences) => {
-    if (subscription?.tier !== 'premium') {
+    if (!subscription) {
       setFeatureContext("Meal plan generation");
       setShowSubscriptionModal(true);
+      return;
+    }
+
+    const allowedDays = subscription.tier === 'premium' ? 7 : 2;
+    const requestedDays = parseInt(chefPreferences.mealPlanDuration);
+    
+    if (requestedDays > allowedDays) {
+      toast({
+        title: "Plan Duration Limit",
+        description: `Free tier is limited to 2 days. Upgrade to premium for up to 7 days.`,
+        variant: "destructive",
+      });
       return;
     }
 
     try {
       setIsGenerating(true);
 
-      // Use the temporary preferences directly
       const updatedPreferences = {
         dietary: Array.isArray(tempPreferences.dietary) ? tempPreferences.dietary : [],
         allergies: Array.isArray(tempPreferences.allergies) ? tempPreferences.allergies : [],
@@ -168,39 +262,72 @@ export default function MealPlan() {
       };
 
       setPreferences(updatedPreferences);
-      console.log('Generating meal plan with preferences:', JSON.stringify(updatedPreferences, null, 2));
+      setTempPreferences(updatedPreferences);
 
-      const result = await generateMealPlan(updatedPreferences, parseInt(chefPreferences.mealPlanDuration));
+      // Save preferences to user account
+      if (user) {
+        await savePreferencesToAccount(updatedPreferences);
+      }
+
+      const result = await generateMealPlan(updatedPreferences, requestedDays);
       if (!result.recipes || result.recipes.length === 0) {
         throw new Error('No recipes were generated. Please try again.');
       }
 
-      // Transform and type cast the recipes
-      const transformedRecipes = result.recipes.map(recipe => ({
-        ...recipe,
-        imageUrl: recipe.image_url || null,
-        permanentUrl: recipe.permanent_url || null,
-        prepTime: recipe.prep_time || null,
-        cookTime: recipe.cook_time || null,
-        favorited: false,
-        ingredients: (recipe.ingredients || []) as { name: string; amount: number; unit: string; }[],
-        instructions: (recipe.instructions || []) as string[],
-        tags: (recipe.tags || []) as string[],
-        nutrition: (recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 }) as { calories: number; protein: number; carbs: number; fat: number; },
-        favorites_count: 0,
-        expiresAt: undefined
-      })) as Recipe[];
+      console.log('Generated recipes:', JSON.stringify(result.recipes, null, 2));
+      
+      // Store missing meals if any
+      if (result.status === 'partial' && result.missingMeals) {
+        setMissingMeals(result.missingMeals);
+        toast({
+          title: "Partial Success",
+          description: result.message || `Generated ${result.recipes.length} out of ${requestedDays * 3} recipes`,
+          variant: "default",
+        });
+      } else {
+        setMissingMeals([]);
+      }
 
-      setGeneratedRecipes(transformedRecipes);
-      toast({
-        title: "Success",
-        description: "Meal plan generated successfully",
-      });
+      // Create the meal plan with expiration
+      const endDate = new Date(selectedDate);
+      endDate.setDate(endDate.getDate() + requestedDays - 1);
+      
+      const expirationDate = new Date(selectedDate);
+      expirationDate.setDate(expirationDate.getDate() + requestedDays);
+
+      const mealPlanInput = {
+        name: `Meal Plan ${new Date().toLocaleDateString()}`,
+        start_date: selectedDate,
+        end_date: endDate,
+        expiration_date: expirationDate,
+        days_generated: requestedDays,
+        is_expired: false,
+        recipes: result.recipes.map(recipe => ({ id: recipe.id }))
+      };
+
+      console.log('Creating meal plan with input:', JSON.stringify(mealPlanInput, null, 2));
+
+      try {
+        const createdMealPlan = await createMealPlan(mealPlanInput);
+        console.log('Meal plan created:', JSON.stringify(createdMealPlan, null, 2));
+        
+        // Close the preferences modal
+        setShowPreferences(false);
+        
+        // Refresh the current meal plan data and wait for it to complete
+        await queryClient.invalidateQueries({ queryKey: ['current-meal-plan'] });
+        await queryClient.refetchQueries({ queryKey: ['current-meal-plan'] });
+
+        toast({
+          title: "Success",
+          description: `Meal plan generated successfully. Valid for ${requestedDays} days.`
+        });
+      } catch (error) {
+        console.error('Error creating meal plan:', error);
+        throw error;
+      }
     } catch (error) {
-      if (error instanceof Error && error.message.includes('subscription')) {
-        setFeatureContext("Meal plan generation");
-        setShowSubscriptionModal(true);
-      } else if (error instanceof Error && !error.message.includes('format')) {
+      if (error instanceof Error) {
         toast({
           title: "Error",
           description: error.message,
@@ -209,7 +336,39 @@ export default function MealPlan() {
       }
     } finally {
       setIsGenerating(false);
-      setShowPreferences(false);
+    }
+  };
+
+  // Function to regenerate a missing recipe
+  const handleRegenerateMissingRecipe = async (day: number, meal: string) => {
+    try {
+      const response = await fetch("/api/regenerate-recipe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          day,
+          meal,
+          preferences: tempPreferences
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to regenerate recipe");
+      }
+
+      // Remove this meal from missing meals
+      setMissingMeals(prev => prev.filter(m => !(m.day === day && m.meal === meal)));
+      
+      // Refresh the meal plan data
+      await queryClient.invalidateQueries({ queryKey: ['current-meal-plan'] });
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error regenerating recipe:', error);
+      throw error;
     }
   };
 
@@ -221,20 +380,16 @@ export default function MealPlan() {
         throw new Error("Premium subscription required");
       }
 
-      if (!generatedRecipes.length) {
-        throw new Error("No recipes generated to save");
-      }
-
-      const mealPlanData = {
+      const mealPlanData: CreateMealPlanInput = {
         name: "Weekly Plan",
         start_date: selectedDate,
         end_date: new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        user_id: user?.id ?? 0,
-        recipes: generatedRecipes.map((recipe, index) => ({
-          recipe_id: recipe.id,
-          day: new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000).toISOString(),
-          meal: index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner"
-        }))
+        expiration_date: new Date(selectedDate.getTime() + 8 * 24 * 60 * 60 * 1000),
+        days_generated: 7,
+        is_expired: false,
+        recipes: currentMealPlan?.recipes.map(recipe => ({
+          id: recipe.id
+        })) ?? []
       };
 
       const response = await createMealPlan(mealPlanData);
@@ -261,6 +416,109 @@ export default function MealPlan() {
     }
   });
 
+  // Update the empty state message based on meal plan status
+  const renderEmptyState = () => {
+    if (isLoadingMealPlan) {
+      return (
+        <div className="text-center py-12">
+          <LoadingAnimation messages={["Loading your meal plan..."]} />
+        </div>
+      );
+    }
+
+    if (currentMealPlan?.is_expired) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="mb-4">Your meal plan has expired</p>
+          <Button onClick={() => setShowPreferences(true)}>
+            <Wand2 className="mr-2 h-4 w-4" />
+            Generate New Meal Plan
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p className="mb-4">Generate a meal plan to get started</p>
+        <Button onClick={() => setShowPreferences(true)}>
+          <Wand2 className="mr-2 h-4 w-4" />
+          Generate Meal Plan
+        </Button>
+      </div>
+    );
+  };
+
+  // Add expiration warning if meal plan is close to expiring
+  const renderExpirationWarning = () => {
+    if (!currentMealPlan?.expiration_date) return null;
+
+    const now = new Date();
+    const expirationDate = new Date(currentMealPlan.expiration_date);
+    const hoursUntilExpiration = Math.max(0, (expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+    if (currentMealPlan.is_expired) {
+      return (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Meal Plan Expired</AlertTitle>
+          <AlertDescription>
+            This meal plan has expired. Please generate a new one.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (hoursUntilExpiration < 24) {
+      return (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Meal Plan Expiring Soon</AlertTitle>
+          <AlertDescription>
+            This meal plan will expire in {Math.ceil(hoursUntilExpiration)} hours.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return null;
+  };
+
+  // Add this function to handle batch calendar selection
+  const handleBatchCalendarAdd = () => {
+    if (!currentMealPlan || currentMealPlan.is_expired) return;
+    
+    setSelectedRecipes(currentMealPlan.recipes);
+    setShowBatchCalendarModal(true);
+  };
+
+  // Add this component inside the MealPlan component, right before the final return statement
+  const FloatingCalendarButton = () => {
+    if (!currentMealPlan || currentMealPlan.is_expired) return null;
+    
+    return (
+      <div className="fixed bottom-6 right-6 z-50">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                size="lg" 
+                className="rounded-full h-14 w-14 shadow-lg flex items-center justify-center bg-primary hover:bg-primary/90"
+                onClick={handleBatchCalendarAdd}
+              >
+                <Calendar className="h-6 w-6 text-primary-foreground" />
+                <span className="sr-only">Add to Calendar</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Add all recipes to calendar</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8">
       <SubscriptionModal
@@ -275,129 +533,202 @@ export default function MealPlan() {
           <p className="text-muted-foreground mb-4">
             Generate a personalized meal plan and organize your grocery shopping
           </p>
-          {generatedRecipes.length > 0 && (
-            <div className="bg-secondary/20 rounded-lg p-4 mb-4">
-              <h3 className="text-sm font-semibold mb-2">Total Nutrition Facts</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(calculateNutritionTotals(generatedRecipes)).map(([nutrient, value]) => (
-                  <div key={nutrient} className="space-y-1">
-                    <p className="text-sm font-medium capitalize">{nutrient}</p>
-                    <p className="text-lg font-semibold">
-                      {nutrient === 'calories'
-                        ? Math.round(value)
-                        : `${Math.round(value)}g`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <Button onClick={() => setShowPreferences(true)}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            Generate Meal Plan
-          </Button>
         </div>
       </div>
 
-      <PreferenceModal
-        open={showPreferences}
-        onOpenChange={setShowPreferences}
-        preferences={preferences}
-        onUpdatePreferences={setPreferences}
-        isGenerating={isGenerating}
-        onGenerate={handleGenerateMealPlan}
-        user={user ? {
-          subscription_tier: user.subscription_tier,
-          meal_plans_generated: user.meal_plans_generated
-        } : undefined}
-      />
+      {renderExpirationWarning()}
 
-      <div className="grid md:grid-cols-[300px_1fr] gap-8">
-        <Card>
-          <CardContent className="p-4">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => date && setSelectedDate(date)}
-              className="rounded-md border"
-            />
-          </CardContent>
-        </Card>
+      {isMobile ? (
+        <PreferenceSheet
+          open={showPreferences}
+          onOpenChange={setShowPreferences}
+          preferences={preferences}
+          onUpdatePreferences={setPreferences}
+          isGenerating={isGenerating}
+          onGenerate={handleGenerateMealPlan}
+          user={user ? {
+            subscription_tier: user.subscription_tier,
+            meal_plans_generated: user.meal_plans_generated
+          } : undefined}
+          skipToChefPreferences={Object.entries(preferences).some(([key, value]) =>
+            key !== 'chefPreferences' && Array.isArray(value) && value.length > 0
+          )}
+        />
+      ) : (
+        <PreferenceModal
+          open={showPreferences}
+          onOpenChange={setShowPreferences}
+          preferences={preferences}
+          onUpdatePreferences={setPreferences}
+          isGenerating={isGenerating}
+          onGenerate={handleGenerateMealPlan}
+          user={user ? {
+            subscription_tier: user.subscription_tier,
+            meal_plans_generated: user.meal_plans_generated
+          } : undefined}
+          skipToChefPreferences={Object.entries(preferences).some(([key, value]) =>
+            key !== 'chefPreferences' && Array.isArray(value) && value.length > 0
+          )}
+        />
+      )}
 
-        <Tabs defaultValue="meals">
-          <TabsList>
-            <TabsTrigger value="meals">Meal Plan</TabsTrigger>
-            <TabsTrigger value="grocery">Grocery List</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="meals" className="w-full">
+        <TabsList>
+          <TabsTrigger value="meals">Meal Plan</TabsTrigger>
+          <TabsTrigger value="grocery">Grocery List</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="meals" className="mt-6">
-            <div className="grid gap-6">
-              {isGenerating ? (
-                <LoadingAnimation
-                  messages={generateLoadingMessages(preferences, preferences.chefPreferences || defaultChefPreferences)}
-                />
-              ) : generatedRecipes.length > 0 ? (
-                <>
+        <TabsContent value="meals" className="mt-6">
+          {currentMealPlan && !currentMealPlan.is_expired && (
+            <div className="flex justify-end mb-4">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleBatchCalendarAdd}
+                      className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 border-primary/20"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      Add All to Calendar
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Schedule all recipes in your calendar</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
+          <div className="grid gap-6">
+            {isGenerating ? (
+              <LoadingAnimation
+                messages={generateLoadingMessages(preferences, preferences.chefPreferences || defaultChefPreferences)}
+              />
+            ) : (
+              <>
+                {currentMealPlan && !currentMealPlan.is_expired ? (
                   <div className="grid md:grid-cols-3 gap-6">
-                    {generatedRecipes.map((recipe, index) => {
-                      const currentDay = new Date(selectedDate.getTime() + Math.floor(index / 3) * 24 * 60 * 60 * 1000);
-                      const mealType = index % 3 === 0 ? "breakfast" : index % 3 === 1 ? "lunch" : "dinner";
-
+                    {currentMealPlan.recipes.map((recipe, index) => {
+                      // Calculate the day based on the index if no valid date is provided
+                      const day = new Date(selectedDate);
+                      day.setDate(day.getDate() + Math.floor(index / 3));
+                      const mealIndex = index % 3;
+                      const mealType = ["breakfast", "lunch", "dinner"][mealIndex] as MealType;
+                      
                       return (
                         <MealPlanCard
                           key={recipe.id}
-                          recipe={{
-                            ...recipe,
-                            image_url: recipe.image_url || undefined,
-                          }}
-                          day={currentDay}
-                          meal={mealType as MealType}
+                          recipe={recipe}
+                          day={day}
+                          meal={recipe.meal as MealType || mealType}
                           onRemove={() => {
-                            const newRecipes = [...generatedRecipes];
-                            const removedRecipe = newRecipes[index];
-                            newRecipes.splice(index, 1);
-                            setGeneratedRecipes(newRecipes);
-
+                            // Handle recipe removal
                             toast({
                               title: "Recipe removed",
-                              description: `${removedRecipe?.name || 'Recipe'} has been removed from your meal plan.`,
+                              description: `${recipe.name} has been removed from your meal plan.`,
                             });
                           }}
                         />
                       );
                     })}
+                    
+                    {/* Display placeholders for missing recipes */}
+                    {missingMeals.map((missingMeal, index) => {
+                      const day = new Date(selectedDate);
+                      day.setDate(day.getDate() + missingMeal.day);
+                      
+                      return (
+                        <MissingRecipeCard
+                          key={`missing-${missingMeal.day}-${missingMeal.meal}`}
+                          day={day}
+                          meal={missingMeal.meal}
+                          onRegenerate={() => handleRegenerateMissingRecipe(missingMeal.day, missingMeal.meal)}
+                        />
+                      );
+                    })}
                   </div>
-                  <Button
-                    onClick={() => saveMutation.mutate()}
-                    disabled={saveMutation.isPending}
-                    className="mt-4"
-                  >
-                    Save Meal Plan
-                  </Button>
-                </>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  Generate a meal plan to get started
-                </div>
-              )}
-            </div>
-          </TabsContent>
+                ) : (
+                  renderEmptyState()
+                )}
+              </>
+            )}
+          </div>
+        </TabsContent>
 
-          <TabsContent value="grocery">
-            <GroceryList
-              items={
-                generatedRecipes
-                  .flatMap(recipe => recipe.ingredients ?? [])
-              }
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
+        <TabsContent value="grocery">
+          <GroceryList
+            items={
+              currentMealPlan?.recipes.flatMap(recipe => 
+                (recipe.ingredients || []).map(ingredient => ({
+                  name: String(ingredient.name || ''),
+                  amount: Number(ingredient.amount || 0),
+                  unit: String(ingredient.unit || ''),
+                  checked: false
+                }))
+              ) ?? []
+            }
+          />
+        </TabsContent>
+      </Tabs>
+
+      {showBatchCalendarModal && (
+        <Dialog open={showBatchCalendarModal} onOpenChange={setShowBatchCalendarModal}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add All Recipes to Calendar</DialogTitle>
+              <DialogDescription>
+                Choose when you'd like to start your meal plan
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <CalendarComponent
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                className="rounded-md border"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBatchCalendarModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                // Add all recipes to calendar starting from selected date
+                selectedRecipes.forEach((recipe, index) => {
+                  const day = new Date(selectedDate);
+                  day.setDate(day.getDate() + Math.floor(index / 3));
+                  const mealIndex = index % 3;
+                  const mealTypeMap = {
+                    0: "Breakfast",
+                    1: "Lunch",
+                    2: "Dinner"
+                  } as const;
+                  const mealType = mealTypeMap[mealIndex as 0 | 1 | 2];
+                  
+                  downloadCalendarEvent({
+                    title: `Cook: ${recipe.name}`,
+                    description: recipe.description || "",
+                    date: day,
+                    mealType,
+                    recipeId: recipe.id
+                  });
+                });
+                
+                setShowBatchCalendarModal(false);
+                toast({
+                  title: "Success",
+                  description: `Added ${selectedRecipes.length} recipes to your calendar`,
+                });
+              }}>
+                Add All
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      <FloatingCalendarButton />
     </div>
   );
 }
-
-const isPreferenceArray = (value: unknown): value is string[] => {
-  return Array.isArray(value);
-};
