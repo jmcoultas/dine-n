@@ -151,7 +151,7 @@ export function setupAuth(app: Express) {
       // Check if this is a mobile verification with oobCode but no Firebase token
       const isMobileVerification = !authToken && verified_by_oobcode;
       if (isMobileVerification) {
-        console.log("Mobile verification detected with oobCode but no Firebase token");
+        console.log("Mobile verification detected - skipping Firebase token verification");
       } else if (!authToken) {
         console.error("Firebase token is required but was not provided");
         return res.status(401).json({
@@ -178,8 +178,7 @@ export function setupAuth(app: Express) {
       } else {
         console.log("Skipping Firebase token verification for mobile flow");
         // Generate a placeholder Firebase UID for now
-        // In a production environment, you might want to create a Firebase user here
-        firebaseUid = `mobile_temp_${Date.now()}`;
+        firebaseUid = `mobile_${Date.now()}`;
       }
 
       const normalizedEmail = email.toLowerCase().trim();

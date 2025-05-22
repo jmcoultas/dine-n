@@ -289,7 +289,7 @@ export default function EmailVerification() {
                       body: JSON.stringify({
                         email: email,
                         // We don't have a token but include verification info
-                        verified_by_oobcode: oobCode
+                        verified_by_oobcode: true
                       })
                     });
                     
@@ -319,6 +319,7 @@ export default function EmailVerification() {
               }
               
               setTimeout(() => {
+                console.log("Redirecting to complete-signup page");
                 setLocation('/auth/complete-signup');
               }, 2000);
             } else {

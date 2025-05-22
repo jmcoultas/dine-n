@@ -146,18 +146,7 @@ export async function sendEmailSignupLink(email: string) {
           // URL you want to redirect back to after email verification
           // Include email parameter in the URL for both mobile and desktop
           url: `${window.location.origin}/auth/verify-email?email=${encodeURIComponent(email)}`,
-          handleCodeInApp: true,
-          // Add iOS and Android settings for better mobile support
-          iOS: {
-            bundleId: 'app.dinen.app'
-          },
-          android: {
-            packageName: 'app.dinen.app',
-            installApp: false,
-            minimumVersion: '1'
-          },
-          // Set dynamic link domain if available
-          dynamicLinkDomain: import.meta.env.VITE_FIREBASE_DYNAMIC_LINK_DOMAIN || undefined
+          handleCodeInApp: true
         };
         
         console.log("Sending verification email with settings:", actionCodeSettings);
@@ -191,18 +180,7 @@ export async function sendEmailSignupLink(email: string) {
             if (userCredential.user && !userCredential.user.emailVerified) {
               const actionCodeSettings = {
                 url: `${window.location.origin}/auth/verify-email?email=${encodeURIComponent(email)}`,
-                handleCodeInApp: true,
-                // Add iOS and Android settings for better mobile support
-                iOS: {
-                  bundleId: 'app.dinen.app'
-                },
-                android: {
-                  packageName: 'app.dinen.app',
-                  installApp: false,
-                  minimumVersion: '1'
-                },
-                // Set dynamic link domain if available
-                dynamicLinkDomain: import.meta.env.VITE_FIREBASE_DYNAMIC_LINK_DOMAIN || undefined
+                handleCodeInApp: true
               };
               
               await sendEmailVerification(userCredential.user, actionCodeSettings);
