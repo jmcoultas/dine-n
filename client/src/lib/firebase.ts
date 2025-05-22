@@ -144,8 +144,20 @@ export async function sendEmailSignupLink(email: string) {
         // Firebase will automatically append mode=verifyEmail and oobCode parameters to this URL
         const actionCodeSettings = {
           // URL you want to redirect back to after email verification
+          // Include email parameter in the URL for both mobile and desktop
           url: `${window.location.origin}/auth/verify-email?email=${encodeURIComponent(email)}`,
-          handleCodeInApp: true
+          handleCodeInApp: true,
+          // Add iOS and Android settings for better mobile support
+          iOS: {
+            bundleId: 'app.dinen.app'
+          },
+          android: {
+            packageName: 'app.dinen.app',
+            installApp: false,
+            minimumVersion: '1'
+          },
+          // Set dynamic link domain if available
+          dynamicLinkDomain: import.meta.env.VITE_FIREBASE_DYNAMIC_LINK_DOMAIN || undefined
         };
         
         console.log("Sending verification email with settings:", actionCodeSettings);
@@ -179,7 +191,18 @@ export async function sendEmailSignupLink(email: string) {
             if (userCredential.user && !userCredential.user.emailVerified) {
               const actionCodeSettings = {
                 url: `${window.location.origin}/auth/verify-email?email=${encodeURIComponent(email)}`,
-                handleCodeInApp: true
+                handleCodeInApp: true,
+                // Add iOS and Android settings for better mobile support
+                iOS: {
+                  bundleId: 'app.dinen.app'
+                },
+                android: {
+                  packageName: 'app.dinen.app',
+                  installApp: false,
+                  minimumVersion: '1'
+                },
+                // Set dynamic link domain if available
+                dynamicLinkDomain: import.meta.env.VITE_FIREBASE_DYNAMIC_LINK_DOMAIN || undefined
               };
               
               await sendEmailVerification(userCredential.user, actionCodeSettings);

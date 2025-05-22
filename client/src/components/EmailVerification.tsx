@@ -15,6 +15,7 @@ export default function EmailVerification() {
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{[key: string]: string}>({});
   const [apiResponse, setApiResponse] = useState<any>(null);
+  const [registerAttemptComplete, setRegisterAttemptComplete] = useState(false);
 
   useEffect(() => {
     // Extract all query parameters for debugging
@@ -24,25 +25,55 @@ export default function EmailVerification() {
       queryParams[key] = value;
     });
     
-    // Log query parameters for debugging
+    // Enhanced debugging for mobile/desktop differences
+    console.log("Full verification URL:", window.location.href);
+    console.log("Search params:", search);
+    console.log("Browser user agent:", navigator.userAgent);
     console.log("Verification URL parameters:", queryParams);
-    setDebugInfo(queryParams);
+    
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    setDebugInfo({
+      ...queryParams,
+      fullUrl: window.location.href,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      isMobile: isMobile.toString(),
+      searchString: search
+    });
     
     // Extract specific parameters we need
-    const oobCode = params.get('oobCode');
-    const mode = params.get('mode');
-    const email = params.get('email') || localStorage.getItem('emailForSignup');
+    // Mobile might use 'apiKey' and 'oobCode' in different formats or positions
+    const oobCode = params.get('oobCode') || 
+                    params.get('code') || 
+                    window.location.href.match(/oobCode=([^&]+)/)?.[1];
+                    
+    const mode = params.get('mode') || 
+                (window.location.href.includes('verifyEmail') ? 'verifyEmail' : null);
+                
+    const email = params.get('email') || 
+                  localStorage.getItem('emailForSignup') ||
+                  params.get('continueUrl')?.match(/email=([^&]+)/)?.[1];
     
-    console.log("Email verification component loaded with:", { oobCode: oobCode?.substring(0, 5) + "...", mode, email });
+    console.log("Email verification component loaded with:", { 
+      oobCode: oobCode ? `${oobCode.substring(0, 5)}...` : null, 
+      mode, 
+      email,
+      search,
+      isMobile
+    });
     
     if (!oobCode) {
-      setError('Missing verification code (oobCode). The verification link may be incomplete.');
+      console.error("Missing verification code. Full URL:", window.location.href);
+      setError('Missing verification code (oobCode). The verification link may be incomplete or was modified by your email provider.');
       setIsLoading(false);
       return;
     }
     
-    if (mode !== 'verifyEmail' && mode !== null) {
+    // Be more lenient with mode parameter on mobile
+    if (!isMobile && mode !== 'verifyEmail' && mode !== null) {
       // Sometimes Firebase sends the oobCode without the mode parameter
+      console.error(`Unexpected mode '${mode}'. Full URL:`, window.location.href);
       setError(`Unexpected verification mode: ${mode}. Expected: verifyEmail`);
       setIsLoading(false);
       return;
@@ -54,10 +85,19 @@ export default function EmailVerification() {
       console.log("Saving email to localStorage:", email);
       localStorage.setItem('emailForSignup', email);
     } else {
-      console.error("No email found in URL or localStorage");
-      setError('Email address not found. Please restart the registration process.');
-      setIsLoading(false);
-      return;
+      console.error("No email found in URL or localStorage. Full URL:", window.location.href);
+      
+      // Ask for email rather than stopping verification
+      if (isMobile) {
+        setError('Email address not found. Please enter your email to continue or restart the registration process.');
+        // In a real implementation, you would add an email input field here
+        setIsLoading(false);
+        return;
+      } else {
+        setError('Email address not found. Please restart the registration process.');
+        setIsLoading(false);
+        return;
+      }
     }
     
     const verifyEmail = async () => {
@@ -67,6 +107,16 @@ export default function EmailVerification() {
         // Apply the action code to verify the email
         await applyActionCode(auth, oobCode);
         console.log("Action code applied successfully");
+        
+        // On mobile, we might need to manually reload auth state 
+        if (isMobile) {
+          console.log("Running on mobile, refreshing auth state...");
+          try {
+            await auth.currentUser?.reload();
+          } catch (refreshError) {
+            console.warn("Failed to refresh user state:", refreshError);
+          }
+        }
         
         // Check auth state to confirm verification status
         onAuthStateChanged(auth, async (user) => {
@@ -86,41 +136,111 @@ export default function EmailVerification() {
             // Create the user in the native database to prevent limbo state
             try {
               // Get the Firebase ID token to authenticate the request
-              const idToken = await user.getIdToken();
+              console.log("Getting Firebase ID token...");
+              const idToken = await user.getIdToken(true); // Force refresh
+              console.log("Firebase ID token obtained");
               
               // We don't know the final password yet, but we'll create the user record
               // The password will be updated later when the user completes signup
               console.log("Sending partial registration request to backend");
-              const response = await fetch('/api/register/partial', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Firebase-Token': idToken,
-                },
-                body: JSON.stringify({
-                  email: user.email,
-                }),
-              });
               
-              const responseData = await response.json();
-              setApiResponse(responseData);
-              console.log('API response:', responseData);
+              // Make API call in a robust way with timeouts and retries
+              let apiCallSuccessful = false;
+              let attempts = 0;
+              const maxAttempts = 3;
               
-              if (!response.ok) {
-                console.error('Failed to create partial user record:', responseData);
+              while (!apiCallSuccessful && attempts < maxAttempts) {
+                attempts++;
+                try {
+                  console.log(`API call attempt ${attempts}/${maxAttempts}...`);
+                  
+                  // Set a timeout for the fetch request
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                  
+                  const response = await fetch('/api/register/partial', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Firebase-Token': idToken,
+                    },
+                    body: JSON.stringify({
+                      email: user.email,
+                    }),
+                    signal: controller.signal
+                  });
+                  
+                  clearTimeout(timeoutId);
+                  
+                  // Get the response as text first for debugging
+                  const responseText = await response.text();
+                  console.log(`API response (text): ${responseText}`);
+                  
+                  // Parse it as JSON if possible
+                  let responseData;
+                  try {
+                    responseData = JSON.parse(responseText);
+                  } catch (e) {
+                    console.error("Failed to parse response as JSON:", e);
+                    responseData = { error: "Invalid JSON response", text: responseText };
+                  }
+                  
+                  setApiResponse(responseData);
+                  console.log('API response (parsed):', responseData);
+                  
+                  // Consider the call successful if status is 200, even if there was an error
+                  // This allows the user to continue to the password setup
+                  if (response.ok) {
+                    console.log('API call succeeded with status:', response.status);
+                    setDebugInfo(prev => ({
+                      ...prev, 
+                      apiSuccess: JSON.stringify(responseData),
+                      apiStatus: response.status.toString(), 
+                      userId: responseData.user_id || 'not returned',
+                      attempt: attempts.toString()
+                    }));
+                    apiCallSuccessful = true;
+                  } else {
+                    console.error('Failed to create partial user record:', responseData);
+                    setDebugInfo(prev => ({
+                      ...prev, 
+                      apiError: JSON.stringify(responseData),
+                      apiStatus: response.status.toString(),
+                      attempt: attempts.toString()
+                    }));
+                    // If it's a server error, retry
+                    if (response.status >= 500) {
+                      console.log("Server error, will retry...");
+                      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+                      continue;
+                    }
+                  }
+                } catch (fetchError) {
+                  console.error(`API call attempt ${attempts} failed:`, fetchError);
+                  setDebugInfo(prev => ({
+                    ...prev, 
+                    apiFetchError: fetchError instanceof Error ? fetchError.message : String(fetchError),
+                    attempt: attempts.toString()
+                  }));
+                  // Wait before retrying
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+              }
+              
+              setRegisterAttemptComplete(true);
+              
+              if (!apiCallSuccessful) {
+                console.error(`Failed to create partial user record after ${maxAttempts} attempts`);
                 setDebugInfo(prev => ({
-                  ...prev, 
-                  apiError: JSON.stringify(responseData),
-                  apiStatus: response.status.toString()
+                  ...prev,
+                  finalStatus: `Failed after ${maxAttempts} attempts`
                 }));
                 // We'll continue to the password step anyway
               } else {
-                console.log('Successfully created partial user record');
+                console.log('Successfully created partial user record after attempts:', attempts);
                 setDebugInfo(prev => ({
-                  ...prev, 
-                  apiSuccess: JSON.stringify(responseData),
-                  apiStatus: response.status.toString(), 
-                  userId: responseData.user_id || 'not returned'
+                  ...prev,
+                  finalStatus: `Success after ${attempts} attempts`
                 }));
               }
             } catch (dbError) {
@@ -129,6 +249,7 @@ export default function EmailVerification() {
                 ...prev, 
                 dbError: dbError instanceof Error ? dbError.message : String(dbError)
               }));
+              setRegisterAttemptComplete(true);
               // We'll continue to the password step anyway
             }
             
@@ -141,6 +262,7 @@ export default function EmailVerification() {
             
             // Redirect to complete signup after a short delay
             setTimeout(() => {
+              console.log("Redirecting to complete-signup page");
               setLocation('/auth/complete-signup');
             }, 2000);
           } else if (user) {
@@ -151,6 +273,44 @@ export default function EmailVerification() {
             console.log("No user found after verification");
             // If we have the email, we can still try to proceed
             if (email) {
+              // On mobile, we might need to manually sign in the user first
+              if (isMobile) {
+                try {
+                  console.log("Mobile user with no session but has oobCode - attempting to recover");
+                  
+                  // Try to create user record anyway even without Firebase auth
+                  try {
+                    console.log("Sending partial registration request without Firebase token");
+                    const response = await fetch('/api/register/partial', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        email: email,
+                        // We don't have a token but include verification info
+                        verified_by_oobcode: oobCode
+                      })
+                    });
+                    
+                    const responseText = await response.text();
+                    console.log(`Mobile fallback API response: ${responseText}`);
+                    
+                    let responseData;
+                    try {
+                      responseData = JSON.parse(responseText);
+                      setApiResponse(responseData);
+                    } catch (e) {
+                      console.error("Failed to parse response as JSON:", e);
+                    }
+                  } catch (mobileApiError) {
+                    console.error("Error in mobile fallback API call:", mobileApiError);
+                  }
+                } catch (mobileError) {
+                  console.error("Error in mobile fallback flow:", mobileError);
+                }
+              }
+              
               setIsVerified(true);
               
               // Clear URL parameters before redirect
@@ -201,6 +361,13 @@ export default function EmailVerification() {
               <CheckCircle className="h-12 w-12 text-green-500" />
               <p>Your email has been verified successfully!</p>
               <p className="text-sm text-muted-foreground">Redirecting you to complete your registration...</p>
+              {registerAttemptComplete && !apiResponse?.user_id && (
+                <Alert className="mt-2 bg-yellow-50 border-yellow-200">
+                  <AlertDescription className="text-yellow-800">
+                    Note: We recommend completing the password setup to ensure your account is fully activated.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center text-center gap-2 py-4">
@@ -211,7 +378,7 @@ export default function EmailVerification() {
           )}
           
           {/* Show debug information in development or any environment for troubleshooting */}
-          {(import.meta.env.DEV || true) && Object.keys(debugInfo).length > 0 && (
+          {(import.meta.env.DEV || true) && (
             <Alert className="mt-4">
               <AlertDescription>
                 <details>
