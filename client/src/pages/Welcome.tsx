@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { logoUrl } from "@/lib/constants";
 import { useState } from "react";
+import Footer from "@/components/Footer";
 
 export default function Welcome() {
   const [expandedFaqs, setExpandedFaqs] = useState<number[]>([]);
@@ -739,6 +740,7 @@ export default function Welcome() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 } 

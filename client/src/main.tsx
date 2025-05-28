@@ -11,6 +11,7 @@ import { useUser } from "@/hooks/use-user";
 import Home from "./pages/Home";
 import Recipes from "./pages/Recipes";
 import MealPlan from "./pages/MealPlan";
+import WeeklyPlanner from "./pages/WeeklyPlanner";
 import AuthPage from "./pages/AuthPage";
 import UserProfile from "./pages/UserProfile";
 import IngredientRecipes from "./pages/IngredientRecipes";
@@ -195,6 +196,10 @@ function Router() {
                 <Route 
                   path="/meal-plan" 
                   component={() => <ProtectedRoute component={MealPlan} />} 
+                />
+                <Route 
+                  path="/weekly-planner" 
+                  component={() => <ProtectedRoute component={WeeklyPlanner} />} 
                 />
                 <Route 
                   path="/ingredient-recipes" 

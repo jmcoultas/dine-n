@@ -15,8 +15,13 @@ import { MealPlanExpirationService } from "./services/mealPlanExpiration";
 import crypto from 'crypto';
 import { randomBytes } from 'crypto';
 import { promisify } from 'util';
+import OpenAI from "openai";
 
 const scryptAsync = promisify(crypto.scrypt);
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -1833,6 +1838,440 @@ export function registerRoutes(app: express.Express) {
       res.status(500).json({
         error: "Failed to regenerate recipe",
         details: error.message
+      });
+    }
+  });
+
+  // Weekly Planner endpoints
+  app.post("/api/weekly-planner/suggestions", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { days, suggestionsPerMealType, preferences } = req.body;
+
+      // Check subscription limits
+      const isFreeTier = user.subscription_tier === 'free';
+      const hasUsedFreePlan = user.meal_plans_generated > 0;
+
+      if (isFreeTier && hasUsedFreePlan) {
+        return res.status(403).json({
+          error: "Free plan limit reached",
+          message: "You've reached your free meal plan limit. Please upgrade to premium for unlimited meal plans.",
+          code: "UPGRADE_REQUIRED"
+        });
+      }
+
+      // Check cooldown period - user must wait until their last meal plan expires
+      const lastMealPlan = await db
+        .select()
+        .from(mealPlans)
+        .where(eq(mealPlans.user_id, user.id))
+        .orderBy(desc(mealPlans.created_at))
+        .limit(1);
+
+      if (lastMealPlan.length > 0) {
+        const lastPlan = lastMealPlan[0];
+        const now = new Date();
+        const planEndDate = new Date(lastPlan.end_date);
+        
+        if (now < planEndDate) {
+          const timeRemaining = planEndDate.getTime() - now.getTime();
+          const daysRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60 * 24));
+          const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60));
+          
+          return res.status(429).json({
+            error: "Cooldown active",
+            message: `You must wait until your current meal plan expires before creating a new one.`,
+            code: "COOLDOWN_ACTIVE",
+            cooldownInfo: {
+              lastPlanEndDate: planEndDate.toISOString(),
+              timeRemainingMs: timeRemaining,
+              daysRemaining,
+              hoursRemaining,
+              lastPlanName: lastPlan.name,
+              lastPlanDays: lastPlan.days_generated
+            }
+          });
+        }
+      }
+
+      // Validate input
+      if (!days || !suggestionsPerMealType || !preferences) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: days, suggestionsPerMealType, preferences"
+        });
+      }
+
+      console.log('Generating weekly planner suggestions:', {
+        days,
+        suggestionsPerMealType,
+        preferences: JSON.stringify(preferences, null, 2),
+        userId: user.id
+      });
+
+      // Normalize preferences
+      const normalizedPreferences = {
+        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
+        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
+        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : []
+      };
+
+      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
+      const suggestions: any = {
+        breakfast: [],
+        lunch: [],
+        dinner: []
+      };
+
+      // Generate suggestions for each meal type
+      for (const mealType of mealTypes) {
+        console.log(`Generating ${suggestionsPerMealType} ${mealType} suggestions`);
+        
+        const mealSuggestions = [];
+        const usedTitles = new Set<string>();
+
+        for (let i = 0; i < suggestionsPerMealType; i++) {
+          try {
+            // Generate title-only suggestion using OpenAI
+            const prompt = `Generate a single ${mealType} recipe title that is:
+- Appropriate for ${mealType}
+- ${normalizedPreferences.dietary.length > 0 ? `Following dietary restrictions: ${normalizedPreferences.dietary.join(", ")}` : "No specific dietary restrictions"}
+- ${normalizedPreferences.allergies.length > 0 ? `Avoiding allergens: ${normalizedPreferences.allergies.join(", ")}` : "No allergies to consider"}
+- ${normalizedPreferences.cuisine.length > 0 ? `From one of these cuisines: ${normalizedPreferences.cuisine.join(", ")}` : "Any cuisine"}
+- ${normalizedPreferences.meatTypes.length > 0 ? `Using preferred proteins: ${normalizedPreferences.meatTypes.join(", ")}` : "Any protein"}
+
+Respond with a JSON object containing:
+{
+  "title": "Recipe Name",
+  "cuisineType": "Cuisine",
+  "difficulty": "Easy|Moderate|Advanced",
+  "estimatedTime": "X minutes",
+  "tags": ["tag1", "tag2"]
+}
+
+Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
+
+            const completion = await openai.chat.completions.create({
+              messages: [
+                {
+                  role: "system",
+                  content: "You are a professional chef who creates recipe suggestions. Always respond with valid JSON containing the requested fields.",
+                },
+                {
+                  role: "user",
+                  content: prompt,
+                },
+              ],
+              model: "gpt-4o-2024-08-06",
+              response_format: { type: "json_object" },
+              temperature: 0.8,
+              max_tokens: 200,
+            });
+
+            if (completion.choices?.[0]?.message?.content) {
+              const suggestionData = JSON.parse(completion.choices[0].message.content);
+              
+              if (suggestionData.title && !usedTitles.has(suggestionData.title)) {
+                usedTitles.add(suggestionData.title);
+                mealSuggestions.push({
+                  title: suggestionData.title,
+                  cuisineType: suggestionData.cuisineType || "Other",
+                  difficulty: suggestionData.difficulty || "Moderate",
+                  estimatedTime: suggestionData.estimatedTime || "30 minutes",
+                  tags: Array.isArray(suggestionData.tags) ? suggestionData.tags : []
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`Error generating ${mealType} suggestion ${i + 1}:`, error);
+            // Continue with other suggestions even if one fails
+          }
+        }
+
+        suggestions[mealType] = mealSuggestions;
+        console.log(`Generated ${mealSuggestions.length} ${mealType} suggestions`);
+      }
+
+      console.log('Weekly planner suggestions generated:', JSON.stringify(suggestions, null, 2));
+      res.json(suggestions);
+    } catch (error: any) {
+      console.error("Error generating weekly planner suggestions:", error);
+      res.status(500).json({
+        error: "Failed to generate suggestions",
+        message: error.message
+      });
+    }
+  });
+
+  app.post("/api/weekly-planner/create-plan", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { selectedRecipes, preferences, days } = req.body;
+
+      // Check subscription limits
+      const isFreeTier = user.subscription_tier === 'free';
+      const hasUsedFreePlan = user.meal_plans_generated > 0;
+
+      if (isFreeTier && hasUsedFreePlan) {
+        return res.status(403).json({
+          error: "Free plan limit reached",
+          message: "You've reached your free meal plan limit. Please upgrade to premium for unlimited meal plans.",
+          code: "UPGRADE_REQUIRED"
+        });
+      }
+
+      // Check cooldown period - user must wait until their last meal plan expires
+      const lastMealPlan = await db
+        .select()
+        .from(mealPlans)
+        .where(eq(mealPlans.user_id, user.id))
+        .orderBy(desc(mealPlans.created_at))
+        .limit(1);
+
+      if (lastMealPlan.length > 0) {
+        const lastPlan = lastMealPlan[0];
+        const now = new Date();
+        const planEndDate = new Date(lastPlan.end_date);
+        
+        if (now < planEndDate) {
+          const timeRemaining = planEndDate.getTime() - now.getTime();
+          const daysRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60 * 24));
+          const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60));
+          
+          return res.status(429).json({
+            error: "Cooldown active",
+            message: `You must wait until your current meal plan expires before creating a new one.`,
+            code: "COOLDOWN_ACTIVE",
+            cooldownInfo: {
+              lastPlanEndDate: planEndDate.toISOString(),
+              timeRemainingMs: timeRemaining,
+              daysRemaining,
+              hoursRemaining,
+              lastPlanName: lastPlan.name,
+              lastPlanDays: lastPlan.days_generated
+            }
+          });
+        }
+      }
+
+      // Validate input
+      if (!selectedRecipes || !preferences || !days) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: selectedRecipes, preferences, days"
+        });
+      }
+
+      console.log('Creating weekly meal plan:', {
+        selectedRecipes,
+        preferences: JSON.stringify(preferences, null, 2),
+        days,
+        userId: user.id
+      });
+
+      // Normalize preferences
+      const normalizedPreferences = {
+        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
+        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
+        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : []
+      };
+
+      // Collect all selected recipe titles with their meal types
+      const allSelectedTitles = [
+        ...selectedRecipes.breakfast,
+        ...selectedRecipes.lunch,
+        ...selectedRecipes.dinner
+      ];
+
+      console.log('Generating full recipes for selected titles:', allSelectedTitles);
+
+      // Generate full recipes for each selected title and track their meal types
+      const generatedRecipes = [];
+      const recipesByMealType: {
+        breakfast: any[];
+        lunch: any[];
+        dinner: any[];
+      } = {
+        breakfast: [],
+        lunch: [],
+        dinner: []
+      };
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 2);
+
+      for (const title of allSelectedTitles) {
+        try {
+          console.log(`Generating full recipe for: ${title}`);
+          
+          const fullRecipe = await generateRecipeFromTitleAI(title, normalizedPreferences.allergies);
+          
+          if (fullRecipe && fullRecipe.name) {
+            // Determine meal type based on which array the title came from
+            let mealType: "breakfast" | "lunch" | "dinner" = "dinner";
+            if (selectedRecipes.breakfast.includes(title)) {
+              mealType = "breakfast";
+            } else if (selectedRecipes.lunch.includes(title)) {
+              mealType = "lunch";
+            }
+
+            // Save to temporary_recipes table
+            const insertData = {
+              user_id: user.id,
+              name: fullRecipe.name,
+              description: fullRecipe.description || null,
+              image_url: fullRecipe.image_url || null,
+              permanent_url: null,
+              prep_time: fullRecipe.prep_time || 0,
+              cook_time: fullRecipe.cook_time || 0,
+              servings: fullRecipe.servings || 4,
+              ingredients: fullRecipe.ingredients || [],
+              instructions: fullRecipe.instructions || [],
+              meal_type: mealType.charAt(0).toUpperCase() + mealType.slice(1) as z.infer<typeof MealTypeEnum>,
+              cuisine_type: (Array.isArray(fullRecipe.tags)
+                ? (fullRecipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+                    ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+                  ) || "Other")
+                : "Other") as z.infer<typeof CuisineTypeEnum>,
+              dietary_restrictions: (Array.isArray(fullRecipe.tags)
+                ? fullRecipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+                    ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+                  )
+                : []) as z.infer<typeof DietaryTypeEnum>[],
+              difficulty: (() => {
+                switch(fullRecipe.complexity) {
+                  case 1: return "Easy" as const;
+                  case 2: return "Moderate" as const;
+                  case 3: return "Advanced" as const;
+                  default: return "Moderate" as const;
+                }
+              })() as z.infer<typeof DifficultyEnum>,
+              tags: fullRecipe.tags || [],
+              nutrition: fullRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+              complexity: fullRecipe.complexity || 1,
+              created_at: new Date(),
+              expires_at: expirationDate,
+              favorited: false,
+              favorites_count: 0
+            };
+
+            const [savedRecipe] = await db.insert(temporaryRecipes).values(insertData).returning();
+            
+            // Store image permanently if it exists
+            let finalRecipe = savedRecipe;
+            if (savedRecipe.image_url) {
+              try {
+                const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+                if (permanentUrl) {
+                  const [updatedRecipe] = await db
+                    .update(temporaryRecipes)
+                    .set({ permanent_url: permanentUrl })
+                    .where(eq(temporaryRecipes.id, savedRecipe.id))
+                    .returning();
+                  
+                  finalRecipe = updatedRecipe;
+                }
+              } catch (error) {
+                console.error('Failed to store image:', error);
+              }
+            }
+
+            generatedRecipes.push(finalRecipe);
+            recipesByMealType[mealType].push(finalRecipe);
+            console.log(`Successfully generated ${mealType} recipe: ${finalRecipe.name}`);
+          }
+        } catch (error) {
+          console.error(`Error generating recipe for title "${title}":`, error);
+          // Continue with other recipes even if one fails
+        }
+      }
+
+      if (generatedRecipes.length === 0) {
+        return res.status(500).json({
+          error: "Failed to generate meal plan",
+          message: "Could not generate any recipes from the selected titles"
+        });
+      }
+
+      // Create meal plan
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + days - 1);
+
+      const [mealPlan] = await db.insert(mealPlans).values({
+        user_id: user.id,
+        name: `Weekly Plan - ${days} Days`,
+        start_date: startDate,
+        end_date: endDate,
+        expiration_date: expirationDate,
+        days_generated: days,
+        is_expired: false,
+        created_at: new Date()
+      }).returning();
+
+      // Create meal plan recipe associations with proper meal type mapping
+      const mealPlanRecipeValues = [];
+
+      for (let day = 0; day < days; day++) {
+        const dayDate = new Date(startDate);
+        dayDate.setDate(dayDate.getDate() + day);
+
+        // Add breakfast for this day
+        if (recipesByMealType.breakfast[day]) {
+          mealPlanRecipeValues.push({
+            meal_plan_id: mealPlan.id,
+            recipe_id: recipesByMealType.breakfast[day].id,
+            day: dayDate,
+            meal: "breakfast",
+            created_at: new Date()
+          });
+        }
+
+        // Add lunch for this day
+        if (recipesByMealType.lunch[day]) {
+          mealPlanRecipeValues.push({
+            meal_plan_id: mealPlan.id,
+            recipe_id: recipesByMealType.lunch[day].id,
+            day: dayDate,
+            meal: "lunch",
+            created_at: new Date()
+          });
+        }
+
+        // Add dinner for this day
+        if (recipesByMealType.dinner[day]) {
+          mealPlanRecipeValues.push({
+            meal_plan_id: mealPlan.id,
+            recipe_id: recipesByMealType.dinner[day].id,
+            day: dayDate,
+            meal: "dinner",
+            created_at: new Date()
+          });
+        }
+      }
+
+      if (mealPlanRecipeValues.length > 0) {
+        await db.insert(mealPlanRecipes).values(mealPlanRecipeValues);
+      }
+
+      // Update user's meal plan counter
+      await db
+        .update(users)
+        .set({ meal_plans_generated: user.meal_plans_generated + 1 })
+        .where(eq(users.id, user.id));
+
+      console.log(`Created weekly meal plan with ${generatedRecipes.length} recipes`);
+      res.json({
+        mealPlan,
+        recipesGenerated: generatedRecipes.length,
+        message: "Weekly meal plan created successfully"
+      });
+    } catch (error: any) {
+      console.error("Error creating weekly meal plan:", error);
+      res.status(500).json({
+        error: "Failed to create meal plan",
+        message: error.message
       });
     }
   });

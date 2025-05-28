@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Settings2, Wand2, AlertTriangle } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { SnakeLoadingGame } from "@/components/SnakeLoadingGame";
 import { PreferenceSchema, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
@@ -428,10 +429,9 @@ export default function PreferenceSheet({
 
                 {isGenerating && (
                   <div className="flex flex-col items-center justify-center p-6">
-                    <LoadingAnimation />
-                    <p className="text-center mt-4 text-muted-foreground">
-                      Creating your personalized meal plan...
-                    </p>
+                    <SnakeLoadingGame 
+                      baseMessage="Creating your personalized meal plan..."
+                    />
                   </div>
                 )}
               </div>

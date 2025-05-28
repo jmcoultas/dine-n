@@ -76,6 +76,12 @@ ${cleanParams.cuisine.length > 0 ? `IMPORTANT: For this specific recipe, randoml
 ${cleanParams.meatTypes.length > 0 ? `Preferred meat types: ${cleanParams.meatTypes.join(", ")}` : "No specific meat preference"}
 ${excludeNamesStr}
 
+MEASUREMENT REQUIREMENTS:
+- Use ONLY US customary units (cups, tablespoons, teaspoons, ounces, pounds, fluid ounces)
+- DO NOT use metric units (grams, kilograms, milliliters, liters)
+- Examples: "1 cup flour", "2 tablespoons olive oil", "8 ounces chicken breast", "1 pound ground beef"
+- For small amounts use teaspoons/tablespoons, for larger amounts use cups/ounces/pounds
+
 You must respond with a valid recipe in this exact JSON format:
 {
   "name": "Recipe Name",
@@ -98,7 +104,8 @@ IMPORTANT REQUIREMENTS:
 4. For lunch: focus on midday-appropriate meals (e.g., sandwiches, salads, light proteins)
 5. For dinner: focus on dinner-appropriate dishes (e.g., main courses, protein with sides)
 6. The recipe name MUST be unique and NOT be one of the excluded names${excludeNamesStr ? " listed above" : ""}
-7. If cuisines were provided, the selected cuisine MUST be included in the tags field`;
+7. If cuisines were provided, the selected cuisine MUST be included in the tags field
+8. ALL ingredient measurements MUST use US customary units only (no grams, kilograms, milliliters, etc.)`;
 
       console.log('AI Service: Generated prompt:', prompt);
 
@@ -106,7 +113,7 @@ IMPORTANT REQUIREMENTS:
         messages: [
           {
             role: "system",
-            content: "You are a professional chef who creates awe-inspiring recipes. Create detailed, healthy recipes following the dietary restrictions and allergies exactly. When multiple cuisine types are provided, randomly select one for each recipe to ensure variety. Always respond with complete, valid JSON containing all required fields.",
+            content: "You are a professional chef who creates awe-inspiring recipes. Create detailed, healthy recipes following the dietary restrictions and allergies exactly. When multiple cuisine types are provided, randomly select one for each recipe to ensure variety. Always respond with complete, valid JSON containing all required fields. IMPORTANT: Always use US customary units (cups, tablespoons, teaspoons, ounces, pounds) for all ingredient measurements - never use metric units.",
           },
           {
             role: "user",
@@ -468,6 +475,12 @@ export async function generateRecipeFromTitleAI(title: string, allergies: string
     const prompt = `Generate a detailed recipe for "${title}".
 ${allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${allergies.join(", ")}` : ""}
 
+MEASUREMENT REQUIREMENTS:
+- Use ONLY US customary units (cups, tablespoons, teaspoons, ounces, pounds, fluid ounces)
+- DO NOT use metric units (grams, kilograms, milliliters, liters)
+- Examples: "1 cup flour", "2 tablespoons olive oil", "8 ounces chicken breast", "1 pound ground beef"
+- For small amounts use teaspoons/tablespoons, for larger amounts use cups/ounces/pounds
+
 You must respond with a valid recipe in this exact JSON format:
 {
   "name": "${title}",
@@ -482,13 +495,14 @@ You must respond with a valid recipe in this exact JSON format:
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
 }
 
-The recipe should be practical and detailed. Include all necessary ingredients and clear step-by-step instructions.`;
+The recipe should be practical and detailed. Include all necessary ingredients and clear step-by-step instructions.
+ALL ingredient measurements MUST use US customary units only (no grams, kilograms, milliliters, etc.).`;
 
     const completion = await openai.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: "You are a professional chef and nutritionist. Create detailed, practical recipes with accurate measurements and clear instructions. Always respond with complete, valid JSON containing all required fields.",
+          content: "You are a professional chef and nutritionist. Create detailed, practical recipes with accurate measurements and clear instructions. Always respond with complete, valid JSON containing all required fields. IMPORTANT: Always use US customary units (cups, tablespoons, teaspoons, ounces, pounds) for all ingredient measurements - never use metric units.",
         },
         {
           role: "user",

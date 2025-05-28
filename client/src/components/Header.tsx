@@ -5,14 +5,26 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils, User, BookOpen, CookingPot, UtensilsCrossed } from "lucide-react";
+import { Utensils, User, BookOpen, CookingPot, UtensilsCrossed, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
+import { useQuery } from "@tanstack/react-query";
+import { getCurrentMealPlan } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { logoUrl } from "@/lib/constants";
 
 export default function Header() {
   const { data: user } = useUser();
+  
+  // Query to check if user has an active meal plan
+  const { data: currentMealPlan } = useQuery({
+    queryKey: ['current-meal-plan'],
+    queryFn: getCurrentMealPlan,
+    enabled: !!user, // Only run query if user is logged in
+  });
+
+  // Check if user has an active (non-expired) meal plan
+  const hasActiveMealPlan = currentMealPlan && !currentMealPlan.is_expired;
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -32,12 +44,25 @@ export default function Header() {
                 </div>
               </Link>
             </NavigationMenuItem>
+            {/* Only show Meal Plan nav item if user has an active meal plan */}
+            {hasActiveMealPlan && (
+              <NavigationMenuItem>
+                <Link href="/meal-plan" className="block">
+                  <div className="relative flex items-center px-3 py-2 w-[42px] hover:w-[130px] hover:bg-accent rounded-md transition-all duration-200">
+                    <CookingPot className="h-6 w-6 transition-transform duration-200 hover:-translate-x-1" />
+                    <span className="absolute left-[46px] whitespace-nowrap opacity-0 transition-all duration-200 hover:opacity-100 pointer-events-none [div:hover>&]:opacity-100">
+                      Meal Plan
+                    </span>
+                  </div>
+                </Link>
+              </NavigationMenuItem>
+            )}
             <NavigationMenuItem>
-              <Link href="/meal-plan" className="block">
-                <div className="relative flex items-center px-3 py-2 w-[42px] hover:w-[130px] hover:bg-accent rounded-md transition-all duration-200">
-                  <CookingPot className="h-6 w-6 transition-transform duration-200 hover:-translate-x-1" />
+              <Link href="/weekly-planner" className="block">
+                <div className="relative flex items-center px-3 py-2 w-[42px] hover:w-[170px] hover:bg-accent rounded-md transition-all duration-200">
+                  <Calendar className="h-6 w-6 transition-transform duration-200 hover:-translate-x-1" />
                   <span className="absolute left-[46px] whitespace-nowrap opacity-0 transition-all duration-200 hover:opacity-100 pointer-events-none [div:hover>&]:opacity-100">
-                    Meal Plan
+                    Weekly Planner
                   </span>
                 </div>
               </Link>

@@ -9,6 +9,7 @@ import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import Footer from "@/components/Footer";
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -139,100 +140,106 @@ export default function AuthPage() {
   // Show password reset form if we have a valid reset code
   if (oobCode && isValidCode) {
     return (
-      <div className="container flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Reset Password</CardTitle>
-            <CardDescription>
-              Please enter your new password
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handlePasswordReset();
-            }}>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Input
-                    type="password"
-                    placeholder="New password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={6}
-                  />
+      <div className="min-h-screen flex flex-col">
+        <div className="container flex items-center justify-center flex-1">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Reset Password</CardTitle>
+              <CardDescription>
+                Please enter your new password
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                handlePasswordReset();
+              }}>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Input
+                      type="password"
+                      placeholder="New password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Resetting..." : "Reset Password"}
+                  </Button>
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Resetting..." : "Reset Password"}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="container relative flex-col items-center justify-center grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-      <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
-        <div className="absolute inset-0 bg-zinc-900/50" />
-        <div 
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: `url('https://res.cloudinary.com/dxiknlpty/image/upload/v1738681929/cld-sample-4.jpg')`
-          }}
-        />
-      </div>
-      <div className="lg:p-8">
-        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-          <div className="flex flex-col space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Welcome to Dine-N
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Sign in to your account or create a new one
-            </p>
+    <div className="min-h-screen flex flex-col">
+      <div className="container relative flex-col items-center justify-center grid lg:max-w-none lg:grid-cols-2 lg:px-0 flex-1">
+        <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
+          <div className="absolute inset-0 bg-zinc-900/50" />
+          <div 
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: `url('https://res.cloudinary.com/dxiknlpty/image/upload/v1738681929/cld-sample-4.jpg')`
+            }}
+          />
+        </div>
+        <div className="lg:p-8">
+          <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+            <div className="flex flex-col space-y-2 text-center">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Welcome to Dine-N
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Sign in to your account or create a new one
+              </p>
+            </div>
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'register')} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+              </TabsList>
+              <TabsContent value="login">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Login</CardTitle>
+                    <CardDescription>
+                      Enter your credentials to access your account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AuthFormWrapper initialMode="login" />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="register">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Register</CardTitle>
+                    <CardDescription>
+                      Create a new account to get started
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AuthFormWrapper initialMode="register" />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'register')} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="register">Register</TabsTrigger>
-            </TabsList>
-            <TabsContent value="login">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Login</CardTitle>
-                  <CardDescription>
-                    Enter your credentials to access your account
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <AuthFormWrapper initialMode="login" />
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="register">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Register</CardTitle>
-                  <CardDescription>
-                    Create a new account to get started
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <AuthFormWrapper initialMode="register" />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

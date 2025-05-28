@@ -12,13 +12,14 @@ import MealPlanCard from "@/components/MealPlanCard";
 import MissingRecipeCard from "@/components/MissingRecipeCard";
 import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { MealPlanLoadingState } from "@/components/MealPlanLoadingState";
 import { createMealPlan, createGroceryList, generateMealPlan, getTemporaryRecipes, getCurrentMealPlan } from "@/lib/api";
 import { downloadCalendarEvent } from "@/lib/calendar";
 import type { Recipe, ChefPreferences, CreateMealPlanInput } from "@/lib/types";
 import type { Preferences, MealPlan } from "@db/schema";
 import { PreferenceSchema } from "@db/schema";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
-import { Wand2, AlertCircle, Calendar, Plus } from "lucide-react";
+import { Wand2, AlertCircle, Calendar, Plus, Bug, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -151,6 +152,27 @@ export default function MealPlan() {
   const queryClient = useQueryClient();
   const { data: user, isLoading: isUserLoading } = useUser();
   const isMobile = useMediaQuery("(max-width: 640px)");
+  
+  // Add a check for development mode
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  // Test function to trigger loading state
+  const handleTestLoadingState = () => {
+    toast({
+      title: "Test Mode",
+      description: "Loading state activated for 15 seconds",
+    });
+    
+    setIsGenerating(true);
+    
+    setTimeout(() => {
+      setIsGenerating(false);
+      toast({
+        title: "Test Complete",
+        description: "Loading state deactivated",
+      });
+    }, 15000);
+  };
 
   // Update the currentMealPlan query to transform recipes
   const { data: currentMealPlan, isLoading: isLoadingMealPlan } = useQuery({
@@ -245,30 +267,35 @@ export default function MealPlan() {
       return;
     }
 
+    // Prepare the preferences data
+    const updatedPreferences = {
+      dietary: Array.isArray(tempPreferences.dietary) ? tempPreferences.dietary : [],
+      allergies: Array.isArray(tempPreferences.allergies) ? tempPreferences.allergies : [],
+      cuisine: Array.isArray(tempPreferences.cuisine) ? tempPreferences.cuisine : [],
+      meatTypes: Array.isArray(tempPreferences.meatTypes) ? tempPreferences.meatTypes : [],
+      chefPreferences: {
+        difficulty: chefPreferences.difficulty || defaultChefPreferences.difficulty,
+        cookTime: chefPreferences.cookTime || defaultChefPreferences.cookTime,
+        servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize,
+        mealPlanDuration: chefPreferences.mealPlanDuration || defaultChefPreferences.mealPlanDuration
+      }
+    };
+
+    // Update local state and close modal
+    setPreferences(updatedPreferences);
+    setTempPreferences(updatedPreferences);
+    setShowPreferences(false);
+    
+    // Start loading state immediately
+    setIsGenerating(true);
+
     try {
-      setIsGenerating(true);
-
-      const updatedPreferences = {
-        dietary: Array.isArray(tempPreferences.dietary) ? tempPreferences.dietary : [],
-        allergies: Array.isArray(tempPreferences.allergies) ? tempPreferences.allergies : [],
-        cuisine: Array.isArray(tempPreferences.cuisine) ? tempPreferences.cuisine : [],
-        meatTypes: Array.isArray(tempPreferences.meatTypes) ? tempPreferences.meatTypes : [],
-        chefPreferences: {
-          difficulty: chefPreferences.difficulty || defaultChefPreferences.difficulty,
-          cookTime: chefPreferences.cookTime || defaultChefPreferences.cookTime,
-          servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize,
-          mealPlanDuration: chefPreferences.mealPlanDuration || defaultChefPreferences.mealPlanDuration
-        }
-      };
-
-      setPreferences(updatedPreferences);
-      setTempPreferences(updatedPreferences);
-
       // Save preferences to user account
       if (user) {
         await savePreferencesToAccount(updatedPreferences);
       }
 
+      // Generate the meal plan
       const result = await generateMealPlan(updatedPreferences, requestedDays);
       if (!result.recipes || result.recipes.length === 0) {
         throw new Error('No recipes were generated. Please try again.');
@@ -276,7 +303,7 @@ export default function MealPlan() {
 
       console.log('Generated recipes:', JSON.stringify(result.recipes, null, 2));
       
-      // Store missing meals if any
+      // Handle missing meals
       if (result.status === 'partial' && result.missingMeals) {
         setMissingMeals(result.missingMeals);
         toast({
@@ -288,7 +315,7 @@ export default function MealPlan() {
         setMissingMeals([]);
       }
 
-      // Create the meal plan with expiration
+      // Create the meal plan
       const endDate = new Date(selectedDate);
       endDate.setDate(endDate.getDate() + requestedDays - 1);
       
@@ -307,26 +334,20 @@ export default function MealPlan() {
 
       console.log('Creating meal plan with input:', JSON.stringify(mealPlanInput, null, 2));
 
-      try {
-        const createdMealPlan = await createMealPlan(mealPlanInput);
-        console.log('Meal plan created:', JSON.stringify(createdMealPlan, null, 2));
-        
-        // Close the preferences modal
-        setShowPreferences(false);
-        
-        // Refresh the current meal plan data and wait for it to complete
-        await queryClient.invalidateQueries({ queryKey: ['current-meal-plan'] });
-        await queryClient.refetchQueries({ queryKey: ['current-meal-plan'] });
+      const createdMealPlan = await createMealPlan(mealPlanInput);
+      console.log('Meal plan created:', JSON.stringify(createdMealPlan, null, 2));
+      
+      // Refresh the meal plan data
+      await queryClient.invalidateQueries({ queryKey: ['current-meal-plan'] });
+      await queryClient.refetchQueries({ queryKey: ['current-meal-plan'] });
 
-        toast({
-          title: "Success",
-          description: `Meal plan generated successfully. Valid for ${requestedDays} days.`
-        });
-      } catch (error) {
-        console.error('Error creating meal plan:', error);
-        throw error;
-      }
+      toast({
+        title: "Success",
+        description: `Meal plan generated successfully. Valid for ${requestedDays} days.`
+      });
+
     } catch (error) {
+      console.error('Error in meal plan generation:', error);
       if (error instanceof Error) {
         toast({
           title: "Error",
@@ -335,6 +356,7 @@ export default function MealPlan() {
         });
       }
     } finally {
+      // Always clear loading state when done
       setIsGenerating(false);
     }
   };
@@ -342,6 +364,9 @@ export default function MealPlan() {
   // Function to regenerate a missing recipe
   const handleRegenerateMissingRecipe = async (day: number, meal: string) => {
     try {
+      // We don't set the full isGenerating state here because the MissingRecipeCard 
+      // already shows its own loading state and we don't want to block the whole UI
+      
       const response = await fetch("/api/regenerate-recipe", {
         method: "POST",
         headers: {
@@ -428,23 +453,97 @@ export default function MealPlan() {
 
     if (currentMealPlan?.is_expired) {
       return (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="mb-4">Your meal plan has expired</p>
-          <Button onClick={() => setShowPreferences(true)}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            Generate New Meal Plan
-          </Button>
+        <div className="text-center py-12 space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold text-muted-foreground">Your meal plan has expired</h2>
+            <p className="text-muted-foreground">Ready to plan your next delicious week?</p>
+          </div>
+          
+          <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg p-6 max-w-md mx-auto">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-primary/20 p-2 rounded-full">
+                <Calendar className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="font-semibold">Weekly Planner</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Get AI-powered recipe suggestions and create your perfect meal plan in just a few clicks.
+            </p>
+            <Button 
+              onClick={() => window.location.href = '/weekly-planner'} 
+              className="w-full"
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              Create New Meal Plan
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="text-xs text-muted-foreground">
+            Or{' '}
+            <Button 
+              variant="link" 
+              className="p-0 h-auto text-xs" 
+              onClick={() => setShowPreferences(true)}
+            >
+              use the classic meal plan generator
+            </Button>
+          </div>
+          
+          {isDevelopment && (
+            <Button variant="outline" onClick={handleTestLoadingState}>
+              <Bug className="mr-2 h-4 w-4" />
+              Test Loading State
+            </Button>
+          )}
         </div>
       );
     }
 
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <p className="mb-4">Generate a meal plan to get started</p>
-        <Button onClick={() => setShowPreferences(true)}>
-          <Wand2 className="mr-2 h-4 w-4" />
-          Generate Meal Plan
-        </Button>
+      <div className="text-center py-12 space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold text-muted-foreground">No meal plan yet</h2>
+          <p className="text-muted-foreground">Let's create your first personalized meal plan!</p>
+        </div>
+        
+        <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg p-6 max-w-md mx-auto">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-primary/20 p-2 rounded-full">
+              <Calendar className="h-5 w-5 text-primary" />
+            </div>
+            <h3 className="font-semibold">Weekly Planner</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Get AI-powered recipe suggestions and create your perfect meal plan in just a few clicks.
+          </p>
+          <Button 
+            onClick={() => window.location.href = '/weekly-planner'} 
+            className="w-full"
+          >
+            <Calendar className="mr-2 h-4 w-4" />
+            Start Planning
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+        
+        <div className="text-xs text-muted-foreground">
+          Or{' '}
+          <Button 
+            variant="link" 
+            className="p-0 h-auto text-xs" 
+            onClick={() => setShowPreferences(true)}
+          >
+            use the classic meal plan generator
+          </Button>
+        </div>
+        
+        {isDevelopment && (
+          <Button variant="outline" onClick={handleTestLoadingState}>
+            <Bug className="mr-2 h-4 w-4" />
+            Test Loading State
+          </Button>
+        )}
       </div>
     );
   };
@@ -579,7 +678,7 @@ export default function MealPlan() {
         </TabsList>
 
         <TabsContent value="meals" className="mt-6">
-          {currentMealPlan && !currentMealPlan.is_expired && (
+          {currentMealPlan && !currentMealPlan.is_expired && !isGenerating && (
             <div className="flex justify-end mb-4">
               <TooltipProvider>
                 <Tooltip>
@@ -598,12 +697,24 @@ export default function MealPlan() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              
+              {isDevelopment && (
+                <Button 
+                  variant="ghost" 
+                  onClick={handleTestLoadingState}
+                  className="ml-2 flex items-center gap-2 text-muted-foreground"
+                >
+                  <Bug className="h-4 w-4" />
+                  Test Loading
+                </Button>
+              )}
             </div>
           )}
           <div className="grid gap-6">
             {isGenerating ? (
-              <LoadingAnimation
-                messages={generateLoadingMessages(preferences, preferences.chefPreferences || defaultChefPreferences)}
+              <MealPlanLoadingState
+                messages={generateLoadingMessages(tempPreferences, tempPreferences.chefPreferences || defaultChefPreferences)}
+                baseMessage="Cooking up your personalized meal plan..."
               />
             ) : (
               <>
@@ -657,18 +768,39 @@ export default function MealPlan() {
         </TabsContent>
 
         <TabsContent value="grocery">
-          <GroceryList
-            items={
-              currentMealPlan?.recipes.flatMap(recipe => 
-                (recipe.ingredients || []).map(ingredient => ({
-                  name: String(ingredient.name || ''),
-                  amount: Number(ingredient.amount || 0),
-                  unit: String(ingredient.unit || ''),
-                  checked: false
-                }))
-              ) ?? []
-            }
-          />
+          {isGenerating ? (
+            <MealPlanLoadingState
+              messages={generateLoadingMessages(tempPreferences, tempPreferences.chefPreferences || defaultChefPreferences)}
+              baseMessage="Preparing your grocery list..."
+            />
+          ) : (
+            <>
+              {isDevelopment && currentMealPlan && !currentMealPlan.is_expired && (
+                <div className="flex justify-end mb-4">
+                  <Button 
+                    variant="ghost" 
+                    onClick={handleTestLoadingState}
+                    className="flex items-center gap-2 text-muted-foreground"
+                  >
+                    <Bug className="h-4 w-4" />
+                    Test Loading
+                  </Button>
+                </div>
+              )}
+              <GroceryList
+                items={
+                  currentMealPlan?.recipes.flatMap(recipe => 
+                    (recipe.ingredients || []).map(ingredient => ({
+                      name: String(ingredient.name || ''),
+                      amount: Number(ingredient.amount || 0),
+                      unit: String(ingredient.unit || ''),
+                      checked: false
+                    }))
+                  ) ?? []
+                }
+              />
+            </>
+          )}
         </TabsContent>
       </Tabs>
 
