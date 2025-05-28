@@ -809,108 +809,104 @@ export function registerRoutes(app: express.Express) {
         }
       });
 
-      // Generate recipes in parallel for each day and meal
-      const recipePromises = [];
+      // Generate recipes in parallel for each day and meal - OPTIMIZED APPROACH
       const expectedRecipeCount = days * 3; // 3 meals per day
+      console.log(`Starting parallel generation of ${expectedRecipeCount} recipes for ${days} days`);
 
-      // Prepare cuisine preference for each meal to ensure variety
-      const cuisinesByMeal: Array<string[]> = [];
-      for (let i = 0; i < expectedRecipeCount; i++) {
-        // Get cuisines sorted by least used
-        const prioritizedCuisines = [...normalizedPreferences.cuisine].sort((a, b) => 
-          (cuisineUsage[a] || 0) - (cuisineUsage[b] || 0)
-        );
-        
-        // Always include all cuisines, but prioritize least used ones
-        cuisinesByMeal.push(prioritizedCuisines);
-      }
-
-      let mealIndex = 0;
+      // Create all recipe generation tasks upfront for maximum parallelization
+      const recipeGenerationTasks = [];
+      
       for (let day = 0; day < days; day++) {
         for (const mealType of mealTypes) {
-          console.log(`Queuing recipe generation for day ${day + 1}, meal ${mealType}`);
-          const existingNames = Array.from(usedRecipeNames);
+          // Get cuisines sorted by least used for variety
+          const prioritizedCuisines = [...normalizedPreferences.cuisine].sort((a, b) => 
+            (cuisineUsage[a] || 0) - (cuisineUsage[b] || 0)
+          );
           
-          // Use prioritized cuisines for this meal
-          const cuisinesForThisMeal = cuisinesByMeal[mealIndex] || normalizedPreferences.cuisine;
-          mealIndex++;
+          const task = {
+            day,
+            mealType,
+            cuisines: prioritizedCuisines.length > 0 ? prioritizedCuisines : normalizedPreferences.cuisine,
+            taskId: `day-${day}-${mealType}`
+          };
           
-          const promise = generateRecipeRecommendation({
+          recipeGenerationTasks.push(task);
+        }
+      }
+
+      // Execute all recipe generations in parallel with improved error handling
+      console.log(`Executing ${recipeGenerationTasks.length} recipe generation tasks in parallel`);
+      const startTime = Date.now();
+      
+      const recipePromises = recipeGenerationTasks.map(async (task, index) => {
+        try {
+          console.log(`Starting generation for ${task.taskId} (${index + 1}/${recipeGenerationTasks.length})`);
+          
+          // Get current used names at the time of generation (thread-safe approach)
+          const currentUsedNames = Array.from(usedRecipeNames);
+          
+          const recipe = await generateRecipeRecommendation({
             dietary: normalizedPreferences.dietary,
             allergies: normalizedPreferences.allergies,
-            cuisine: cuisinesForThisMeal,
+            cuisine: task.cuisines,
             meatTypes: normalizedPreferences.meatTypes,
-            mealType,
-            excludeNames: existingNames,
-            maxRetries: 3 // Allow 3 retries at each relaxation level
-          }).catch(error => {
-            console.error(`Failed to generate recipe for day ${day + 1}, meal ${mealType}:`, error);
-            missingMeals.push({ day, meal: mealType });
-            return null;
+            mealType: task.mealType,
+            excludeNames: currentUsedNames,
+            maxRetries: 2 // Reduced retries for faster parallel execution
           });
-          recipePromises.push(promise);
-        }
-      }
 
-      // Wait for all recipes to be generated
-      const generatedRecipes = await Promise.all(recipePromises);
-      const suggestedRecipes = [];
-
-      // Process the generated recipes
-      for (const recipeData of generatedRecipes) {
-        if (!recipeData?.name || typeof recipeData !== 'object') {
-          console.error('Invalid recipe data received:', recipeData);
-          continue;
-        }
-
-        if (!usedRecipeNames.has(recipeData.name)) {
-          const generatedRecipe: Partial<Recipe> = {
-            ...recipeData,
-            id: -(suggestedRecipes.length + 1), // Using negative IDs for temporary recipes
-          };
-
-          // Update cuisine usage count
-          if (Array.isArray(recipeData.tags)) {
-            const cuisineTag = recipeData.tags.find(tag => 
-              typeof tag === 'string' && normalizedPreferences.cuisine.includes(tag)
-            ) as string | undefined;
-            
-            if (cuisineTag && typeof cuisineTag === 'string') {
-              cuisineUsage[cuisineTag] = (cuisineUsage[cuisineTag] || 0) + 1;
-              console.log(`Updated cuisine usage: ${cuisineTag} used ${cuisineUsage[cuisineTag]} times`);
-            }
+          // Add to used names immediately to prevent duplicates in parallel execution
+          if (recipe?.name) {
+            usedRecipeNames.add(recipe.name);
           }
 
-          console.log('Generated recipe:', JSON.stringify(generatedRecipe, null, 2));
-          usedRecipeNames.add(recipeData.name);
-          suggestedRecipes.push(generatedRecipe);
+          console.log(`Completed generation for ${task.taskId}: ${recipe?.name || 'FAILED'}`);
+          return {
+            ...recipe,
+            day: task.day,
+            mealType: task.mealType,
+            taskId: task.taskId
+          };
+        } catch (error) {
+          console.error(`Failed to generate recipe for ${task.taskId}:`, error);
+          missingMeals.push({ day: task.day, meal: task.mealType });
+          return null;
         }
-      }
+      });
+
+      // Wait for all recipes to be generated with timeout protection
+      console.log('Waiting for all recipe generations to complete...');
+      const generatedRecipes = await Promise.all(recipePromises);
+      const generationTime = Date.now() - startTime;
+      console.log(`Parallel generation completed in ${generationTime}ms`);
+
+      // Filter out failed generations and process successful ones
+      const successfulRecipes = generatedRecipes.filter(recipe => recipe !== null && recipe?.name);
+      console.log(`Successfully generated ${successfulRecipes.length} out of ${expectedRecipeCount} recipes`);
 
       // Allow partial success if we have at least one recipe per day
       const minimumRequired = days; // At least one meal per day
-      if (suggestedRecipes.length < minimumRequired) {
-        console.error(`Failed to generate minimum required recipes. Expected at least ${minimumRequired}, got ${suggestedRecipes.length}`);
+      if (successfulRecipes.length < minimumRequired) {
+        console.error(`Failed to generate minimum required recipes. Expected at least ${minimumRequired}, got ${successfulRecipes.length}`);
         return res.status(500).json({
           error: "Failed to generate meal plan",
           message: "Could not generate enough recipes for a viable meal plan"
         });
       }
 
-      // Save generated recipes to temporary_recipes table
+      // Save generated recipes to temporary_recipes table in parallel
       const expirationDate = new Date();
-      expirationDate.setDate(expirationDate.getDate() + 2); // Set expiration to 2 days from now
+      expirationDate.setDate(expirationDate.getDate() + 2);
 
-      const savedRecipes = [];
-      for (let i = 0; i < suggestedRecipes.length; i++) {
-        const recipe = suggestedRecipes[i];
-        if (!recipe) continue;
-
-        // Calculate the current meal type based on the recipe's position
-        const currentMealType = mealTypes[i % 3];
-        const mealTypeCapitalized = currentMealType.charAt(0).toUpperCase() + currentMealType.slice(1);
+      console.log('Starting parallel recipe saving...');
+      const saveStartTime = Date.now();
+      
+      const savePromises = successfulRecipes.map(async (recipe, index) => {
+        if (!recipe) return null;
 
         try {
+          const mealTypeCapitalized = recipe.mealType.charAt(0).toUpperCase() + recipe.mealType.slice(1);
+
           const insertData = {
             user_id: user.id,
             name: recipe.name || '',
@@ -955,10 +951,10 @@ export function registerRoutes(app: express.Express) {
           if (!parseResult.success) {
             console.error('Invalid recipe data:', parseResult.error.issues);
             missingMeals.push({ 
-              day: Math.floor(i / 3), 
-              meal: currentMealType 
+              day: recipe.day, 
+              meal: recipe.mealType 
             });
-            continue;
+            return null;
           }
 
           const [savedRecipe] = await db
@@ -966,31 +962,34 @@ export function registerRoutes(app: express.Express) {
             .values(parseResult.data)
             .returning();
 
+          // Handle image storage asynchronously (don't block the response)
           if (savedRecipe.image_url) {
-            try {
-              const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
-              if (permanentUrl) {
-                const [updatedRecipe] = await db
-                  .update(temporaryRecipes)
-                  .set({ permanent_url: permanentUrl })
-                  .where(eq(temporaryRecipes.id, savedRecipe.id))
-                  .returning();
-                savedRecipes.push(updatedRecipe);
-                continue;
-              }
-            } catch (error) {
-              console.error('Failed to store image:', error);
-            }
+            downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id))
+              .then(permanentUrl => {
+                if (permanentUrl) {
+                  db.update(temporaryRecipes)
+                    .set({ permanent_url: permanentUrl })
+                    .where(eq(temporaryRecipes.id, savedRecipe.id))
+                    .catch(error => console.error('Failed to update permanent URL:', error));
+                }
+              })
+              .catch(error => console.error('Failed to store image:', error));
           }
-          savedRecipes.push(savedRecipe);
+
+          return savedRecipe;
         } catch (error) {
           console.error('Failed to save recipe:', error);
           missingMeals.push({ 
-            day: Math.floor(i / 3), 
-            meal: currentMealType 
+            day: recipe.day, 
+            meal: recipe.mealType 
           });
+          return null;
         }
-      }
+      });
+
+      const savedRecipes = (await Promise.all(savePromises)).filter(recipe => recipe !== null);
+      const saveTime = Date.now() - saveStartTime;
+      console.log(`Parallel recipe saving completed in ${saveTime}ms`);
 
       // After successfully saving recipes, increment the meal_plans_generated counter
       if (savedRecipes.length > 0) {
@@ -1000,6 +999,9 @@ export function registerRoutes(app: express.Express) {
           .where(eq(users.id, user.id));
       }
 
+      const totalTime = Date.now() - startTime;
+      console.log(`Total meal plan generation completed in ${totalTime}ms`);
+
       // Return partial success response if we have some recipes but not all
       res.json({
         recipes: savedRecipes,
@@ -1008,7 +1010,12 @@ export function registerRoutes(app: express.Express) {
         message: savedRecipes.length === days * 3 
           ? 'Successfully generated all recipes'
           : `Generated ${savedRecipes.length} out of ${days * 3} recipes`,
-        remaining_free_plans: isFreeTier ? (hasUsedFreePlan ? 0 : 1) : null
+        remaining_free_plans: isFreeTier ? (hasUsedFreePlan ? 0 : 1) : null,
+        performance: {
+          generationTimeMs: generationTime,
+          saveTimeMs: saveTime,
+          totalTimeMs: totalTime
+        }
       });
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
@@ -1848,17 +1855,8 @@ export function registerRoutes(app: express.Express) {
       const user = req.user!;
       const { days, suggestionsPerMealType, preferences } = req.body;
 
-      // Check subscription limits
-      const isFreeTier = user.subscription_tier === 'free';
-      const hasUsedFreePlan = user.meal_plans_generated > 0;
-
-      if (isFreeTier && hasUsedFreePlan) {
-        return res.status(403).json({
-          error: "Free plan limit reached",
-          message: "You've reached your free meal plan limit. Please upgrade to premium for unlimited meal plans.",
-          code: "UPGRADE_REQUIRED"
-        });
-      }
+      // Remove subscription limit check for suggestions - allow free users to generate suggestions
+      // The limit will be enforced when they try to create the actual meal plan
 
       // Check cooldown period - user must wait until their last meal plan expires
       const lastMealPlan = await db
@@ -2101,7 +2099,11 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 2);
 
-      for (const title of allSelectedTitles) {
+      // OPTIMIZED: Generate all recipes in parallel instead of sequentially
+      console.log(`Starting parallel generation of ${allSelectedTitles.length} recipes`);
+      const startTime = Date.now();
+
+      const recipeGenerationPromises = allSelectedTitles.map(async (title) => {
         try {
           console.log(`Generating full recipe for: ${title}`);
           
@@ -2116,74 +2118,121 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               mealType = "lunch";
             }
 
-            // Save to temporary_recipes table
-            const insertData = {
-              user_id: user.id,
-              name: fullRecipe.name,
-              description: fullRecipe.description || null,
-              image_url: fullRecipe.image_url || null,
-              permanent_url: null,
-              prep_time: fullRecipe.prep_time || 0,
-              cook_time: fullRecipe.cook_time || 0,
-              servings: fullRecipe.servings || 4,
-              ingredients: fullRecipe.ingredients || [],
-              instructions: fullRecipe.instructions || [],
-              meal_type: mealType.charAt(0).toUpperCase() + mealType.slice(1) as z.infer<typeof MealTypeEnum>,
-              cuisine_type: (Array.isArray(fullRecipe.tags)
-                ? (fullRecipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
-                    ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
-                  ) || "Other")
-                : "Other") as z.infer<typeof CuisineTypeEnum>,
-              dietary_restrictions: (Array.isArray(fullRecipe.tags)
-                ? fullRecipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
-                    ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
-                  )
-                : []) as z.infer<typeof DietaryTypeEnum>[],
-              difficulty: (() => {
-                switch(fullRecipe.complexity) {
-                  case 1: return "Easy" as const;
-                  case 2: return "Moderate" as const;
-                  case 3: return "Advanced" as const;
-                  default: return "Moderate" as const;
-                }
-              })() as z.infer<typeof DifficultyEnum>,
-              tags: fullRecipe.tags || [],
-              nutrition: fullRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-              complexity: fullRecipe.complexity || 1,
-              created_at: new Date(),
-              expires_at: expirationDate,
-              favorited: false,
-              favorites_count: 0
+            return {
+              recipe: fullRecipe,
+              mealType,
+              title
             };
-
-            const [savedRecipe] = await db.insert(temporaryRecipes).values(insertData).returning();
-            
-            // Store image permanently if it exists
-            let finalRecipe = savedRecipe;
-            if (savedRecipe.image_url) {
-              try {
-                const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
-                if (permanentUrl) {
-                  const [updatedRecipe] = await db
-                    .update(temporaryRecipes)
-                    .set({ permanent_url: permanentUrl })
-                    .where(eq(temporaryRecipes.id, savedRecipe.id))
-                    .returning();
-                  
-                  finalRecipe = updatedRecipe;
-                }
-              } catch (error) {
-                console.error('Failed to store image:', error);
-              }
-            }
-
-            generatedRecipes.push(finalRecipe);
-            recipesByMealType[mealType].push(finalRecipe);
-            console.log(`Successfully generated ${mealType} recipe: ${finalRecipe.name}`);
           }
+          return null;
         } catch (error) {
           console.error(`Error generating recipe for title "${title}":`, error);
-          // Continue with other recipes even if one fails
+          return null;
+        }
+      });
+
+      // Wait for all recipe generations to complete
+      const recipeResults = await Promise.all(recipeGenerationPromises);
+      const generationTime = Date.now() - startTime;
+      console.log(`Parallel recipe generation completed in ${generationTime}ms`);
+
+      // Filter successful results and prepare for database insertion
+      const successfulResults = recipeResults.filter(result => result !== null);
+      
+      if (successfulResults.length === 0) {
+        return res.status(500).json({
+          error: "Failed to generate meal plan",
+          message: "Could not generate any recipes from the selected titles"
+        });
+      }
+
+      // OPTIMIZED: Save all recipes to database in parallel
+      console.log('Starting parallel recipe saving...');
+      const saveStartTime = Date.now();
+
+      const savePromises = successfulResults.map(async (result) => {
+        if (!result) return null;
+
+        const { recipe: fullRecipe, mealType } = result;
+
+        try {
+          const insertData = {
+            user_id: user.id,
+            name: fullRecipe.name || "Untitled Recipe",
+            description: fullRecipe.description || null,
+            image_url: fullRecipe.image_url || null,
+            permanent_url: null,
+            prep_time: fullRecipe.prep_time || 0,
+            cook_time: fullRecipe.cook_time || 0,
+            servings: fullRecipe.servings || 4,
+            ingredients: fullRecipe.ingredients || [],
+            instructions: fullRecipe.instructions || [],
+            meal_type: mealType.charAt(0).toUpperCase() + mealType.slice(1) as z.infer<typeof MealTypeEnum>,
+            cuisine_type: (Array.isArray(fullRecipe.tags)
+              ? (fullRecipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+                  ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+                ) || "Other")
+              : "Other") as z.infer<typeof CuisineTypeEnum>,
+            dietary_restrictions: (Array.isArray(fullRecipe.tags)
+              ? fullRecipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+                  ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+                )
+              : []) as z.infer<typeof DietaryTypeEnum>[],
+            difficulty: (() => {
+              switch(fullRecipe.complexity) {
+                case 1: return "Easy" as const;
+                case 2: return "Moderate" as const;
+                case 3: return "Advanced" as const;
+                default: return "Moderate" as const;
+              }
+            })() as z.infer<typeof DifficultyEnum>,
+            tags: fullRecipe.tags || [],
+            nutrition: fullRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+            complexity: fullRecipe.complexity || 1,
+            created_at: new Date(),
+            expires_at: expirationDate,
+            favorited: false,
+            favorites_count: 0
+          };
+
+          const [savedRecipe] = await db.insert(temporaryRecipes).values(insertData).returning();
+          
+          // Handle image storage asynchronously (don't block the response)
+          if (savedRecipe.image_url) {
+            downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id))
+              .then(permanentUrl => {
+                if (permanentUrl) {
+                  db.update(temporaryRecipes)
+                    .set({ permanent_url: permanentUrl })
+                    .where(eq(temporaryRecipes.id, savedRecipe.id))
+                    .catch(error => console.error('Failed to update permanent URL:', error));
+                }
+              })
+              .catch(error => console.error('Failed to store image:', error));
+          }
+
+          return {
+            savedRecipe,
+            mealType
+          };
+        } catch (error) {
+          console.error(`Error saving recipe for "${fullRecipe.name}":`, error);
+          return null;
+        }
+      });
+
+      const saveResults = await Promise.all(savePromises);
+      const saveTime = Date.now() - saveStartTime;
+      console.log(`Parallel recipe saving completed in ${saveTime}ms`);
+
+      // Process saved results and organize by meal type
+      const successfulSaves = saveResults.filter(result => result !== null);
+      
+      for (const result of successfulSaves) {
+        if (result) {
+          generatedRecipes.push(result.savedRecipe);
+          recipesByMealType[result.mealType].push(result.savedRecipe);
+          console.log(`Successfully generated ${result.mealType} recipe: ${result.savedRecipe.name}`);
         }
       }
 

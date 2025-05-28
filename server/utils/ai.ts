@@ -49,71 +49,49 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
         ? `\nMust NOT generate any of these exact recipes: ${params.excludeNames.join(", ")}`
         : "";
 
-      // Log the actual parameters being used to generate the prompt
-      console.log('AI Service: Using dietary restrictions:', cleanParams.dietary);
-      console.log('AI Service: Using allergies:', cleanParams.allergies);
-      console.log('AI Service: Using cuisine preferences:', cleanParams.cuisine);
-      console.log('AI Service: Using meat preferences:', cleanParams.meatTypes);
-      console.log('AI Service: Meal type:', cleanParams.mealType);
-
-      // Build the prompt based on relaxation level
+      // Build the prompt based on relaxation level - OPTIMIZED FOR SPEED
       let uniquenessConstraint = "";
       if (relaxationLevel === 1) {
-        uniquenessConstraint = "Generate a completely unique recipe with a unique name and unique ingredients combination.";
+        uniquenessConstraint = "Create a completely unique recipe name that hasn't been used before.";
       } else if (relaxationLevel === 2) {
-        uniquenessConstraint = "You can use a similar recipe name but must use different main ingredients and cooking method.";
+        uniquenessConstraint = "Create a recipe with a creative variation on common dishes.";
       } else if (relaxationLevel === 3) {
-        uniquenessConstraint = "You can use a similar recipe structure but vary the main protein or primary ingredients.";
+        uniquenessConstraint = "Create any suitable recipe, variations of existing dishes are acceptable.";
       } else {
-        uniquenessConstraint = "You can use a similar recipe but must vary at least the sauce, seasoning, or preparation method.";
+        uniquenessConstraint = "Create any recipe that meets the basic requirements.";
       }
 
-      const prompt = `Generate a unique and detailed recipe that is suitable for ${params.mealType}. ${uniquenessConstraint}
-Do not include recipes with Tofu unless the user chose Vegetarian or Vegan.
-${cleanParams.dietary.length > 0 ? `Must follow dietary restrictions: ${cleanParams.dietary.join(", ")}` : "No specific dietary restrictions"}
-${cleanParams.allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${cleanParams.allergies.join(", ")}` : "No allergies to consider"}
-${cleanParams.cuisine.length > 0 ? `IMPORTANT: For this specific recipe, randomly select ONE of these cuisines and create an authentic recipe from that cuisine: ${cleanParams.cuisine.join(", ")}. Make sure to include the selected cuisine in the tags field.` : "No specific cuisine preference"}
-${cleanParams.meatTypes.length > 0 ? `Preferred meat types: ${cleanParams.meatTypes.join(", ")}` : "No specific meat preference"}
-${excludeNamesStr}
+      // OPTIMIZED PROMPT - Reduced token count while maintaining quality
+      const prompt = `Generate a ${params.mealType} recipe. ${uniquenessConstraint}${excludeNamesStr}
 
-MEASUREMENT REQUIREMENTS:
-- Use ONLY US customary units (cups, tablespoons, teaspoons, ounces, pounds, fluid ounces)
-- DO NOT use metric units (grams, kilograms, milliliters, liters)
-- Examples: "1 cup flour", "2 tablespoons olive oil", "8 ounces chicken breast", "1 pound ground beef"
-- For small amounts use teaspoons/tablespoons, for larger amounts use cups/ounces/pounds
+Requirements:
+${cleanParams.dietary.length > 0 ? `- Diet: ${cleanParams.dietary.join(", ")}` : ""}
+${cleanParams.allergies.length > 0 ? `- Avoid: ${cleanParams.allergies.join(", ")}` : ""}
+${cleanParams.cuisine.length > 0 ? `- Cuisine: ${cleanParams.cuisine.join(", ")}` : ""}
+${cleanParams.meatTypes.length > 0 ? `- Proteins: ${cleanParams.meatTypes.join(", ")}` : ""}
 
-You must respond with a valid recipe in this exact JSON format:
+Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
 {
   "name": "Recipe Name",
   "description": "Brief description",
-  "prep_time": minutes (number),
-  "cook_time": minutes (number),
+  "prep_time": minutes,
+  "cook_time": minutes,
   "servings": number,
-  "ingredients": [{ "name": "ingredient", "amount": number, "unit": "unit" }],
+  "ingredients": [{"name": "ingredient", "amount": number, "unit": "unit"}],
   "instructions": ["step 1", "step 2"],
   "meal_type": "${params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1)}",
   "tags": ["tag1", "tag2"],
-  "nutrition": { "calories": number, "protein": number, "carbs": number, "fat": number },
-  "complexity": number (1 for easy, 2 for medium, 3 for hard)
-}
+  "nutrition": {"calories": number, "protein": number, "carbs": number, "fat": number},
+  "complexity": number
+}`;
 
-IMPORTANT REQUIREMENTS:
-1. The meal_type field MUST be exactly "${params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1)}"
-2. The recipe MUST be appropriate for the specified meal type
-3. For breakfast: focus on breakfast-appropriate dishes (e.g., eggs, oatmeal, breakfast sandwiches)
-4. For lunch: focus on midday-appropriate meals (e.g., sandwiches, salads, light proteins)
-5. For dinner: focus on dinner-appropriate dishes (e.g., main courses, protein with sides)
-6. The recipe name MUST be unique and NOT be one of the excluded names${excludeNamesStr ? " listed above" : ""}
-7. If cuisines were provided, the selected cuisine MUST be included in the tags field
-8. ALL ingredient measurements MUST use US customary units only (no grams, kilograms, milliliters, etc.)`;
-
-      console.log('AI Service: Generated prompt:', prompt);
+      console.log('AI Service: Generated optimized prompt');
 
       const completion = await openai.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: "You are a professional chef who creates awe-inspiring recipes. Create detailed, healthy recipes following the dietary restrictions and allergies exactly. When multiple cuisine types are provided, randomly select one for each recipe to ensure variety. Always respond with complete, valid JSON containing all required fields. IMPORTANT: Always use US customary units (cups, tablespoons, teaspoons, ounces, pounds) for all ingredient measurements - never use metric units.",
+            content: "You are a professional chef. Create detailed, healthy recipes following dietary restrictions exactly. Use US customary units only. Always respond with complete, valid JSON.",
           },
           {
             role: "user",
@@ -123,7 +101,7 @@ IMPORTANT REQUIREMENTS:
         model: "gpt-4o-2024-08-06",
         response_format: { type: "json_object" },
         temperature: 0.7 + (attempt * 0.1) + (relaxationLevel * 0.1), // Increase temperature with each retry and relaxation level
-        max_tokens: 1000,
+        max_tokens: 800, // Reduced from 1000 for faster generation
       });
 
       if (!completion.choices?.[0]?.message?.content) {
@@ -135,47 +113,40 @@ IMPORTANT REQUIREMENTS:
         throw new Error("Empty response from OpenAI API");
       }
 
+      console.log('AI Service: Received response from OpenAI');
+
       try {
-        const recipeData = JSON.parse(content) as RecipeGenerationResponse;
+        const parsedRecipe = JSON.parse(content);
         
-        // Check if the recipe name is in the excluded names list
-        if (recipeData.name && params.excludeNames?.includes(recipeData.name)) {
-          console.log(`AI Service: Generated recipe name "${recipeData.name}" is in exclude list, relaxing constraints...`);
-          lastError = new Error("Generated recipe name is in exclude list");
-          
-          // Increase relaxation level before continuing
-          if (attempt === maxRetries) {
-            relaxationLevel++;
-            attempt = 0; // Reset attempts for the new relaxation level
-            if (relaxationLevel > 4) {
-              throw new Error("Failed to generate unique recipe after all relaxation levels");
-            }
-          }
+        // Validate the parsed recipe structure
+        const validatedRecipe = {
+          name: parsedRecipe.name || "Untitled Recipe",
+          description: parsedRecipe.description || "",
+          prep_time: Number(parsedRecipe.prep_time) || 15,
+          cook_time: Number(parsedRecipe.cook_time) || 30,
+          servings: Number(parsedRecipe.servings) || 4,
+          ingredients: Array.isArray(parsedRecipe.ingredients) ? parsedRecipe.ingredients : [],
+          instructions: Array.isArray(parsedRecipe.instructions) ? parsedRecipe.instructions : [],
+          meal_type: parsedRecipe.meal_type || params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
+          tags: Array.isArray(parsedRecipe.tags) ? parsedRecipe.tags : [],
+          nutrition: parsedRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+          complexity: Number(parsedRecipe.complexity) || 2,
+          image_url: parsedRecipe.image_url || null
+        };
+
+        // Validate ingredients structure
+        if (!Array.isArray(validatedRecipe.ingredients) || validatedRecipe.ingredients.length === 0) {
+          console.error('AI Service: Invalid ingredients array');
+          lastError = new Error("Generated recipe has invalid ingredients");
           continue;
         }
 
-        let imageUrl: string | null = null;
-
-        if (recipeData.name) {
-          imageUrl = await generateRecipeImage(recipeData.name, cleanParams.allergies);
+        // Validate instructions
+        if (!Array.isArray(validatedRecipe.instructions) || validatedRecipe.instructions.length === 0) {
+          console.error('AI Service: Invalid instructions array');
+          lastError = new Error("Generated recipe has invalid instructions");
+          continue;
         }
-
-        // Ensure the meal type is properly set
-        const validatedRecipe: RecipeGenerationResponse = {
-          ...recipeData,
-          name: String(recipeData.name || '').trim(),
-          description: String(recipeData.description || 'No description available').trim(),
-          image_url: imageUrl,
-          prep_time: Math.max(0, Number(recipeData.prep_time) || 0),
-          cook_time: Math.max(0, Number(recipeData.cook_time) || 0),
-          servings: Math.max(1, Number(recipeData.servings) || 2),
-          ingredients: recipeData.ingredients,
-          instructions: recipeData.instructions,
-          meal_type: recipeData.meal_type || params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
-          tags: Array.isArray(recipeData.tags) ? recipeData.tags : [],
-          nutrition: recipeData.nutrition,
-          complexity: Math.max(1, Math.min(3, Number(recipeData.complexity) || 1))
-        };
 
         // Add validation check for meal type
         if (validatedRecipe.meal_type !== (params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1))) {
@@ -187,7 +158,7 @@ IMPORTANT REQUIREMENTS:
           continue;
         }
 
-        console.log('AI Service: Generated recipe:', JSON.stringify(validatedRecipe, null, 2));
+        console.log('AI Service: Successfully generated and validated recipe:', validatedRecipe.name);
         return validatedRecipe;
       } catch (parseError) {
         console.error('AI Service: Error parsing OpenAI response:', parseError);

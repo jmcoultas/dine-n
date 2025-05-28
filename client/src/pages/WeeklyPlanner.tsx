@@ -6,11 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { MealPlanLoadingState } from "@/components/MealPlanLoadingState";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
-import { Calendar, Sunrise, Sun, Moon, Wand2, CheckCircle, Loader2 } from "lucide-react";
+import { Calendar, Sunrise, Sun, Moon, Wand2, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
+import { getCurrentMealPlan } from "@/lib/api";
 import type { Preferences } from "@db/schema";
 import { PreferenceSchema } from "@db/schema";
 
@@ -67,6 +69,48 @@ const mealTypeConfig = {
   }
 };
 
+// Generate loading messages based on user preferences and selections
+const generateLoadingMessages = (preferences: Preferences, selectedRecipes: SelectedRecipes, selectedDays: number): string[] => {
+  const messages: string[] = [];
+
+  // Add preference-based messages
+  if (preferences.dietary?.length) {
+    preferences.dietary.forEach(diet => {
+      messages.push(`Ensuring recipes follow ${diet} guidelines...`);
+    });
+  }
+
+  if (preferences.allergies?.length) {
+    preferences.allergies.forEach(allergy => {
+      messages.push(`Checking for ${allergy}-free alternatives...`);
+    });
+  }
+
+  if (preferences.cuisine?.length) {
+    preferences.cuisine.forEach(cuisine => {
+      messages.push(`Exploring ${cuisine} cuisine recipes...`);
+    });
+  }
+
+  if (preferences.meatTypes?.length) {
+    messages.push(`Including your preferred protein choices...`);
+  }
+
+  // Add recipe generation messages
+  const totalRecipes = selectedDays * 3;
+  messages.push(
+    `Generating ${totalRecipes} complete recipes from your selections...`,
+    `Creating detailed ingredients lists...`,
+    `Calculating cooking times and difficulty levels...`,
+    `Adding nutritional information...`,
+    `Organizing your ${selectedDays}-day meal plan...`,
+    `Preparing your grocery list...`,
+    `Adding finishing touches...`
+  );
+
+  return messages;
+};
+
 export default function WeeklyPlanner() {
   const [selectedDays, setSelectedDays] = useState(2);
   const [suggestions, setSuggestions] = useState<WeeklyPlannerSuggestions>({
@@ -101,6 +145,12 @@ export default function WeeklyPlanner() {
       servingSize: '4',
       mealPlanDuration: '2'
     }
+  });
+
+  // Check for current meal plan
+  const { data: currentMealPlan, isLoading: isLoadingCurrentPlan } = useQuery({
+    queryKey: ['current-meal-plan'],
+    queryFn: getCurrentMealPlan,
   });
 
   useEffect(() => {
@@ -196,6 +246,14 @@ export default function WeeklyPlanner() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // Check if this is an upgrade required error
+        if (response.status === 403 && errorData.code === 'UPGRADE_REQUIRED') {
+          const upgradeError = new Error(errorData.message || 'Upgrade required');
+          (upgradeError as any).isUpgradeRequired = true;
+          throw upgradeError;
+        }
+        
         throw new Error(errorData.message || 'Failed to create meal plan');
       }
 
@@ -216,6 +274,13 @@ export default function WeeklyPlanner() {
       }, 100);
     },
     onError: (error: Error) => {
+      // Check if this is an upgrade required error
+      if ((error as any).isUpgradeRequired) {
+        setFeatureContext("Weekly Planner");
+        setShowSubscriptionModal(true);
+        return;
+      }
+      
       toast({
         title: "Error",
         description: error.message,
@@ -225,16 +290,9 @@ export default function WeeklyPlanner() {
   });
 
   const handleGenerateSuggestions = async () => {
-    // Check subscription limits
-    const isFreeTier = user?.subscription_tier === 'free';
-    const hasUsedFreePlan = (user?.meal_plans_generated || 0) > 0;
-
-    if (isFreeTier && hasUsedFreePlan) {
-      setFeatureContext("Weekly Planner");
-      setShowSubscriptionModal(true);
-      return;
-    }
-
+    // Remove the subscription limit check here - allow free users to generate suggestions
+    // The limit will be enforced when they try to create the actual meal plan
+    
     // Use the mutation instead of manual fetch
     generateSuggestionsMutation.mutate({ 
       days: selectedDays, 
@@ -292,10 +350,12 @@ export default function WeeklyPlanner() {
       return;
     }
 
+    // The subscription limit check is now handled server-side
+    // If the user exceeds their limit, the server will return an error that triggers the modal
     createMealPlanMutation.mutate({ selectedRecipes, preferences });
   };
 
-  if (isUserLoading) {
+  if (isUserLoading || isLoadingCurrentPlan) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <LoadingAnimation />
@@ -317,6 +377,56 @@ export default function WeeklyPlanner() {
           Plan your week with AI-generated recipe suggestions
         </p>
       </div>
+
+      {/* Active Meal Plan Alert */}
+      {currentMealPlan && !isLoadingCurrentPlan && (
+        <Alert className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:border-primary/30 dark:from-primary/10 dark:to-primary/20 shadow-lg">
+          <div className="flex items-start gap-3">
+            <div className="bg-primary/10 dark:bg-primary/20 p-2 rounded-full">
+              <AlertCircle className="h-5 w-5 text-primary" />
+            </div>
+            <AlertDescription className="text-foreground flex-1">
+              <div className="space-y-3">
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">
+                    🍽️ You already have an active meal plan!
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Your current meal plan "{currentMealPlan.name}" is active until{' '}
+                    <span className="font-semibold bg-primary/10 text-primary px-2 py-1 rounded">
+                      {new Date(currentMealPlan.end_date).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </span>
+                  </p>
+                </div>
+                <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/10 dark:border-primary/20">
+                  <p className="text-xs font-medium text-primary mb-1">
+                    💡 What you can do:
+                  </p>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• View your current meal plan and recipes</li>
+                    <li>• Generate new suggestions to prepare for your next plan</li>
+                    <li>• Wait until your current plan expires to create a new one</li>
+                  </ul>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    onClick={() => setLocation('/meal-plan')}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    View Current Plan
+                  </Button>
+                </div>
+              </div>
+            </AlertDescription>
+          </div>
+        </Alert>
+      )}
 
       {/* Cooldown Alert */}
       {cooldownInfo && (
@@ -566,18 +676,24 @@ export default function WeeklyPlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {!isSelectionComplete && (
+                {currentMealPlan ? (
+                  <Alert>
+                    <AlertDescription>
+                      You already have an active meal plan. You can save these suggestions for later or wait until your current plan expires to create a new one.
+                    </AlertDescription>
+                  </Alert>
+                ) : !isSelectionComplete ? (
                   <Alert>
                     <AlertDescription>
                       Please complete your recipe selections before creating your meal plan.
                       You need {selectedDays} recipes for each meal type.
                     </AlertDescription>
                   </Alert>
-                )}
+                ) : null}
                 
                 <Button
                   onClick={handleCreatePlan}
-                  disabled={!isSelectionComplete || createMealPlanMutation.isPending}
+                  disabled={!isSelectionComplete || createMealPlanMutation.isPending || !!currentMealPlan}
                   className="w-full sm:w-auto"
                   size="lg"
                 >
@@ -585,6 +701,11 @@ export default function WeeklyPlanner() {
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Creating Your Plan...
+                    </>
+                  ) : currentMealPlan ? (
+                    <>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Plan Already Active
                     </>
                   ) : (
                     <>
@@ -594,7 +715,7 @@ export default function WeeklyPlanner() {
                   )}
                 </Button>
                 
-                {isSelectionComplete && (
+                {isSelectionComplete && !currentMealPlan && (
                   <p className="text-sm text-muted-foreground">
                     This will generate {progress.totalSelected} complete recipes and organize them into your meal plan.
                   </p>
@@ -604,6 +725,14 @@ export default function WeeklyPlanner() {
           </Card>
         )}
       </div>
+
+      {/* Meal Plan Creation Loading Modal */}
+      {createMealPlanMutation.isPending && (
+        <MealPlanLoadingState
+          messages={generateLoadingMessages(preferences, selectedRecipes, selectedDays)}
+          baseMessage={`Creating your ${selectedDays}-day meal plan...`}
+        />
+      )}
 
       {/* Subscription Modal */}
       <SubscriptionModal
