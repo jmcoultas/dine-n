@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { MealPlanLoadingState } from "@/components/MealPlanLoadingState";
+import { SuggestionLoadingState } from "@/components/SuggestionLoadingState";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { Calendar, Sunrise, Sun, Moon, Wand2, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -142,8 +143,7 @@ export default function WeeklyPlanner() {
     chefPreferences: {
       difficulty: 'Moderate',
       cookTime: '30-60 minutes',
-      servingSize: '4',
-      mealPlanDuration: '2'
+      servingSize: '4'
     }
   });
 
@@ -543,6 +543,11 @@ export default function WeeklyPlanner() {
                   </>
                 )}
               </Button>
+              {!generateSuggestionsMutation.isPending && !cooldownInfo && (
+                <p className="text-xs text-muted-foreground">
+                  ⏱️ This process typically takes 30-60 seconds to analyze your preferences and generate personalized suggestions.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -725,6 +730,15 @@ export default function WeeklyPlanner() {
           </Card>
         )}
       </div>
+
+      {/* Suggestion Generation Loading Modal */}
+      {generateSuggestionsMutation.isPending && (
+        <SuggestionLoadingState
+          preferences={preferences}
+          selectedDays={selectedDays}
+          suggestionsPerMealType={SUGGESTIONS_PER_MEAL_TYPE}
+        />
+      )}
 
       {/* Meal Plan Creation Loading Modal */}
       {createMealPlanMutation.isPending && (

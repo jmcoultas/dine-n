@@ -19,7 +19,7 @@ import type { Recipe, ChefPreferences, CreateMealPlanInput } from "@/lib/types";
 import type { Preferences, MealPlan } from "@db/schema";
 import { PreferenceSchema } from "@db/schema";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
-import { Wand2, AlertCircle, Calendar, Plus, Bug, ArrowRight } from "lucide-react";
+import { Wand2, AlertCircle, Calendar, Plus, ArrowRight, ArrowLeft, Settings2, AlertTriangle, Sunrise, Sun, Moon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -31,8 +31,7 @@ type MealType = "breakfast" | "lunch" | "dinner";
 const defaultChefPreferences: ChefPreferences = {
   difficulty: 'Moderate',
   cookTime: '30-60 minutes',
-  servingSize: '4',
-  mealPlanDuration: '2'
+  servingSize: '4'
 };
 
 const calculateNutritionTotals = (recipes: Recipe[]) => {
@@ -139,6 +138,28 @@ const transformRecipe = (recipe: any): Recipe => {
   };
 };
 
+// Add meal type configuration
+const mealTypeConfig = {
+  breakfast: {
+    icon: Sunrise,
+    label: "Breakfast",
+    emoji: "🌅",
+    color: "bg-yellow-100 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100"
+  },
+  lunch: {
+    icon: Sun,
+    label: "Lunch", 
+    emoji: "🌞",
+    color: "bg-green-100 dark:bg-green-900 text-green-900 dark:text-green-100"
+  },
+  dinner: {
+    icon: Moon,
+    label: "Dinner",
+    emoji: "🌙", 
+    color: "bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100"
+  }
+} as const;
+
 export default function MealPlan() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showPreferences, setShowPreferences] = useState(false);
@@ -153,27 +174,6 @@ export default function MealPlan() {
   const { data: user, isLoading: isUserLoading } = useUser();
   const isMobile = useMediaQuery("(max-width: 640px)");
   
-  // Add a check for development mode
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  
-  // Test function to trigger loading state
-  const handleTestLoadingState = () => {
-    toast({
-      title: "Test Mode",
-      description: "Loading state activated for 15 seconds",
-    });
-    
-    setIsGenerating(true);
-    
-    setTimeout(() => {
-      setIsGenerating(false);
-      toast({
-        title: "Test Complete",
-        description: "Loading state deactivated",
-      });
-    }, 15000);
-  };
-
   // Update the currentMealPlan query to transform recipes
   const { data: currentMealPlan, isLoading: isLoadingMealPlan } = useQuery({
     queryKey: ['current-meal-plan'],
@@ -256,7 +256,7 @@ export default function MealPlan() {
     }
 
     const allowedDays = subscription.tier === 'premium' ? 7 : 2;
-    const requestedDays = parseInt(chefPreferences.mealPlanDuration);
+    const requestedDays = 2; // Default to 2 days since duration is now handled by weekly planner
     
     if (requestedDays > allowedDays) {
       toast({
@@ -276,8 +276,7 @@ export default function MealPlan() {
       chefPreferences: {
         difficulty: chefPreferences.difficulty || defaultChefPreferences.difficulty,
         cookTime: chefPreferences.cookTime || defaultChefPreferences.cookTime,
-        servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize,
-        mealPlanDuration: chefPreferences.mealPlanDuration || defaultChefPreferences.mealPlanDuration
+        servingSize: chefPreferences.servingSize || defaultChefPreferences.servingSize
       }
     };
 
@@ -489,13 +488,6 @@ export default function MealPlan() {
               use the classic meal plan generator
             </Button>
           </div>
-          
-          {isDevelopment && (
-            <Button variant="outline" onClick={handleTestLoadingState}>
-              <Bug className="mr-2 h-4 w-4" />
-              Test Loading State
-            </Button>
-          )}
         </div>
       );
     }
@@ -537,13 +529,6 @@ export default function MealPlan() {
             use the classic meal plan generator
           </Button>
         </div>
-        
-        {isDevelopment && (
-          <Button variant="outline" onClick={handleTestLoadingState}>
-            <Bug className="mr-2 h-4 w-4" />
-            Test Loading State
-          </Button>
-        )}
       </div>
     );
   };
@@ -697,17 +682,6 @@ export default function MealPlan() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              
-              {isDevelopment && (
-                <Button 
-                  variant="ghost" 
-                  onClick={handleTestLoadingState}
-                  className="ml-2 flex items-center gap-2 text-muted-foreground"
-                >
-                  <Bug className="h-4 w-4" />
-                  Test Loading
-                </Button>
-              )}
             </div>
           )}
           <div className="grid gap-6">
@@ -719,43 +693,90 @@ export default function MealPlan() {
             ) : (
               <>
                 {currentMealPlan && !currentMealPlan.is_expired ? (
-                  <div className="grid md:grid-cols-3 gap-6">
-                    {currentMealPlan.recipes.map((recipe, index) => {
-                      // Calculate the day based on the index if no valid date is provided
-                      const day = new Date(selectedDate);
-                      day.setDate(day.getDate() + Math.floor(index / 3));
-                      const mealIndex = index % 3;
-                      const mealType = ["breakfast", "lunch", "dinner"][mealIndex] as MealType;
+                  <div className="space-y-8">
+                    {/* Group recipes by meal type */}
+                    {(["breakfast", "lunch", "dinner"] as const).map((mealType) => {
+                      const mealRecipes = currentMealPlan.recipes.filter(recipe => {
+                        // Handle cases where meal might not be set, fallback to index-based calculation
+                        const recipeMeal = recipe.meal as MealType;
+                        if (recipeMeal) {
+                          return recipeMeal === mealType;
+                        }
+                        
+                        // Fallback: calculate meal type based on recipe index in the array
+                        const recipeIndex = currentMealPlan.recipes.indexOf(recipe);
+                        const calculatedMealType = ["breakfast", "lunch", "dinner"][recipeIndex % 3] as MealType;
+                        return calculatedMealType === mealType;
+                      });
                       
-                      return (
-                        <MealPlanCard
-                          key={recipe.id}
-                          recipe={recipe}
-                          day={day}
-                          meal={recipe.meal as MealType || mealType}
-                          onRemove={() => {
-                            // Handle recipe removal
-                            toast({
-                              title: "Recipe removed",
-                              description: `${recipe.name} has been removed from your meal plan.`,
-                            });
-                          }}
-                        />
+                      // Add missing meal placeholders for this meal type
+                      const missingMealsForType = missingMeals.filter(missingMeal => 
+                        missingMeal.meal === mealType
                       );
-                    })}
-                    
-                    {/* Display placeholders for missing recipes */}
-                    {missingMeals.map((missingMeal, index) => {
-                      const day = new Date(selectedDate);
-                      day.setDate(day.getDate() + missingMeal.day);
+                      
+                      // Skip section if no recipes and no missing meals
+                      if (mealRecipes.length === 0 && missingMealsForType.length === 0) {
+                        return null;
+                      }
+                      
+                      const MealIcon = mealTypeConfig[mealType].icon;
                       
                       return (
-                        <MissingRecipeCard
-                          key={`missing-${missingMeal.day}-${missingMeal.meal}`}
-                          day={day}
-                          meal={missingMeal.meal}
-                          onRegenerate={() => handleRegenerateMissingRecipe(missingMeal.day, missingMeal.meal)}
-                        />
+                        <div key={mealType} className="space-y-4">
+                          {/* Section Header */}
+                          <div className="flex items-center gap-3 pb-2 border-b">
+                            <div className={`p-2 rounded-lg ${mealTypeConfig[mealType].color}`}>
+                              <MealIcon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <h2 className="text-xl font-semibold capitalize">
+                                {mealTypeConfig[mealType].label}
+                              </h2>
+                              <p className="text-sm text-muted-foreground">
+                                {mealRecipes.length + missingMealsForType.length} recipe{mealRecipes.length + missingMealsForType.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Recipe Cards Grid */}
+                          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {mealRecipes.map((recipe) => {
+                              // Find the day for this recipe based on its original index or day property
+                              const recipeDay = recipe.day ? new Date(recipe.day) : new Date(selectedDate);
+                              
+                              return (
+                                <MealPlanCard
+                                  key={recipe.id}
+                                  recipe={recipe}
+                                  day={recipeDay}
+                                  meal={mealType}
+                                  onRemove={() => {
+                                    // Handle recipe removal
+                                    toast({
+                                      title: "Recipe removed",
+                                      description: `${recipe.name} has been removed from your meal plan.`,
+                                    });
+                                  }}
+                                />
+                              );
+                            })}
+                            
+                            {/* Missing recipe placeholders for this meal type */}
+                            {missingMealsForType.map((missingMeal) => {
+                              const day = new Date(selectedDate);
+                              day.setDate(day.getDate() + missingMeal.day);
+                              
+                              return (
+                                <MissingRecipeCard
+                                  key={`missing-${missingMeal.day}-${missingMeal.meal}`}
+                                  day={day}
+                                  meal={missingMeal.meal}
+                                  onRegenerate={() => handleRegenerateMissingRecipe(missingMeal.day, missingMeal.meal)}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -775,18 +796,6 @@ export default function MealPlan() {
             />
           ) : (
             <>
-              {isDevelopment && currentMealPlan && !currentMealPlan.is_expired && (
-                <div className="flex justify-end mb-4">
-                  <Button 
-                    variant="ghost" 
-                    onClick={handleTestLoadingState}
-                    className="flex items-center gap-2 text-muted-foreground"
-                  >
-                    <Bug className="h-4 w-4" />
-                    Test Loading
-                  </Button>
-                </div>
-              )}
               <GroceryList
                 items={
                   currentMealPlan?.recipes.flatMap(recipe => 

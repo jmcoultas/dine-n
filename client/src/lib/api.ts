@@ -14,7 +14,6 @@ interface ChefPreferences {
   difficulty: string;
   cookTime: string;
   servingSize: string;
-  mealPlanDuration: string;
 }
 
 export interface GenerateMealPlanResponse {

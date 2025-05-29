@@ -34,8 +34,7 @@ function isPreferenceArray(value: unknown): value is string[] {
 const CHEF_PREFERENCES = {
   difficulty: ChefPreferencesSchema.shape.difficulty.options,
   cookTime: ChefPreferencesSchema.shape.cookTime.options,
-  servingSize: ChefPreferencesSchema.shape.servingSize.options,
-  mealPlanDuration: ChefPreferencesSchema.shape.mealPlanDuration.options
+  servingSize: ChefPreferencesSchema.shape.servingSize.options
 } as const;
 
 const STEPS = [
@@ -95,8 +94,7 @@ interface PreferenceModalProps {
 const defaultChefPreferences: ChefPreferences = {
   difficulty: 'Moderate',
   cookTime: '30-60 minutes',
-  servingSize: '4',
-  mealPlanDuration: '2'
+  servingSize: '4'
 };
 
 export default function PreferenceModal({
@@ -593,29 +591,6 @@ export default function PreferenceModal({
                           </SelectContent>
                         </Select>
                       </div>
-
-                      {user?.subscription_tier === 'premium' && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Meal Plan Duration</label>
-                          <Select
-                            value={chefPreferences.mealPlanDuration}
-                            onValueChange={(value: typeof CHEF_PREFERENCES.mealPlanDuration[number]) =>
-                              setChefPreferences(prev => ({ ...prev, mealPlanDuration: value }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CHEF_PREFERENCES.mealPlanDuration.map((days) => (
-                                <SelectItem key={days} value={days}>
-                                  {days} {parseInt(days) === 1 ? 'day' : 'days'}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ) : isLastStep ? (
@@ -670,14 +645,6 @@ export default function PreferenceModal({
                                 {chefPreferences.servingSize} {parseInt(chefPreferences.servingSize) === 1 ? 'person' : 'people'}
                               </span>
                             </div>
-                            {user?.subscription_tier === 'premium' && (
-                              <div className="flex justify-between">
-                                <span className="text-sm">Duration:</span>
-                                <span className="text-sm font-medium">
-                                  {chefPreferences.mealPlanDuration} {parseInt(chefPreferences.mealPlanDuration) === 1 ? 'day' : 'days'}
-                                </span>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>

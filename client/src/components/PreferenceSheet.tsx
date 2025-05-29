@@ -35,8 +35,7 @@ function isPreferenceArray(value: unknown): value is string[] {
 const CHEF_PREFERENCES = {
   difficulty: ChefPreferencesSchema.shape.difficulty.options,
   cookTime: ChefPreferencesSchema.shape.cookTime.options,
-  servingSize: ChefPreferencesSchema.shape.servingSize.options,
-  mealPlanDuration: ChefPreferencesSchema.shape.mealPlanDuration.options
+  servingSize: ChefPreferencesSchema.shape.servingSize.options
 } as const;
 
 const STEPS = [
@@ -96,8 +95,7 @@ interface PreferenceSheetProps {
 const defaultChefPreferences: ChefPreferences = {
   difficulty: 'Moderate',
   cookTime: '30-60 minutes',
-  servingSize: '4',
-  mealPlanDuration: '2'
+  servingSize: '4'
 };
 
 export default function PreferenceSheet({
@@ -419,10 +417,6 @@ export default function PreferenceSheet({
                         <span className="text-xs text-muted-foreground">Serving Size:</span>
                         <p className="text-sm">{preferences.chefPreferences.servingSize} servings</p>
                       </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground">Meal Plan Duration:</span>
-                        <p className="text-sm">{preferences.chefPreferences.mealPlanDuration} days</p>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -564,27 +558,6 @@ export default function PreferenceSheet({
                           {CHEF_PREFERENCES.servingSize.map((size) => (
                             <SelectItem key={size} value={size}>
                               {size} servings
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Meal Plan Duration</label>
-                      <Select
-                        value={chefPreferences.mealPlanDuration}
-                        onValueChange={(value: typeof CHEF_PREFERENCES.mealPlanDuration[number]) =>
-                          setChefPreferences(prev => ({ ...prev, mealPlanDuration: value }))
-                        }
-                      >
-                        <SelectTrigger className={`${isMobile ? "h-12" : ""} w-full`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent position="popper" className="max-h-[300px]">
-                          {CHEF_PREFERENCES.mealPlanDuration.map((duration) => (
-                            <SelectItem key={duration} value={duration}>
-                              {duration} days
                             </SelectItem>
                           ))}
                         </SelectContent>

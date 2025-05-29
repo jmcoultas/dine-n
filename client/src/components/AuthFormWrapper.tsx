@@ -35,16 +35,29 @@ export function AuthFormWrapper({ initialMode = 'login' }: AuthFormWrapperProps)
 
       // When we reach this point in login mode, we can be sure password exists
       if (mode === 'login' && data.password) {
-        const result = await login({ 
-          email: data.email, 
-          password: data.password 
-        });
-        
-        if (result.ok && result.user) {
-          queryClient.setQueryData(['user'], result.user);
-          setLocation('/');
-        } else if (!result.ok) {
-          setError(result.message);
+        try {
+          const result = await login({ 
+            email: data.email, 
+            password: data.password 
+          });
+          
+          if (result.ok && result.user) {
+            queryClient.setQueryData(['user'], result.user);
+            setLocation('/');
+          } else if (!result.ok) {
+            setError(result.message);
+          }
+        } catch (err) {
+          // Handle specific authentication errors
+          const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+          setError(errorMessage);
+          
+          // Show toast for better user experience
+          toast({
+            title: "Login Failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
         }
       } 
       // When in register mode and password exists (for complete-signup)

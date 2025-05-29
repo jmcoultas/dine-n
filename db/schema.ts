@@ -10,8 +10,7 @@ export const SubscriptionStatusEnum = z.enum(["active", "inactive", "cancelled"]
 export const ChefPreferencesSchema = z.object({
   difficulty: z.enum(["Easy", "Moderate", "Advanced"]),
   cookTime: z.enum(["15 minutes or less", "15-30 minutes", "30-60 minutes", "60+ minutes"]),
-  servingSize: z.enum(["1", "2", "3", "4", "5", "6", "7", "8"]),
-  mealPlanDuration: z.enum(["1", "2", "3", "4", "5", "6", "7"])
+  servingSize: z.enum(["1", "2", "3", "4", "5", "6", "7", "8"])
 }).optional();
 
 export const PreferenceSchema = z.object({

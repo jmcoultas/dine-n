@@ -75,12 +75,12 @@ export function setupAuth(app: Express) {
           .limit(1);
 
         if (!foundUser) {
-          return done(null, false, { message: "Incorrect email address." });
+          return done(null, false, { message: "🕵️ That email address is playing hide and seek with our database. Are you sure it's registered?" });
         }
 
         const isMatch = await crypto.compare(password, foundUser.password_hash);
         if (!isMatch) {
-          return done(null, false, { message: "Incorrect password." });
+          return done(null, false, { message: "🔐 Close, but no cigar! Your password is doing the cha-cha when it should be doing the tango." });
         }
 
         const user: PublicUser = {
@@ -628,16 +628,41 @@ export function setupAuth(app: Express) {
     // Normal authentication via passport
     const cb = (err: any, user: Express.User | false | null | undefined, info: IVerifyOptions) => {
       if (err) {
-        return next(err);
+        console.error('Authentication error:', err);
+        return res.status(500).json({
+          error: "Server Error",
+          message: "🤖 Our servers are having a moment. Please give them a coffee break and try again!",
+          type: "SERVER_ERROR"
+        });
       }
 
       if (!user) {
-        return res.status(400).send(info.message ?? "Login failed");
+        // Extract the specific error message from passport
+        const errorMessage = info?.message || "🎭 Something went wrong in the authentication theater. Please try your performance again!";
+        
+        // Determine error type based on the message content
+        let errorType = "AUTHENTICATION_FAILED";
+        if (errorMessage.includes("hide and seek") || errorMessage.includes("registered")) {
+          errorType = "EMAIL_NOT_FOUND";
+        } else if (errorMessage.includes("password") || errorMessage.includes("cha-cha") || errorMessage.includes("tango")) {
+          errorType = "INCORRECT_PASSWORD";
+        }
+
+        return res.status(401).json({
+          error: "Authentication Failed",
+          message: errorMessage,
+          type: errorType
+        });
       }
 
       req.logIn(user, (err) => {
         if (err) {
-          return next(err);
+          console.error('Login session error:', err);
+          return res.status(500).json({
+            error: "Server Error",
+            message: "🎪 We successfully verified you, but our session juggler dropped the ball. Please try again!",
+            type: "SESSION_ERROR"
+          });
         }
 
         return res.json({

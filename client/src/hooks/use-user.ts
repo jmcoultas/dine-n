@@ -22,6 +22,7 @@ export type RequestResult = {
 } | {
   ok: false;
   message: string;
+  type?: string;
 };
 
 async function handleRequest(
@@ -32,16 +33,11 @@ async function handleRequest(
   try {
     let firebaseToken = null;
 
-    // Handle Firebase auth for registration and login
-    if (body?.email && body?.password) {
+    // Handle Firebase auth for registration only, not login
+    if (body?.email && body?.password && url.includes('/register')) {
       try {
-        if (url.includes('/register')) {
-          const { idToken } = await createFirebaseUser(body.email, body.password);
-          firebaseToken = idToken;
-        } else if (url.includes('/login')) {
-          const { idToken } = await signInWithEmail(body.email, body.password);
-          firebaseToken = idToken;
-        }
+        const { idToken } = await createFirebaseUser(body.email, body.password);
+        firebaseToken = idToken;
       } catch (firebaseError: any) {
         // Handle Firebase-specific errors
         const errorMessage = firebaseError.code ? 
@@ -71,8 +67,60 @@ async function handleRequest(
         return { ok: false, message: response.statusText };
       }
 
-      const message = await response.text();
-      return { ok: false, message };
+      // Try to parse JSON error response first
+      try {
+        const errorData = await response.json();
+        return { 
+          ok: false as const, 
+          message: errorData.message || errorData.error || 'An error occurred',
+          type: errorData.type
+        };
+      } catch {
+        // Fallback to text if JSON parsing fails
+        const message = await response.text();
+        return { ok: false, message };
+      }
+    }
+
+    const data = await response.json();
+    
+    // Initialize Firebase auth if token is present
+    if (data.user?.firebaseToken) {
+      await initializeFirebaseAuth(data.user.firebaseToken);
+    }
+
+    return { ok: true, user: data.user };
+  } catch (e: any) {
+    return { ok: false, message: e.toString() };
+  }
+}
+
+// Separate login function that bypasses Firebase
+async function handleLogin(credentials: { email: string; password: string }): Promise<RequestResult> {
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(credentials),
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      // Try to parse JSON error response first
+      try {
+        const errorData = await response.json();
+        return { 
+          ok: false as const, 
+          message: errorData.message || errorData.error || 'Login failed',
+          type: errorData.type
+        };
+      } catch {
+        // Fallback to text if JSON parsing fails
+        const message = await response.text();
+        return { ok: false, message };
+      }
     }
 
     const data = await response.json();
@@ -119,7 +167,7 @@ export function useUser(): UserQueryResult {
 
   const loginMutation = useMutation<RequestResult, Error, { email: string; password: string }>({
     mutationFn: async (credentials) => {
-      const result = await handleRequest('/api/login', 'POST', credentials);
+      const result = await handleLogin(credentials);
       if (!result.ok) {
         throw new Error(result.message);
       }
