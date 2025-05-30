@@ -83,10 +83,21 @@ export default function CompleteSignup() {
       setError(null);
       
       console.log("Starting signup completion process");
+      console.log("Browser localStorage state:", {
+        hasEmailForSignup: !!localStorage.getItem('emailForSignup'),
+        hasTempAuthPassword: !!localStorage.getItem('tempAuthPassword'),
+        currentEmail: data.email
+      });
       
       // Call the updated completeEmailSignup function to update the password
-      const { user, idToken } = await completeEmailSignup(data.email, data.password);
-      console.log("Successfully completed Firebase signup, contacting backend");
+      const signupResult = await completeEmailSignup(data.email, data.password);
+      const { user, idToken, crossBrowser } = signupResult;
+      
+      if (crossBrowser) {
+        console.log("Cross-browser completion detected, using backend-only approach");
+      } else {
+        console.log("Same-browser completion, Firebase authentication successful");
+      }
       
       // Show the success screen
       setRegistrationSuccess(true);
@@ -107,15 +118,66 @@ export default function CompleteSignup() {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server error:', errorText);
-        throw new Error('Failed to register with the server: ' + errorText);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Server error:', errorData);
+        
+        // Handle specific cross-browser error cases
+        if (crossBrowser && response.status === 400) {
+          // For cross-browser scenarios, the user might already be fully registered
+          // Check if the error indicates the user already exists and is complete
+          if (errorData.message?.includes('already registered') || errorData.type === 'DUPLICATE_EMAIL') {
+            console.log("User already fully registered in cross-browser scenario, attempting login");
+            
+            // Try to log the user in instead
+            try {
+              const loginResponse = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  email: data.email,
+                  password: data.password
+                }),
+                credentials: 'include',
+              });
+              
+              if (loginResponse.ok) {
+                const loginResult = await loginResponse.json();
+                console.log("Successfully logged in existing user");
+                
+                // Update the user state
+                queryClient.setQueryData<AuthUser | null>(['user'], loginResult.user || null);
+                queryClient.invalidateQueries({ queryKey: ['user'] });
+                
+                toast({
+                  title: "Welcome back!",
+                  description: "You're now logged in to your account.",
+                });
+                
+                // Clear any stored registration data
+                localStorage.removeItem('emailForSignup');
+                localStorage.removeItem('tempAuthPassword');
+                localStorage.setItem('registrationCompleted', 'true');
+                localStorage.setItem('registrationTimestamp', Date.now().toString());
+                
+                // Redirect to home
+                setTimeout(() => redirectToHome(), 1000);
+                return;
+              }
+            } catch (loginError) {
+              console.error("Login attempt failed:", loginError);
+            }
+          }
+        }
+        
+        throw new Error(errorData.message || 'Failed to register with the server');
       }
 
       console.log("Successfully registered with backend");
-      const result = await response.json();
+      const registrationResult = await response.json();
       
-      // Clear the stored email
+      // Clear the stored email and auth data
       localStorage.removeItem('emailForSignup');
       localStorage.removeItem('tempAuthPassword');
       
@@ -127,7 +189,7 @@ export default function CompleteSignup() {
       localStorage.setItem('registrationTimestamp', Date.now().toString());
       
       // Update the user state
-      queryClient.setQueryData<AuthUser | null>(['user'], result.user || null);
+      queryClient.setQueryData<AuthUser | null>(['user'], registrationResult.user || null);
       queryClient.invalidateQueries({ queryKey: ['user'] });
       
       toast({
@@ -180,10 +242,30 @@ export default function CompleteSignup() {
       
     } catch (error) {
       console.error('Error completing signup:', error);
-      setError(error instanceof Error ? error.message : 'Failed to complete registration');
+      
+      // Handle specific error messages for cross-browser scenarios
+      let errorMessage = error instanceof Error ? error.message : 'Failed to complete registration';
+      
+      // If the error mentions password setup link, show a more helpful message
+      if (errorMessage.includes('password setup link')) {
+        setError(errorMessage);
+        toast({
+          title: "Cross-browser Registration",
+          description: errorMessage,
+          variant: "default", // Not destructive since this is expected behavior
+        });
+        
+        // Redirect to auth page after showing the message
+        setTimeout(() => {
+          setLocation('/auth');
+        }, 5000);
+        return;
+      }
+      
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : 'Failed to complete registration',
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

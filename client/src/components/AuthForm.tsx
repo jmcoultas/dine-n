@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, resetPassword, sendEmailSignupLink } from '../lib/firebase';
+import { signInWithGoogle, resetPassword, emailSignup } from '../lib/firebase';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AuthUser } from '../hooks/use-user';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
     try {
       if (mode === 'register') {
         // In register mode, only collect email and name, then send verification
-        await sendEmailSignupLink(email);
+        await emailSignup(email);
         setVerificationSent(true);
         toast({
           title: "Verification Email Sent",

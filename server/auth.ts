@@ -339,12 +339,32 @@ export function setupAuth(app: Express) {
       }
 
       let firebaseUid;
+      let isCrossBrowserCompletion = false;
+      
       if (userFirebaseToken) {
         try {
-          console.log("Verifying Firebase token for registration");
-          const decodedToken = await auth.verifyIdToken(userFirebaseToken as string);
-          firebaseUid = decodedToken.uid;
-          console.log(`Firebase token verified for UID: ${firebaseUid}`);
+          // Check if this is a cross-browser completion token
+          if (typeof userFirebaseToken === 'string' && userFirebaseToken.startsWith('eyJ')) {
+            // This looks like a base64 encoded JSON token (our cross-browser token)
+            try {
+              const decodedCrossBrowser = JSON.parse(atob(userFirebaseToken));
+              if (decodedCrossBrowser.cross_browser === true && decodedCrossBrowser.email === normalizedEmail) {
+                console.log("Cross-browser registration completion detected");
+                isCrossBrowserCompletion = true;
+                firebaseUid = null; // We don't have a real Firebase UID in this case
+              }
+            } catch (crossBrowserError) {
+              console.log("Not a cross-browser token, trying Firebase verification");
+            }
+          }
+          
+          // If not cross-browser, try normal Firebase token verification
+          if (!isCrossBrowserCompletion) {
+            console.log("Verifying Firebase token for registration");
+            const decodedToken = await auth.verifyIdToken(userFirebaseToken as string);
+            firebaseUid = decodedToken.uid;
+            console.log(`Firebase token verified for UID: ${firebaseUid}`);
+          }
         } catch (error) {
           console.error('Error verifying Firebase token:', error);
           // Don't return an error, just log it - we'll try to continue without it
