@@ -146,12 +146,24 @@ export async function sendEmailSignupLink(email: string) {
           // URL you want to redirect back to after email verification
           // Include email parameter in the URL for both mobile and desktop
           url: `${window.location.origin}/auth/verify-email?email=${encodeURIComponent(email)}`,
-          handleCodeInApp: true
+          handleCodeInApp: true,
+          // Add iOS and Android package names if you have mobile apps
+          // iOS: {
+          //   bundleId: 'com.yourapp.ios'
+          // },
+          // android: {
+          //   packageName: 'com.yourapp.android',
+          //   installApp: true,
+          //   minimumVersion: '12'
+          // }
         };
         
         console.log("Sending verification email with settings:", actionCodeSettings);
         await sendEmailVerification(userCredential.user, actionCodeSettings);
         console.log("Verification email sent successfully");
+        
+        // Also log the expected verification URL format for debugging
+        console.log("Expected verification URL format:", `${window.location.origin}/auth/verify-email?mode=verifyEmail&oobCode=XXXXX&email=${encodeURIComponent(email)}`);
       }
       
       // Save the email locally to remember the user

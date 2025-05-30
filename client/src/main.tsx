@@ -54,6 +54,7 @@ function VerificationRouter() {
   const params = new URLSearchParams(search);
   const hasOobCode = params.has('oobCode');
   const mode = params.get('mode');
+  const apiKey = params.get('apiKey'); // Firebase sometimes uses this parameter
   const { data: user, isLoading } = useUser();
   
   useEffect(() => {
@@ -105,12 +106,34 @@ function VerificationRouter() {
       return;
     }
     
+    // Handle Firebase's default redirect URLs (like /auth?apiKey=...&mode=verifyEmail&oobCode=...)
+    // This is a fallback for when Firebase doesn't use our custom actionCodeSettings.url
+    if ((hasOobCode || apiKey) && (mode === 'verifyEmail' || mode === null)) {
+      console.log("Firebase verification parameters detected, redirecting to verification page");
+      console.log("Original URL:", window.location.href);
+      
+      // Extract email from URL params or localStorage
+      let email = params.get('email');
+      if (!email) {
+        email = localStorage.getItem('emailForSignup');
+      }
+      
+      // Build the correct verification URL
+      const verificationUrl = email 
+        ? `/auth/verify-email${search}&email=${encodeURIComponent(email)}`
+        : `/auth/verify-email${search}`;
+      
+      console.log("Redirecting to:", verificationUrl);
+      setLocation(verificationUrl);
+      return;
+    }
+    
     // If this looks like a verification link, redirect to the verification component
     if (hasOobCode && (mode === 'verifyEmail' || mode === null)) {
       console.log("Verification parameters detected, redirecting to verification page");
       setLocation(`/auth/verify-email${search}`);
     }
-  }, [hasOobCode, mode, search, setLocation, pathname, user, isLoading]);
+  }, [hasOobCode, mode, search, setLocation, pathname, user, isLoading, apiKey]);
   
   return <AuthPage />;
 }
