@@ -80,6 +80,19 @@ export function setupAuth(app: Express) {
 
         const isMatch = await crypto.compare(password, foundUser.password_hash);
         if (!isMatch) {
+          // Check if this user might have a temporary password (incomplete registration)
+          try {
+            const hasTempPassword = await crypto.compare("TEMPORARY_PASSWORD", foundUser.password_hash);
+            if (hasTempPassword || foundUser.is_partial_registration === true) {
+              return done(null, false, { 
+                message: "🚧 It looks like your registration isn't complete yet. Please check your email for a verification link or restart the registration process to set your password." 
+              });
+            }
+          } catch (tempCheckError) {
+            // If temp password check fails, continue with normal error
+            console.log(`Could not verify temporary password during login for user ${foundUser.id}:`, tempCheckError);
+          }
+          
           return done(null, false, { message: "🔐 Close, but no cigar! Your password is doing the cha-cha when it should be doing the tango." });
         }
 
@@ -352,12 +365,23 @@ export function setupAuth(app: Express) {
         console.log(`User exists with ID ${existingUser.id} for email ${normalizedEmail}`);
         
         // Check if this is a partial registration that needs completion
-        const isPartial = existingUser.is_partial_registration === true || 
-                          (existingUser.password_hash && 
-                           (existingUser.password_hash.startsWith('TEMPORARY_') || 
-                            existingUser.password_hash.includes('TEMPORARY')));
+        // First check the explicit flag, then check if we can verify the temporary password
+        let isPartial = existingUser.is_partial_registration === true;
         
-        console.log(`User state: is_partial=${isPartial}, password_hash=${existingUser.password_hash?.substring(0, 20)}...`);
+        // If the flag isn't set, try to verify if this user has the temporary password
+        if (!isPartial && existingUser.password_hash) {
+          try {
+            const isTempPassword = await crypto.compare("TEMPORARY_PASSWORD", existingUser.password_hash);
+            if (isTempPassword) {
+              isPartial = true;
+              console.log(`User ${existingUser.id} has temporary password - treating as partial registration`);
+            }
+          } catch (tempCheckError) {
+            console.log(`Could not verify temporary password for user ${existingUser.id}:`, tempCheckError);
+          }
+        }
+        
+        console.log(`User state: is_partial=${isPartial}, has_password_hash=${!!existingUser.password_hash}`);
         
         if (isPartial) {
           console.log(`Completing partial registration for user ID ${existingUser.id}`);
@@ -687,6 +711,81 @@ export function setupAuth(app: Express) {
       }
       res.json({ message: "Logout successful" });
     });
+  });
+
+  // Endpoint to help users stuck with incomplete registrations
+  app.post("/api/auth/reset-registration", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email?.trim()) {
+        return res.status(400).json({
+          error: "Validation Error",
+          message: "Email is required"
+        });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log(`Reset registration request for email: ${normalizedEmail}`);
+      
+      // Find the user
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, normalizedEmail))
+        .limit(1);
+      
+      if (!existingUser) {
+        return res.status(404).json({
+          error: "User Not Found",
+          message: "No account found with this email address"
+        });
+      }
+      
+      // Check if this user has a temporary password or is marked as partial
+      let canReset = existingUser.is_partial_registration === true;
+      
+      if (!canReset) {
+        try {
+          const hasTempPassword = await crypto.compare("TEMPORARY_PASSWORD", existingUser.password_hash);
+          canReset = hasTempPassword;
+        } catch (tempCheckError) {
+          console.log(`Could not verify temporary password for reset request:`, tempCheckError);
+        }
+      }
+      
+      if (!canReset) {
+        return res.status(400).json({
+          error: "Reset Not Allowed",
+          message: "This account appears to be fully registered. Please use password reset instead."
+        });
+      }
+      
+      // Reset the user to partial registration state
+      const tempPasswordHash = await crypto.hash("TEMPORARY_PASSWORD");
+      
+      await db
+        .update(users)
+        .set({
+          password_hash: tempPasswordHash,
+          is_partial_registration: true
+        })
+        .where(eq(users.id, existingUser.id));
+      
+      console.log(`Reset registration state for user ${existingUser.id}`);
+      
+      res.json({
+        message: "Registration state reset successfully. You can now restart the registration process.",
+        canRetry: true
+      });
+      
+    } catch (error) {
+      console.error("Error resetting registration:", error);
+      res.status(500).json({
+        error: "Server Error",
+        message: "Failed to reset registration state. Please try again."
+      });
+    }
   });
 
   app.get("/api/user", (req, res) => {

@@ -377,7 +377,7 @@ export default function Welcome() {
             <div className="mt-6 py-2">
               <div className={cn(
                 "text-4xl lg:text-5xl xl:text-6xl font-bold px-6 py-2",
-                "bg-gradient-to-r from-primary to-primary-foreground bg-clip-text text-transparent"
+                "text-primary"
               )}>
                 Dine-N
               </div>
