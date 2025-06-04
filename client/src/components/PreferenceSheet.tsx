@@ -24,6 +24,7 @@ import { PreferenceSchema, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { celebrateOnboarding, celebrate } from "@/lib/confetti";
 
 type PreferenceField = keyof Omit<Preferences, 'chefPreferences'>;
 type PreferenceValue = string[] | ChefPreferences;
@@ -163,7 +164,6 @@ export default function PreferenceSheet({
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     // Initialize or update preferences when sheet opens
@@ -380,13 +380,25 @@ export default function PreferenceSheet({
         }
       }
       
+      // Trigger confetti celebration!
+      if (isOnboarding) {
+        celebrateOnboarding();
+      } else {
+        celebrate();
+      }
+      
       toast({
-        title: "Preferences Saved",
-        description: "Your preferences have been updated successfully."
+        title: isOnboarding ? "🎉 You're all set!" : "Preferences Saved! 🎉",
+        description: isOnboarding 
+          ? "Your taste profile is ready. Let's start cooking up something amazing!"
+          : "Your preferences have been updated successfully."
       });
 
       if (hideGenerateOption) {
-        onOpenChange(false);
+        // Small delay to show the confetti before closing
+        setTimeout(() => {
+          onOpenChange(false);
+        }, 1000);
       } else {
         setCurrentStep(getSteps(isOnboarding).length - 1);
       }
@@ -663,29 +675,10 @@ export default function PreferenceSheet({
                                 </Button>
                               </div>
                               
-                              {/* Search filter */}
-                              <div className="p-4 bg-background">
-                                <div className="relative">
-                                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground">
-                                    <path d="M10 6.5C10 8.433 8.433 10 6.5 10C4.567 10 3 8.433 3 6.5C3 4.567 4.567 3 6.5 3C8.433 3 10 4.567 10 6.5ZM9.30884 10.0159C8.53901 10.6318 7.56251 11 6.5 11C4.01472 11 2 8.98528 2 6.5C2 4.01472 4.01472 2 6.5 2C8.98528 2 11 4.01472 11 6.5C11 7.56251 10.6318 8.53901 10.0159 9.30884L12.8536 12.1464C13.0488 12.3417 13.0488 12.6583 12.8536 12.8536C12.6583 13.0488 12.3417 13.0488 12.1464 12.8536L9.30884 10.0159Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path>
-                                  </svg>
-                                  <input
-                                    type="text"
-                                    className="pl-9 pr-4 py-3 w-full border rounded-md"
-                                    placeholder={`Search ${currentStepConfig.title.toLowerCase()}...`}
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                  />
-                                </div>
-                              </div>
-                              
                               {/* Scrollable options list */}
                               <div className="flex-1 overflow-y-auto">
                                 <div className="p-4 space-y-1 pb-20">
                                   {currentStepConfig.field && currentStepConfig.options
-                                    .filter(option => 
-                                      option.toLowerCase().includes(searchQuery.toLowerCase())
-                                    )
                                     .map((option) => {
                                       const field = currentStepConfig.field!;
                                       const isSelected = (tempPreferences[field] as string[]).includes(option);
@@ -727,7 +720,6 @@ export default function PreferenceSheet({
                                         [currentStepConfig.field]: preferences[currentStepConfig.field]
                                       }));
                                     }
-                                    setSearchQuery("");
                                     setSelectOpen(false);
                                   }}
                                 >
@@ -736,7 +728,6 @@ export default function PreferenceSheet({
                                 <Button
                                   onClick={() => {
                                     // Keep the current selections (which are already in tempPreferences)
-                                    setSearchQuery("");
                                     setSelectOpen(false);
                                     
                                     // If we're on the last field step, proceed to save or next step

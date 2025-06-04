@@ -9,6 +9,7 @@ import PreferenceSheet from "@/components/PreferenceSheet";
 import { PreferenceSchema, type Preferences } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { celebrateOnboarding } from "@/lib/confetti";
 
 const defaultPreferences: Preferences = {
   dietary: [],
@@ -75,16 +76,19 @@ export default function Onboarding() {
       setPreferences(updatedPreferences);
       setShowPreferences(false);
       
+      // Trigger confetti celebration!
+      celebrateOnboarding();
+      
       toast({
-        title: "Welcome aboard! 🎉",
-        description: "Your preferences have been saved. You're all set to start meal planning!"
+        title: "🎉 Welcome to your culinary adventure!",
+        description: "Your taste preferences are locked and loaded. Time to discover some amazing meals!"
       });
 
-      // Clear the onboarding flag and redirect to home
+      // Clear the onboarding flag and redirect to home after confetti
       localStorage.removeItem('registrationCompleted');
       setTimeout(() => {
         setLocation('/');
-      }, 1500);
+      }, 2000); // Increased delay to let confetti finish
     } catch (error) {
       console.error('Error saving preferences:', error);
       toast({
