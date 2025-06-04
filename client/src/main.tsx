@@ -16,6 +16,7 @@ import AuthPage from "./pages/AuthPage";
 import UserProfile from "./pages/UserProfile";
 import IngredientRecipes from "./pages/IngredientRecipes";
 import Welcome from "./pages/Welcome";
+import Onboarding from "./pages/Onboarding";
 import Header from "./components/Header";
 import RecipeView from "./pages/RecipeView";
 import EmailVerification from "./components/EmailVerification";
@@ -188,6 +189,12 @@ function Router() {
           <>
             <Header />
             <Welcome />
+          </>
+        </Route>
+        <Route path="/onboarding">
+          <>
+            <Header />
+            <Onboarding />
           </>
         </Route>
         <Route path="/auth/verify-email">

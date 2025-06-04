@@ -77,6 +77,48 @@ const STEPS = [
   }
 ] as const;
 
+const ONBOARDING_STEPS = [
+  {
+    title: "First Things First - What's Your Vibe? 🌱",
+    description: "Time for a quick taste test! Are you team keto, going green with vegetarian, or just here for the good vibes? Don't worry, we won't judge your midnight pizza cravings.",
+    field: "dietary" as const,
+    options: PreferenceSchema.shape.dietary.element.options
+  },
+  {
+    title: "Let's Keep You Safe & Sound 🛡️",
+    description: "Nobody wants a surprise ingredient ruining the party! Tell us about any food allergies or things that don't play nice with your system.",
+    field: "allergies" as const,
+    options: PreferenceSchema.shape.allergies.element.options
+  },
+  {
+    title: "Around the World in 80 Bites 🌍",
+    description: "Passport not required! Which cuisines make your taste buds do a happy dance? From spicy Thai to comforting Italian - the world is your oyster (unless you're allergic to shellfish).",
+    field: "cuisine" as const,
+    options: PreferenceSchema.shape.cuisine.element.options
+  },
+  {
+    title: "The Protein Plot Thickens 🥩",
+    description: "Let's talk about the main event! What proteins are you excited to see on your plate? Or maybe you're team plants-only? We've got options for every appetite.",
+    field: "meatTypes" as const,
+    options: PreferenceSchema.shape.meatTypes.element.options
+  },
+  {
+    title: "Chef Mode: Activated! 👨‍🍳",
+    description: "Time to set your kitchen confidence level! Are you a 'microwave-is-my-best-friend' type or ready to channel your inner Gordon Ramsay? No judgment - we're here to meet you where you're at.",
+    field: null,
+    options: [] as const
+  },
+  {
+    title: "The Grand Finale! 🎉",
+    description: "Look at you go! You're all set up for culinary success. These preferences will help us craft meals that'll make your future self thank you. Ready to start your delicious journey?",
+    field: null,
+    options: [] as const
+  }
+] as const;
+
+// Function to get the appropriate steps based on onboarding mode
+const getSteps = (isOnboarding: boolean) => isOnboarding ? ONBOARDING_STEPS : STEPS;
+
 interface PreferenceSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -90,6 +132,7 @@ interface PreferenceSheetProps {
   };
   skipToChefPreferences?: boolean;
   hideGenerateOption?: boolean;
+  isOnboarding?: boolean;
 }
 
 const defaultChefPreferences: ChefPreferences = {
@@ -107,7 +150,8 @@ export default function PreferenceSheet({
   onGenerate,
   user,
   skipToChefPreferences = false,
-  hideGenerateOption = false
+  hideGenerateOption = false,
+  isOnboarding = false
 }: PreferenceSheetProps) {
   const { toast } = useToast();
   const isMobile = useMediaQuery("(max-width: 640px)");
@@ -148,8 +192,8 @@ export default function PreferenceSheet({
     }
   }, [preferences, open, skipToChefPreferences, isEditMode, hideGenerateOption]);
 
-  const currentStepConfig = currentStep >= 0 ? STEPS[currentStep] : null;
-  const isLastStep = currentStep === STEPS.length - 1;
+  const currentStepConfig = currentStep >= 0 ? getSteps(isOnboarding)[currentStep] : null;
+  const isLastStep = currentStep === getSteps(isOnboarding).length - 1;
   const isFirstStep = currentStep === 0;
 
   const hasExistingPreferences = Object.entries(preferences).some(([key, value]) =>
@@ -344,7 +388,7 @@ export default function PreferenceSheet({
       if (hideGenerateOption) {
         onOpenChange(false);
       } else {
-        setCurrentStep(STEPS.length - 1);
+        setCurrentStep(getSteps(isOnboarding).length - 1);
       }
     } catch (error) {
       console.error('Error saving preferences:', error);
@@ -464,11 +508,11 @@ export default function PreferenceSheet({
               <div className="w-full bg-secondary h-2 rounded-full mt-4">
                 <div
                   className="bg-primary h-full rounded-full transition-all duration-300"
-                  style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
+                  style={{ width: `${((currentStep + 1) / getSteps(isOnboarding).length) * 100}%` }}
                 />
               </div>
               <div className="text-sm text-muted-foreground text-center mt-1 mb-4">
-                Step {currentStep + 1} of {STEPS.length}
+                Step {currentStep + 1} of {getSteps(isOnboarding).length}
               </div>
 
               {isLastStep && (
@@ -696,10 +740,10 @@ export default function PreferenceSheet({
                                     setSelectOpen(false);
                                     
                                     // If we're on the last field step, proceed to save or next step
-                                    if (currentStep === STEPS.length - 2) {
+                                    if (currentStep === getSteps(isOnboarding).length - 2) {
                                       // Save preferences when done selecting options on the final field step
                                       handleSavePreferences();
-                                    } else if (currentStep < STEPS.length - 1) {
+                                    } else if (currentStep < getSteps(isOnboarding).length - 1) {
                                       // Move to the next step when done selecting options
                                       handleNext();
                                     }
@@ -751,7 +795,7 @@ export default function PreferenceSheet({
                         </Button>
                       )}
                     </div>
-                    {currentStep === STEPS.length - 2 ? (
+                    {currentStep === getSteps(isOnboarding).length - 2 ? (
                       <div className="flex gap-2 w-full">
                         <Button
                           variant="outline"

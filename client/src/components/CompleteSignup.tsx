@@ -19,18 +19,18 @@ export default function CompleteSignup() {
   const queryClient = useQueryClient();
   
   // Redirect handler to ensure we only redirect once
-  const redirectToHome = useCallback(() => {
-    console.log("Redirecting to home page");
+  const redirectToOnboarding = useCallback(() => {
+    console.log("Redirecting to onboarding page for new user");
     
     // Clear any query parameters from URL to prevent verification router from redirecting back
     if (window.history && window.history.pushState) {
       // Replace the current URL with one that has no query parameters
-      window.history.pushState({}, document.title, '/');
+      window.history.pushState({}, document.title, '/onboarding');
     }
     
     // Small delay to allow React to finish any rendering
     setTimeout(() => {
-      setLocation('/');
+      setLocation('/onboarding');
     }, 100);
   }, [setLocation]);
 
@@ -162,7 +162,7 @@ export default function CompleteSignup() {
                 localStorage.setItem('registrationTimestamp', Date.now().toString());
                 
                 // Redirect to home
-                setTimeout(() => redirectToHome(), 1000);
+                setTimeout(() => redirectToOnboarding(), 1000);
                 return;
               }
             } catch (loginError) {
@@ -217,7 +217,7 @@ export default function CompleteSignup() {
           if (userResponse.ok) {
             console.log("User data confirmed in backend, safe to redirect");
             // User data confirmed, safe to redirect
-            redirectToHome();
+            redirectToOnboarding();
           } else {
             retryCount++;
             if (retryCount < maxRetries) {
@@ -227,13 +227,13 @@ export default function CompleteSignup() {
             } else {
               console.log("Max retries reached, redirecting anyway");
               // Max retries reached, redirect anyway
-              redirectToHome();
+              redirectToOnboarding();
             }
           }
         } catch (error) {
           console.error("Error checking user data:", error);
           // If checking fails, just redirect
-          redirectToHome();
+          redirectToOnboarding();
         }
       };
       
