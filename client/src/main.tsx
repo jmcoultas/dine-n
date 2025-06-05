@@ -23,7 +23,6 @@ import Header from "./components/Header";
 import RecipeView from "./pages/RecipeView";
 import EmailVerification from "./components/EmailVerification";
 import CompleteSignup from "./components/CompleteSignup";
-import FirebaseDiagnostic from "./pages/FirebaseDiagnostic";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { data: user, isLoading } = useUser();
@@ -216,9 +215,6 @@ function Router() {
         </Route>
         <Route path="/auth/complete-signup">
           <CompleteSignup />
-        </Route>
-        <Route path="/firebase-diagnostic">
-          <FirebaseDiagnostic />
         </Route>
         <Route path="/auth">
           {/* Skip the verification router if registration was just completed */}
