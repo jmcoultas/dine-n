@@ -16,7 +16,7 @@ export default function Footer() {
           </div>
 
           {/* Navigation Links */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 flex-wrap justify-center">
             <Link href="/welcome" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Welcome
             </Link>
@@ -25,6 +25,12 @@ export default function Footer() {
             </Link>
             <Link href="/recipes" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Recipes
+            </Link>
+            <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Terms & Conditions
+            </Link>
+            <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Privacy Policy
             </Link>
           </div>
 
@@ -69,10 +75,13 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Copyright */}
-        <div className="mt-6 pt-6 border-t text-center">
+        {/* Copyright and Legal */}
+        <div className="mt-6 pt-6 border-t text-center space-y-2">
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Dine-N. All rights reserved.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            AI-generated content is for informational purposes only. Please exercise your own judgment regarding food safety and dietary decisions.
           </p>
         </div>
       </div>

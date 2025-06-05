@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Check, X, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Link } from 'wouter';
 
 interface CompleteSignupFormProps {
   email: string;
@@ -35,6 +37,7 @@ export function CompleteSignupForm({ email, onSubmit, error }: CompleteSignupFor
     number: false,
     special: false
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   
   // Check password strength and update validation errors
   const checkPasswordStrength = (password: string) => {
@@ -79,6 +82,12 @@ export function CompleteSignupForm({ email, onSubmit, error }: CompleteSignupFor
     
     // Prevent multiple submissions
     if (isLoading || submitted) {
+      return;
+    }
+    
+    // Check terms acceptance
+    if (!acceptedTerms) {
+      setFormError('You must accept the Terms and Conditions to complete registration');
       return;
     }
     
@@ -241,6 +250,33 @@ export function CompleteSignupForm({ email, onSubmit, error }: CompleteSignupFor
         )}
       </div>
 
+      {/* Terms and Conditions checkbox */}
+      <div className="space-y-3">
+        <div className="flex items-start space-x-2">
+          <Checkbox
+            id="terms"
+            checked={acceptedTerms}
+            onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+            className="mt-1"
+            disabled={isLoading || submitted}
+          />
+          <div className="grid gap-1.5 leading-none">
+            <Label
+              htmlFor="terms"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              I agree to the{' '}
+              <Link href="/terms" className="text-primary hover:underline">
+                Terms and Conditions
+              </Link>
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              By creating an account, you acknowledge that you understand our AI-generated content is for informational purposes only and you will exercise your own judgment regarding food safety and dietary decisions.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {formError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -251,7 +287,7 @@ export function CompleteSignupForm({ email, onSubmit, error }: CompleteSignupFor
       <Button
         type="submit"
         className="w-full"
-        disabled={isLoading || submitted || passwordsMismatch || passwordStrength < 80}
+        disabled={isLoading || submitted || passwordsMismatch || passwordStrength < 80 || !acceptedTerms}
       >
         {isLoading ? (
           <span className="flex items-center gap-2">

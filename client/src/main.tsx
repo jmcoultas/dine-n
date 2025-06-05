@@ -7,6 +7,8 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { Loader2 } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
+import { TermsAndConditions } from '@/components/TermsAndConditions';
+import { PrivacyPolicy } from '@/components/PrivacyPolicy';
 
 import Home from "./pages/Home";
 import Recipes from "./pages/Recipes";
@@ -189,6 +191,18 @@ function Router() {
           <>
             <Header />
             <Welcome />
+          </>
+        </Route>
+        <Route path="/terms">
+          <>
+            <Header />
+            <TermsAndConditions />
+          </>
+        </Route>
+        <Route path="/privacy">
+          <>
+            <Header />
+            <PrivacyPolicy />
           </>
         </Route>
         <Route path="/onboarding">
