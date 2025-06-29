@@ -102,7 +102,8 @@ export function setupAuth(app: Express) {
           subscription_tier: foundUser.subscription_tier || 'free',
           meal_plans_generated: foundUser.meal_plans_generated || 0,
           ingredient_recipes_generated: foundUser.ingredient_recipes_generated || 0,
-          firebase_uid: foundUser.firebase_uid || null
+          firebase_uid: foundUser.firebase_uid || null,
+          is_admin: foundUser.is_admin || false
         };
 
         // Create Firebase custom token after successful authentication
@@ -138,7 +139,8 @@ export function setupAuth(app: Express) {
         subscription_tier: foundUser.subscription_tier || 'free',
         meal_plans_generated: foundUser.meal_plans_generated || 0,
         ingredient_recipes_generated: foundUser.ingredient_recipes_generated || 0,
-        firebase_uid: foundUser.firebase_uid || null
+        firebase_uid: foundUser.firebase_uid || null,
+        is_admin: foundUser.is_admin || false
       };
 
       done(null, user);
@@ -435,7 +437,8 @@ export function setupAuth(app: Express) {
               subscription_tier: updatedUser.subscription_tier || 'free',
               meal_plans_generated: updatedUser.meal_plans_generated || 0,
               ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
-              firebase_uid: updatedUser.firebase_uid || null
+              firebase_uid: updatedUser.firebase_uid || null,
+              is_admin: updatedUser.is_admin || false
             };
             
             const customToken = await createFirebaseToken(publicUser.id.toString());
@@ -463,13 +466,76 @@ export function setupAuth(app: Express) {
           }
         }
         
-        // If the user exists and is not a partial registration, return an error
+        // If the user exists and is not a partial registration, check if they might be in limbo
         console.log(`User ${existingUser.id} already exists and is not in partial state`);
+        
+        // Check if this might be a Firebase-only user trying to complete registration
+        if (!existingUser.firebase_uid && userFirebaseToken && !isCrossBrowserCompletion) {
+          try {
+            const decodedToken = await auth.verifyIdToken(userFirebaseToken as string);
+            if (decodedToken.email?.toLowerCase() === normalizedEmail) {
+              console.log(`Firebase user trying to complete registration for existing native user ${existingUser.id}`);
+              
+              // Update the existing user with Firebase UID and complete registration
+              const hashedPassword = await crypto.hash(password);
+              
+              await db
+                .update(users)
+                .set({ 
+                  password_hash: hashedPassword,
+                  name: name?.trim() || existingUser.name || normalizedEmail.split('@')[0],
+                  firebase_uid: decodedToken.uid,
+                  is_partial_registration: false
+                })
+                .where(eq(users.id, existingUser.id));
+              
+              console.log(`Updated existing user ${existingUser.id} with Firebase UID and new password`);
+              
+              // Get the updated user and log them in
+              const [updatedUser] = await db
+                .select()
+                .from(users)
+                .where(eq(users.id, existingUser.id))
+                .limit(1);
+              
+              const publicUser: PublicUser = {
+                ...updatedUser,
+                subscription_status: updatedUser.subscription_status || 'inactive',
+                subscription_tier: updatedUser.subscription_tier || 'free',
+                meal_plans_generated: updatedUser.meal_plans_generated || 0,
+                ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
+                firebase_uid: updatedUser.firebase_uid || null
+              };
+              
+              const customToken = await createFirebaseToken(publicUser.id.toString());
+              publicUser.firebaseToken = customToken;
+              
+              req.login(publicUser, (err) => {
+                if (err) {
+                  console.error("Error logging in user after Firebase sync:", err);
+                  return next(err);
+                }
+                console.log(`User ${publicUser.id} successfully logged in after Firebase sync`);
+                return res.json({
+                  message: "Registration completed successfully (synced with Firebase)",
+                  user: publicUser,
+                  recovered_from_limbo: true
+                });
+              });
+              
+              return;
+            }
+          } catch (firebaseVerificationError) {
+            console.log("Firebase token verification failed during limbo recovery:", firebaseVerificationError);
+          }
+        }
+        
         return res.status(400).json({
           error: "Registration Error",
-          message: "This email address is already registered",
+          message: "This email address is already registered. If you're having trouble accessing your account, please try the password reset option.",
           field: "email",
-          type: "DUPLICATE_EMAIL"
+          type: "DUPLICATE_EMAIL",
+          suggestion: "Try using the 'Forgot Password' option if you can't remember your password."
         });
       }
 
@@ -499,7 +565,8 @@ export function setupAuth(app: Express) {
         subscription_tier: newUser.subscription_tier || 'free',
         meal_plans_generated: newUser.meal_plans_generated || 0,
         ingredient_recipes_generated: newUser.ingredient_recipes_generated || 0,
-        firebase_uid: newUser.firebase_uid || null
+        firebase_uid: newUser.firebase_uid || null,
+        is_admin: newUser.is_admin || false
       };
 
       const customToken = await createFirebaseToken(publicUser.id.toString());
@@ -603,7 +670,8 @@ export function setupAuth(app: Express) {
               subscription_tier: newUser.subscription_tier || 'free',
               meal_plans_generated: newUser.meal_plans_generated || 0,
               ingredient_recipes_generated: newUser.ingredient_recipes_generated || 0,
-              firebase_uid: newUser.firebase_uid || null
+              firebase_uid: newUser.firebase_uid || null,
+              is_admin: newUser.is_admin || false
             };
             
             // Create a custom token for Firebase authentication

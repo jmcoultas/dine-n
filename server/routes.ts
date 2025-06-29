@@ -4,6 +4,7 @@ import { generateRecipeRecommendation, generateIngredientSubstitution, generateR
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
+import { requireAdmin, checkAdminStatus } from "./middleware/admin";
 import { stripeService } from "./services/stripe";
 import { downloadAndStoreImage } from "./services/imageStorage";
 import auth from './services/firebase';
@@ -13,11 +14,30 @@ import { z } from "zod";
 import { MealTypeEnum, CuisineTypeEnum, DietaryTypeEnum, DifficultyEnum } from "@db/schema";
 import { MealPlanExpirationService } from "./services/mealPlanExpiration";
 import crypto from 'crypto';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { promisify } from 'util';
 import OpenAI from "openai";
 
 const scryptAsync = promisify(crypto.scrypt);
+
+// Crypto utility functions for password hashing
+const cryptoUtils = {
+  hash: async (password: string): Promise<string> => {
+    const salt = randomBytes(16).toString("hex");
+    const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+    return `${buf.toString("hex")}.${salt}`;
+  },
+  compare: async (suppliedPassword: string, storedPassword: string): Promise<boolean> => {
+    const [hashedPassword, salt] = storedPassword.split(".");
+    const hashedPasswordBuf = Buffer.from(hashedPassword, "hex");
+    const suppliedPasswordBuf = (await scryptAsync(
+      suppliedPassword,
+      salt,
+      64
+    )) as Buffer;
+    return timingSafeEqual(hashedPasswordBuf, suppliedPasswordBuf);
+  }
+};
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -1300,6 +1320,7 @@ export function registerRoutes(app: express.Express) {
         subscription_status: user.subscription_status || 'inactive',
         subscription_tier: user.subscription_tier || 'free',
         meal_plans_generated: user.meal_plans_generated || 0,
+        is_admin: user.is_admin || false,
         firebaseToken
       };
       
@@ -1325,34 +1346,101 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ message: 'Email and new password are required' });
       }
       
-      console.log(`Looking up user with email: ${email}`);
-      // Find the user
-      const [user] = await db
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log(`Looking up user with email: ${normalizedEmail}`);
+      
+      // Find the user in native database
+      let [user] = await db
         .select()
         .from(users)
-        .where(eq(users.email, email.toLowerCase()))
+        .where(eq(users.email, normalizedEmail))
         .limit(1);
       
       if (!user) {
-        console.error(`User not found for email: ${email}`);
-        return res.status(404).json({ message: 'User not found' });
+        console.log(`User not found in native database for email: ${normalizedEmail}`);
+        console.log('Checking if user exists in Firebase...');
+        
+        // Check if user exists in Firebase but not in native DB (limbo state)
+        try {
+          // Try to get user from Firebase by email
+          const firebaseUser = await auth.getUserByEmail(normalizedEmail);
+          
+          if (firebaseUser) {
+            console.log(`User found in Firebase but missing from native DB. Creating native user record for UID: ${firebaseUser.uid}`);
+            
+                         // Create user in native database to resolve limbo state
+             const tempPasswordHash = await cryptoUtils.hash("TEMPORARY_PASSWORD");
+            
+            const [newUser] = await db
+              .insert(users)
+              .values({
+                email: normalizedEmail,
+                password_hash: tempPasswordHash,
+                name: firebaseUser.displayName || normalizedEmail.split('@')[0],
+                firebase_uid: firebaseUser.uid,
+                subscription_status: 'inactive' as const,
+                subscription_tier: 'free' as const,
+                meal_plans_generated: 0,
+                ingredient_recipes_generated: 0,
+                created_at: new Date(),
+                is_partial_registration: true // Mark as partial since we're creating from limbo
+              })
+              .returning();
+              
+            user = newUser;
+            console.log(`Created native user record with ID ${user.id} for Firebase user ${firebaseUser.uid}`);
+          }
+        } catch (firebaseError: any) {
+          console.log('User not found in Firebase either:', firebaseError.message);
+          return res.status(404).json({ 
+            message: 'User not found. Please ensure you have registered an account with this email address.' 
+          });
+        }
+        
+        if (!user) {
+          console.error(`Failed to create or find user for email: ${normalizedEmail}`);
+          return res.status(404).json({ message: 'User not found' });
+        }
       }
       
-      console.log(`User found, generating new password hash for user ID: ${user.id}`);
-      // Generate a new salt and hash the password
-      const salt = randomBytes(16).toString("hex");
-      const buf = (await scryptAsync(newPassword, salt, 64)) as Buffer;
-      const hashedPassword = `${buf.toString("hex")}.${salt}`;
+      // Check if user is in partial registration state and allow password reset
+      let canResetPassword = true;
+      if (user.is_partial_registration === true) {
+        console.log(`User ${user.id} is in partial registration state - allowing password reset`);
+        canResetPassword = true;
+      } else {
+                 // Check if user has temporary password (another indicator of partial state)
+         try {
+           const hasTempPassword = await cryptoUtils.compare("TEMPORARY_PASSWORD", user.password_hash);
+           if (hasTempPassword) {
+             console.log(`User ${user.id} has temporary password - allowing password reset`);
+             canResetPassword = true;
+           }
+         } catch (tempCheckError) {
+           console.log(`Could not verify temporary password for user ${user.id}:`, tempCheckError);
+           // Continue with normal password reset
+         }
+      }
+      
+             console.log(`User found, generating new password hash for user ID: ${user.id}`);
+       // Generate a new salt and hash the password using the crypto utility
+       const hashedPassword = await cryptoUtils.hash(newPassword);
       
       console.log('Updating password in database');
-      // Update the user's password in the database
+      // Update the user's password in the database and clear partial registration flag
       await db
         .update(users)
-        .set({ password_hash: hashedPassword })
+        .set({ 
+          password_hash: hashedPassword,
+          is_partial_registration: false // Clear partial registration flag
+        })
         .where(eq(users.id, user.id));
       
       console.log('Password updated successfully');
-      res.json({ message: 'Password updated successfully' });
+      res.json({ 
+        message: 'Password updated successfully',
+        recovered_from_limbo: user.is_partial_registration === true || user.password_hash.includes('TEMPORARY_PASSWORD')
+      });
     } catch (error) {
       console.error('Error updating password:', error);
       res.status(500).json({ message: 'Failed to update password' });
@@ -2322,6 +2410,517 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         error: "Failed to create meal plan",
         message: error.message
       });
+    }
+  });
+
+  // Detect and resolve user limbo states
+  app.post('/api/auth/resolve-limbo', async (req, res) => {
+    try {
+      console.log('Limbo resolution request received');
+      const { email } = req.body;
+      
+      if (!email?.trim()) {
+        return res.status(400).json({ 
+          message: 'Email is required',
+          type: 'VALIDATION_ERROR'
+        });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log(`Checking limbo state for email: ${normalizedEmail}`);
+      
+      // Check native database first
+      const [nativeUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, normalizedEmail))
+        .limit(1);
+      
+      let firebaseUser = null;
+      try {
+        firebaseUser = await auth.getUserByEmail(normalizedEmail);
+      } catch (firebaseError: any) {
+        console.log('Firebase user lookup failed:', firebaseError.message);
+      }
+      
+      // Analyze the situation
+      const analysis = {
+        email: normalizedEmail,
+        native_user_exists: !!nativeUser,
+        firebase_user_exists: !!firebaseUser,
+        native_user_partial: nativeUser?.is_partial_registration === true,
+        native_user_has_temp_password: false,
+        firebase_uid: firebaseUser?.uid || null,
+        native_firebase_uid: nativeUser?.firebase_uid || null,
+        limbo_state: 'none' as 'none' | 'firebase_only' | 'native_only' | 'partial_native' | 'uid_mismatch',
+        can_auto_resolve: false,
+        suggested_action: 'none' as 'none' | 'password_reset' | 'complete_registration' | 'manual_intervention'
+      };
+      
+      // Check if native user has temporary password
+      if (nativeUser?.password_hash) {
+        try {
+          analysis.native_user_has_temp_password = await cryptoUtils.compare("TEMPORARY_PASSWORD", nativeUser.password_hash);
+        } catch (tempCheckError) {
+          console.log('Could not verify temporary password:', tempCheckError);
+        }
+      }
+      
+      // Determine limbo state
+      if (firebaseUser && !nativeUser) {
+        analysis.limbo_state = 'firebase_only';
+        analysis.can_auto_resolve = true;
+        analysis.suggested_action = 'password_reset';
+      } else if (!firebaseUser && nativeUser) {
+        analysis.limbo_state = 'native_only';
+        analysis.suggested_action = 'complete_registration';
+      } else if (nativeUser && (analysis.native_user_partial || analysis.native_user_has_temp_password)) {
+        analysis.limbo_state = 'partial_native';
+        analysis.can_auto_resolve = true;
+        analysis.suggested_action = 'complete_registration';
+      } else if (firebaseUser && nativeUser && firebaseUser.uid !== nativeUser.firebase_uid) {
+        analysis.limbo_state = 'uid_mismatch';
+        analysis.suggested_action = 'manual_intervention';
+      }
+      
+      console.log('Limbo analysis:', analysis);
+      
+      // Auto-resolve if possible
+      if (analysis.can_auto_resolve && analysis.limbo_state === 'firebase_only') {
+        console.log('Auto-resolving Firebase-only limbo state');
+        
+        // Create native user from Firebase user
+        const tempPasswordHash = await cryptoUtils.hash("TEMPORARY_PASSWORD");
+        
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            email: normalizedEmail,
+            password_hash: tempPasswordHash,
+            name: firebaseUser?.displayName || normalizedEmail.split('@')[0],
+            firebase_uid: firebaseUser?.uid || '',
+            subscription_status: 'inactive' as const,
+            subscription_tier: 'free' as const,
+            meal_plans_generated: 0,
+            ingredient_recipes_generated: 0,
+            created_at: new Date(),
+            is_partial_registration: true
+          })
+          .returning();
+          
+        console.log(`Created native user ${newUser.id} from Firebase user ${firebaseUser?.uid}`);
+        
+        return res.json({
+          message: 'Limbo state resolved automatically',
+          analysis,
+          resolved: true,
+          action_taken: 'created_native_user',
+          next_step: 'Use password reset to set your password'
+        });
+      }
+      
+      // Return analysis without auto-resolution
+      return res.json({
+        message: 'Limbo state analysis completed',
+        analysis,
+        resolved: false,
+        recommendations: {
+          firebase_only: 'Use password reset to sync accounts',
+          native_only: 'Complete registration process',
+          partial_native: 'Use password reset or complete registration',
+          uid_mismatch: 'Contact support for manual resolution'
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error resolving limbo state:', error);
+      res.status(500).json({ 
+        message: 'Failed to resolve limbo state',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Admin Routes - User Management and Troubleshooting
+  
+  // Get current user's admin status
+  app.get('/api/admin/status', isAuthenticated, checkAdminStatus, (req, res) => {
+    res.json({
+      isAdmin: req.isAdmin || false,
+      userId: req.user?.id || null
+    });
+  });
+
+  // Admin Dashboard - Get system stats
+  app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
+    try {
+      // Get user statistics
+      const userStats = await db
+        .select({
+          total_users: sql<number>`count(*)`,
+          admin_users: sql<number>`count(*) filter (where is_admin = true)`,
+          partial_registrations: sql<number>`count(*) filter (where is_partial_registration = true)`,
+          premium_users: sql<number>`count(*) filter (where subscription_tier = 'premium')`,
+          users_last_24h: sql<number>`count(*) filter (where created_at > now() - interval '24 hours')`
+        })
+        .from(users);
+
+      // Get recent problematic users (partial registrations, temp passwords)
+      const problematicUsers = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          created_at: users.created_at,
+          is_partial_registration: users.is_partial_registration,
+          firebase_uid: users.firebase_uid,
+          subscription_tier: users.subscription_tier
+        })
+        .from(users)
+        .where(
+          or(
+            eq(users.is_partial_registration, true),
+            sql`password_hash LIKE 'TEMPORARY_%'`
+          )
+        )
+        .orderBy(desc(users.created_at))
+        .limit(20);
+
+      // Check for potential limbo users (users with Firebase UID but no proper password)
+      const potentialLimboUsers = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          firebase_uid: users.firebase_uid,
+          created_at: users.created_at
+        })
+        .from(users)
+        .where(
+          and(
+            isNotNull(users.firebase_uid),
+            or(
+              eq(users.is_partial_registration, true),
+              sql`password_hash LIKE 'FIREBASE_USER_%'`
+            )
+          )
+        )
+        .orderBy(desc(users.created_at))
+        .limit(10);
+
+      res.json({
+        stats: userStats[0],
+        problematic_users: problematicUsers,
+        potential_limbo_users: potentialLimboUsers,
+        generated_at: new Date()
+      });
+    } catch (error) {
+      console.error('Error fetching admin dashboard data:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard data' });
+    }
+  });
+
+  // Admin - Search users
+  app.get('/api/admin/users/search', requireAdmin, async (req, res) => {
+    try {
+      const { q, limit = 20 } = req.query;
+      
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ error: 'Search query required' });
+      }
+
+      const searchTerm = `%${q.toLowerCase()}%`;
+      
+      const searchResults = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          created_at: users.created_at,
+          subscription_tier: users.subscription_tier,
+          subscription_status: users.subscription_status,
+          is_partial_registration: users.is_partial_registration,
+          firebase_uid: users.firebase_uid,
+          is_admin: users.is_admin
+        })
+        .from(users)
+        .where(
+          or(
+            sql`lower(email) LIKE ${searchTerm}`,
+            sql`lower(name) LIKE ${searchTerm}`,
+            sql`cast(id as text) = ${q}`
+          )
+        )
+        .orderBy(desc(users.created_at))
+        .limit(Number(limit));
+
+      res.json({
+        results: searchResults,
+        query: q,
+        count: searchResults.length
+      });
+    } catch (error) {
+      console.error('Error searching users:', error);
+      res.status(500).json({ error: 'Failed to search users' });
+    }
+  });
+
+  // Admin - Get detailed user info for troubleshooting
+  app.get('/api/admin/users/:userId', requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      // Get user details
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Check Firebase status if user has Firebase UID
+      let firebaseStatus = null;
+      if (user.firebase_uid) {
+        try {
+          const firebaseUser = await auth.getUser(user.firebase_uid);
+          firebaseStatus = {
+            exists: true,
+            email: firebaseUser.email,
+            emailVerified: firebaseUser.emailVerified,
+            disabled: firebaseUser.disabled,
+            creationTime: firebaseUser.metadata.creationTime,
+            lastSignInTime: firebaseUser.metadata.lastSignInTime
+          };
+        } catch (firebaseError: any) {
+          firebaseStatus = {
+            exists: false,
+            error: firebaseError.message
+          };
+        }
+      }
+
+      // Check for temporary password
+      let hasTemporaryPassword = false;
+      try {
+        hasTemporaryPassword = await cryptoUtils.compare("TEMPORARY_PASSWORD", user.password_hash);
+      } catch (error) {
+        // Ignore error, just assume not temporary
+      }
+
+      // Analyze user state
+      const userAnalysis = {
+        user_state: 'normal' as 'normal' | 'partial' | 'limbo' | 'firebase_only' | 'problematic',
+        issues: [] as string[],
+        recommendations: [] as string[]
+      };
+
+      if (user.is_partial_registration) {
+        userAnalysis.user_state = 'partial';
+        userAnalysis.issues.push('User has partial registration flag set');
+        userAnalysis.recommendations.push('User should complete registration or use password reset');
+      }
+
+      if (hasTemporaryPassword) {
+        userAnalysis.user_state = 'partial';
+        userAnalysis.issues.push('User has temporary password');
+        userAnalysis.recommendations.push('User should set a real password via password reset');
+      }
+
+      if (user.firebase_uid && firebaseStatus && !firebaseStatus.exists) {
+        userAnalysis.user_state = 'problematic';
+        userAnalysis.issues.push('User has Firebase UID but Firebase user does not exist');
+        userAnalysis.recommendations.push('Clear Firebase UID or recreate Firebase user');
+      }
+
+      if (!user.firebase_uid && firebaseStatus === null) {
+        // Check if Firebase user exists with this email
+        try {
+          const firebaseUser = await auth.getUserByEmail(user.email);
+          if (firebaseUser) {
+            userAnalysis.user_state = 'limbo';
+            userAnalysis.issues.push('Firebase user exists but not linked to native user');
+            userAnalysis.recommendations.push('Link Firebase UID to native user');
+          }
+        } catch (error) {
+          // Firebase user doesn't exist, which is fine
+        }
+      }
+
+      // Remove sensitive data
+      const safeUser = {
+        ...user,
+        password_hash: '[HIDDEN]'
+      };
+
+      res.json({
+        user: safeUser,
+        firebase_status: firebaseStatus,
+        analysis: userAnalysis,
+        has_temporary_password: hasTemporaryPassword,
+        checked_at: new Date()
+      });
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      res.status(500).json({ error: 'Failed to fetch user details' });
+    }
+  });
+
+  // Admin - Fix user limbo state
+  app.post('/api/admin/users/:userId/fix-limbo', requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const { action } = req.body;
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      let result = { success: false, message: '', action_taken: '' };
+
+      switch (action) {
+        case 'reset_to_partial':
+          // Reset user to partial registration state
+          const tempPasswordHash = await cryptoUtils.hash("TEMPORARY_PASSWORD");
+          await db
+            .update(users)
+            .set({
+              password_hash: tempPasswordHash,
+              is_partial_registration: true
+            })
+            .where(eq(users.id, userId));
+          
+          result = {
+            success: true,
+            message: 'User reset to partial registration state',
+            action_taken: 'reset_to_partial'
+          };
+          break;
+
+        case 'link_firebase':
+          // Try to link Firebase user by email
+          try {
+            const firebaseUser = await auth.getUserByEmail(user.email);
+            await db
+              .update(users)
+              .set({ firebase_uid: firebaseUser.uid })
+              .where(eq(users.id, userId));
+            
+            result = {
+              success: true,
+              message: `Linked Firebase user ${firebaseUser.uid}`,
+              action_taken: 'link_firebase'
+            };
+          } catch (firebaseError: any) {
+            result = {
+              success: false,
+              message: `Failed to find Firebase user: ${firebaseError.message}`,
+              action_taken: 'link_firebase_failed'
+            };
+          }
+          break;
+
+        case 'clear_firebase_uid':
+          // Clear Firebase UID
+          await db
+            .update(users)
+            .set({ firebase_uid: null })
+            .where(eq(users.id, userId));
+          
+          result = {
+            success: true,
+            message: 'Cleared Firebase UID',
+            action_taken: 'clear_firebase_uid'
+          };
+          break;
+
+        case 'complete_registration':
+          // Mark registration as complete
+          await db
+            .update(users)
+            .set({ is_partial_registration: false })
+            .where(eq(users.id, userId));
+          
+          result = {
+            success: true,
+            message: 'Marked registration as complete',
+            action_taken: 'complete_registration'
+          };
+          break;
+
+        default:
+          return res.status(400).json({ error: 'Invalid action' });
+      }
+
+      console.log(`Admin ${req.user?.email} performed action ${action} on user ${user.email} (ID: ${userId})`);
+      res.json(result);
+    } catch (error) {
+      console.error('Error fixing user limbo state:', error);
+      res.status(500).json({ error: 'Failed to fix user state' });
+    }
+  });
+
+  // Admin - Toggle admin status
+  app.post('/api/admin/users/:userId/toggle-admin', requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      // Prevent self-demotion
+      if (userId === req.user?.id) {
+        return res.status(400).json({ error: 'Cannot modify your own admin status' });
+      }
+
+      const [user] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          is_admin: users.is_admin
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const newAdminStatus = !user.is_admin;
+      
+      await db
+        .update(users)
+        .set({ is_admin: newAdminStatus })
+        .where(eq(users.id, userId));
+
+      console.log(`Admin ${req.user?.email} ${newAdminStatus ? 'granted' : 'revoked'} admin access to user ${user.email} (ID: ${userId})`);
+      
+      res.json({
+        success: true,
+        message: `User ${newAdminStatus ? 'granted' : 'revoked'} admin access`,
+        new_admin_status: newAdminStatus
+      });
+    } catch (error) {
+      console.error('Error toggling admin status:', error);
+      res.status(500).json({ error: 'Failed to toggle admin status' });
     }
   });
 }

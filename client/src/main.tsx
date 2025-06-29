@@ -24,6 +24,7 @@ import RecipeView from "./pages/RecipeView";
 import EmailVerification from "./components/EmailVerification";
 import CompleteSignup from "./components/CompleteSignup";
 import FirebaseDiagnostic from "./pages/FirebaseDiagnostic";
+import AdminDashboard from "./pages/AdminDashboard";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { data: user, isLoading } = useUser();
@@ -252,6 +253,10 @@ function Router() {
                 <Route 
                   path="/profile" 
                   component={() => <ProtectedRoute component={UserProfile} />} 
+                />
+                <Route 
+                  path="/admin" 
+                  component={() => <ProtectedRoute component={AdminDashboard} />} 
                 />
                 <Route>404 Page Not Found</Route>
               </Switch>

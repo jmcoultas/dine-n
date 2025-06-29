@@ -4,6 +4,7 @@ import { AuthForm } from './AuthForm';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import { ToastAction } from '@/components/ui/toast';
 
 interface AuthFormWrapperProps {
   initialMode?: 'login' | 'register';
@@ -16,6 +17,44 @@ export function AuthFormWrapper({ initialMode = 'login' }: AuthFormWrapperProps)
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+
+  // Handle limbo state recovery
+  const handleLimboRecovery = async (email: string) => {
+    try {
+      const response = await fetch('/api/auth/resolve-limbo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (data.resolved) {
+        toast({
+          title: "Account Recovered",
+          description: data.next_step || "Your account has been recovered. You can now reset your password.",
+          variant: "default",
+        });
+      } else {
+        const recommendation = data.recommendations?.[data.analysis?.limbo_state];
+        toast({
+          title: "Account Status",
+          description: recommendation || "Please try using the password reset option.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Limbo recovery failed:', error);
+      toast({
+        title: "Recovery Failed",
+        description: "Unable to recover account automatically. Please try the password reset option.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // This handler accepts optional password but enforces it as required when needed
   const handleSubmit = async (data: { email: string; password?: string; name?: string }) => {
@@ -62,17 +101,69 @@ export function AuthFormWrapper({ initialMode = 'login' }: AuthFormWrapperProps)
       } 
       // When in register mode and password exists (for complete-signup)
       else if (mode === 'register' && data.password) {
-        const result = await register({ 
-          email: data.email, 
-          password: data.password,
-          ...(data.name ? { name: data.name } : {})
-        });
-        
-        if (result.ok && result.user) {
-          queryClient.setQueryData(['user'], result.user);
-          setLocation('/');
-        } else if (!result.ok) {
-          setError(result.message);
+        try {
+          const result = await register({ 
+            email: data.email, 
+            password: data.password,
+            ...(data.name ? { name: data.name } : {})
+          });
+          
+          if (result.ok && result.user) {
+            queryClient.setQueryData(['user'], result.user);
+            
+            // Show success message if recovered from limbo
+            if ((result as any).recovered_from_limbo) {
+              toast({
+                title: "Account Recovered",
+                description: "Your account has been successfully recovered and synced!",
+                variant: "default",
+              });
+            }
+            
+            setLocation('/');
+          } else if (!result.ok) {
+            setError(result.message);
+            
+                         // Handle specific registration errors with recovery suggestions
+             if (result.type === 'DUPLICATE_EMAIL') {
+               toast({
+                 title: "Account Already Exists",
+                 description: result.suggestion || "Try using the password reset option if you can't access your account.",
+                 variant: "destructive",
+                 action: (
+                   <ToastAction 
+                     onClick={() => handleLimboRecovery(data.email)}
+                     altText="Try Password Reset"
+                   >
+                     Try Password Reset
+                   </ToastAction>
+                 )
+               });
+             } else if (result.type === 'FIREBASE_ERROR') {
+               toast({
+                 title: "Registration Issue",
+                 description: result.suggestion || result.message,
+                 variant: "destructive",
+                 action: result.suggestion ? (
+                   <ToastAction 
+                     onClick={() => handleLimboRecovery(data.email)}
+                     altText="Get Help"
+                   >
+                     Get Help
+                   </ToastAction>
+                 ) : undefined
+               });
+             }
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Registration failed';
+          setError(errorMessage);
+          
+          toast({
+            title: "Registration Failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
         }
       }
       // Register without password handled by the AuthForm component directly

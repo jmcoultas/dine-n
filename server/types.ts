@@ -15,7 +15,8 @@ export const UserSchema = z.object({
   meal_plans_generated: z.number().default(0),
   firebase_uid: z.string().nullable(),
   ingredient_recipes_generated: z.number().default(0),
-  created_at: z.date()
+  created_at: z.date(),
+  is_admin: z.boolean().default(false)
 });
 
 // Export the User type based on the schema

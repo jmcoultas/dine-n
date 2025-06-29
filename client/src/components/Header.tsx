@@ -5,7 +5,7 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils, User, BookOpen, CookingPot, UtensilsCrossed, Calendar } from "lucide-react";
+import { Utensils, User, BookOpen, CookingPot, UtensilsCrossed, Calendar, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
 import { useQuery } from "@tanstack/react-query";
@@ -77,6 +77,19 @@ export default function Header() {
                 </div>
               </Link>
             </NavigationMenuItem>
+            {/* Admin navigation - only show for admin users */}
+            {user?.is_admin && (
+              <NavigationMenuItem>
+                <Link href="/admin" className="block">
+                  <div className="relative flex items-center px-3 py-2 w-[42px] hover:w-[130px] hover:bg-accent rounded-md transition-all duration-200">
+                    <Shield className="h-6 w-6 transition-transform duration-200 hover:-translate-x-1 text-orange-600" />
+                    <span className="absolute left-[46px] whitespace-nowrap opacity-0 transition-all duration-200 hover:opacity-100 pointer-events-none [div:hover>&]:opacity-100">
+                      Admin
+                    </span>
+                  </div>
+                </Link>
+              </NavigationMenuItem>
+            )}
           </NavigationMenuList>
         </NavigationMenu>
         <Button

@@ -13,6 +13,7 @@ export interface AuthUser extends Omit<User, 'password_hash'> {
   subscription_status: string;
   subscription_tier: string;
   meal_plans_generated: number;
+  is_admin: boolean;
   firebaseToken?: string;
 }
 
@@ -23,6 +24,7 @@ export type RequestResult = {
   ok: false;
   message: string;
   type?: string;
+  suggestion?: string;
 };
 
 async function handleRequest(
@@ -39,11 +41,32 @@ async function handleRequest(
         const { idToken } = await createFirebaseUser(body.email, body.password);
         firebaseToken = idToken;
       } catch (firebaseError: any) {
-        // Handle Firebase-specific errors
-        const errorMessage = firebaseError.code ? 
-          firebaseError.code.replace('auth/', '').replace(/-/g, ' ') : 
-          firebaseError.message;
-        return { ok: false, message: errorMessage };
+        // Handle Firebase-specific errors with better limbo detection
+        if (firebaseError.code === 'auth/email-already-in-use') {
+          // User exists in Firebase - try to proceed with backend registration anyway
+          // The backend can handle Firebase-native DB sync
+          console.log('Firebase user already exists, attempting backend sync...');
+          
+          try {
+            // Try to get Firebase token for existing user (won't work without password)
+            // Instead, we'll let the backend handle this case
+            firebaseToken = null; // Proceed without Firebase token
+          } catch (syncError) {
+            console.log('Could not sync with existing Firebase user:', syncError);
+          }
+        } else {
+          // Other Firebase errors
+          const errorMessage = firebaseError.code ? 
+            firebaseError.code.replace('auth/', '').replace(/-/g, ' ') : 
+            firebaseError.message;
+          return { 
+            ok: false, 
+            message: errorMessage,
+            type: 'FIREBASE_ERROR',
+            suggestion: firebaseError.code === 'auth/email-already-in-use' ? 
+              'This email is already registered. Try using the password reset option.' : undefined
+          };
+        }
       }
     }
 
