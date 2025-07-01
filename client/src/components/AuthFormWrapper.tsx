@@ -102,14 +102,14 @@ export function AuthFormWrapper({ initialMode = 'login' }: AuthFormWrapperProps)
       // When in register mode and password exists (for complete-signup)
       else if (mode === 'register' && data.password) {
         try {
-          const result = await register({ 
-            email: data.email, 
-            password: data.password,
-            ...(data.name ? { name: data.name } : {})
-          });
-          
-          if (result.ok && result.user) {
-            queryClient.setQueryData(['user'], result.user);
+        const result = await register({ 
+          email: data.email, 
+          password: data.password,
+          ...(data.name ? { name: data.name } : {})
+        });
+        
+        if (result.ok && result.user) {
+          queryClient.setQueryData(['user'], result.user);
             
             // Show success message if recovered from limbo
             if ((result as any).recovered_from_limbo) {
@@ -120,37 +120,23 @@ export function AuthFormWrapper({ initialMode = 'login' }: AuthFormWrapperProps)
               });
             }
             
-            setLocation('/');
-          } else if (!result.ok) {
-            setError(result.message);
+          setLocation('/');
+        } else if (!result.ok) {
+          setError(result.message);
             
                          // Handle specific registration errors with recovery suggestions
              if (result.type === 'DUPLICATE_EMAIL') {
                toast({
                  title: "Account Already Exists",
-                 description: "This email is already registered. You can log in to your existing account or reset your password if needed.",
-                 variant: "default",
-                 duration: 8000,
+                 description: result.suggestion || "Try using the password reset option if you can't access your account.",
+                 variant: "destructive",
                  action: (
-                   <div className="flex gap-2">
-                     <ToastAction 
-                       onClick={() => {
-                         setMode('login');
-                         setError('');
-                       }}
-                       altText="Switch to Login"
-                       className="bg-primary text-primary-foreground hover:bg-primary/90"
-                     >
-                       Login
-                     </ToastAction>
-                     <ToastAction 
-                       onClick={() => handleLimboRecovery(data.email)}
-                       altText="Reset Password"
-                       className="bg-secondary text-secondary-foreground hover:bg-secondary/90"
-                     >
-                       Reset Password
-                     </ToastAction>
-                   </div>
+                   <ToastAction 
+                     onClick={() => handleLimboRecovery(data.email)}
+                     altText="Try Password Reset"
+                   >
+                     Try Password Reset
+                   </ToastAction>
                  )
                });
              } else if (result.type === 'FIREBASE_ERROR') {
