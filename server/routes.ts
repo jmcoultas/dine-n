@@ -1305,6 +1305,11 @@ export function registerRoutes(app: express.Express) {
             email: email.toLowerCase(),
             password_hash: '', // No password for Google auth users
             name: decodedToken.name || null,
+            firebase_uid: decodedToken.uid, // Set the Firebase UID from the decoded token
+            subscription_status: 'inactive' as const,
+            subscription_tier: 'free' as const,
+            meal_plans_generated: 0,
+            ingredient_recipes_generated: 0,
             created_at: new Date(),
           })
           .returning();

@@ -43,16 +43,24 @@ async function handleRequest(
       } catch (firebaseError: any) {
         // Handle Firebase-specific errors with better limbo detection
         if (firebaseError.code === 'auth/email-already-in-use') {
-          // User exists in Firebase - try to proceed with backend registration anyway
-          // The backend can handle Firebase-native DB sync
-          console.log('Firebase user already exists, attempting backend sync...');
+          // User exists in Firebase - try to sign them in to get their token
+          console.log('Firebase user already exists, attempting to sign in to get token...');
           
           try {
-            // Try to get Firebase token for existing user (won't work without password)
-            // Instead, we'll let the backend handle this case
-            firebaseToken = null; // Proceed without Firebase token
-          } catch (syncError) {
-            console.log('Could not sync with existing Firebase user:', syncError);
+            // Try to sign in with the provided credentials to get the Firebase token
+            const { signInWithEmailAndPassword } = await import('firebase/auth');
+            const { auth } = await import('../lib/firebase');
+            
+            const userCredential = await signInWithEmailAndPassword(auth, body.email, body.password);
+            const idToken = await userCredential.user.getIdToken();
+            firebaseToken = idToken;
+            console.log('Successfully obtained Firebase token for existing user');
+          } catch (signInError: any) {
+            console.log('Could not sign in to existing Firebase user:', signInError);
+            // If sign-in fails, it means the password doesn't match the Firebase user
+            // In this case, we should still try to link the accounts but without Firebase token
+            console.log('Proceeding with backend registration without Firebase token for account linking');
+            firebaseToken = null;
           }
         } else {
           // Other Firebase errors

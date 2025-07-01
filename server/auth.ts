@@ -192,8 +192,21 @@ export function setupAuth(app: Express) {
         }
       } else {
         console.log("Skipping Firebase token verification for mobile flow");
-        // Generate a placeholder Firebase UID for now
-        firebaseUid = `mobile_${Date.now()}`;
+        // Instead of generating a placeholder UID, try to find existing Firebase user
+        try {
+          console.log(`Checking if Firebase user exists for ${email.toLowerCase().trim()}`);
+          const firebaseUser = await auth.getUserByEmail(email.toLowerCase().trim());
+          if (firebaseUser) {
+            firebaseUid = firebaseUser.uid;
+            console.log(`Found existing Firebase user with UID: ${firebaseUid} for mobile flow`);
+          } else {
+            console.log("No existing Firebase user found for mobile flow");
+            firebaseUid = null; // No Firebase user exists
+          }
+        } catch (firebaseError: any) {
+          console.log(`No existing Firebase user found for mobile flow:`, firebaseError.message);
+          firebaseUid = null; // No Firebase user exists
+        }
       }
 
       const normalizedEmail = email.toLowerCase().trim();
@@ -541,6 +554,21 @@ export function setupAuth(app: Express) {
 
       console.log(`Creating new user for ${normalizedEmail}`);
       const hashedPassword = await crypto.hash(password);
+      
+      // If we don't have a Firebase UID but the user might exist in Firebase, try to find them
+      if (!firebaseUid) {
+        try {
+          console.log(`No Firebase UID provided, checking if Firebase user exists for ${normalizedEmail}`);
+          const firebaseUser = await auth.getUserByEmail(normalizedEmail);
+          if (firebaseUser) {
+            firebaseUid = firebaseUser.uid;
+            console.log(`Found existing Firebase user with UID: ${firebaseUid}`);
+          }
+        } catch (firebaseError: any) {
+          console.log(`No existing Firebase user found for ${normalizedEmail}:`, firebaseError.message);
+        }
+      }
+      
       const [newUser] = await db
         .insert(users)
         .values({
