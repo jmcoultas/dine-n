@@ -113,16 +113,23 @@ export default function RecipePreferencesModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Recipe Preferences</DialogTitle>
+          <DialogTitle>
+            {userPreferences && ((userPreferences.dietary || []).length > 0 || (userPreferences.allergies || []).length > 0) 
+              ? "Override Recipe Preferences" 
+              : "Recipe Preferences"}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Choose your dietary preferences and allergies for recipe suggestions.
+            {userPreferences && ((userPreferences.dietary || []).length > 0 || (userPreferences.allergies || []).length > 0)
+              ? "You can use your saved preferences or set temporary ones for this recipe generation."
+              : "Choose your dietary preferences and allergies for recipe suggestions."
+            }
             <br />
             <strong>Note:</strong> Your account allergies will always be respected for safety.
           </p>
 
-          {userPreferences && (Object.keys(userPreferences.dietary || []).length > 0 || Object.keys(userPreferences.allergies || []).length > 0) && (
+          {userPreferences && ((userPreferences.dietary || []).length > 0 || (userPreferences.allergies || []).length > 0) && (
             <div className="flex items-center gap-4">
               <Button
                 variant={useDefaultPreferences ? "default" : "outline"}

@@ -33,6 +33,13 @@
     animation: slideInRight 0.6s ease-out 0.6s both;
   }
 
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
   @keyframes fadeIn {
     from {
       opacity: 0;

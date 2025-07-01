@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser, type AuthUser } from "@/hooks/use-user";
 import { useSubscription } from "@/hooks/use-subscription";
@@ -21,6 +21,8 @@ import { z } from "zod";
 
 const STORAGE_KEY = 'ingredient-recipe';
 const FREE_RECIPE_LIMIT = 3;
+const FREE_INGREDIENT_LIMIT = 3;
+const PREMIUM_INGREDIENT_LIMIT = 10;
 
 // Add PantryPal specific recipe schema
 const PantryPalRecipeSchema = z.object({
@@ -79,55 +81,17 @@ type PantryPalRecipe = z.infer<typeof PantryPalRecipeSchema>;
 
 export default function IngredientRecipes() {
   const { data: user } = useUser() as { data: AuthUser | null };
-  const getUserStorageKey = (key: string) => user ? `${key}-${user.id}` : null;
 
-  // Query to fetch user preferences from the backend
-  const { data: userPreferences } = useQuery({
-    queryKey: ['userPreferences'],
-    queryFn: async () => {
-      if (!user) return null;
-      const response = await fetch('/api/user/profile', {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch user preferences');
-      }
-      const data = await response.json();
-      return data.preferences as Preferences;
-    },
-    enabled: !!user
-  });
+  // Get user preferences directly from user object like weekly planner does
+  const userPreferences = useMemo(() => {
+    if (!user?.preferences) return null;
+    const parsedPrefs = PreferenceSchema.safeParse(user.preferences);
+    return parsedPrefs.success ? parsedPrefs.data : null;
+  }, [user?.preferences]);
 
-  // Initialize from localStorage if available
-  const getStoredSuggestions = () => {
-    if (user) {
-      const storageKey = getUserStorageKey('suggestions');
-      if (storageKey) {
-        const savedSuggestions = localStorage.getItem(storageKey);
-        if (savedSuggestions) {
-          try {
-            const parsedSuggestions = JSON.parse(savedSuggestions);
-            if (Array.isArray(parsedSuggestions) && parsedSuggestions.length > 0) {
-              console.log('Initializing with stored suggestions:', parsedSuggestions);
-              return parsedSuggestions;
-            }
-          } catch (e) {
-            console.error('Failed to parse saved suggestions during initialization', e);
-          }
-        }
-      }
-    }
-    return [];
-  };
-
-  const [ingredients, setIngredients] = useState<string[]>(() => {
-    const storageKey = getUserStorageKey('ingredients');
-    if (!storageKey) return [];
-    const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [ingredients, setIngredients] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>(getStoredSuggestions);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState<string>("");
   const { subscription } = useSubscription();
@@ -139,6 +103,24 @@ export default function IngredientRecipes() {
     dietary: [],
     allergies: []
   });
+
+  // Initialize ingredients from localStorage when user loads
+  useEffect(() => {
+    if (user) {
+      const storageKey = `ingredients-${user.id}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsedIngredients = JSON.parse(saved);
+          if (Array.isArray(parsedIngredients)) {
+            setIngredients(parsedIngredients);
+          }
+        } catch (e) {
+          console.error('Failed to parse saved ingredients', e);
+        }
+      }
+    }
+  }, [user?.id]);
 
   // Initialize tempPreferences from user account
   useEffect(() => {
@@ -188,7 +170,6 @@ export default function IngredientRecipes() {
       }
 
       // Invalidate the user query to ensure it has the latest preferences
-      await queryClient.invalidateQueries({ queryKey: ['userPreferences'] });
       await queryClient.invalidateQueries({ queryKey: ['user'] });
     } catch (error) {
       console.error('Error saving preferences to account:', error);
@@ -220,7 +201,7 @@ export default function IngredientRecipes() {
     
     // Check if we have suggestions in localStorage that we should restore
     if (user) {
-      const storageKey = getUserStorageKey('suggestions');
+      const storageKey = user ? `suggestions-${user.id}` : null;
       if (storageKey && suggestions.length === 0) {
         const savedSuggestions = localStorage.getItem(storageKey);
         if (savedSuggestions) {
@@ -236,20 +217,20 @@ export default function IngredientRecipes() {
         }
       }
     }
-  }, [user, suggestions.length, getUserStorageKey, setSuggestions]);
+  }, [user?.id, suggestions.length]);
 
   // Save ingredients to localStorage whenever they change
   useEffect(() => {
-    const storageKey = getUserStorageKey('ingredients');
-    if (storageKey) {
+    if (user) {
+      const storageKey = `ingredients-${user.id}`;
       localStorage.setItem(storageKey, JSON.stringify(ingredients));
     }
   }, [ingredients, user?.id]);
 
   // Save suggestions to localStorage whenever they change
   useEffect(() => {
-    const storageKey = getUserStorageKey('suggestions');
-    if (storageKey) {
+    if (user) {
+      const storageKey = `suggestions-${user.id}`;
       localStorage.setItem(storageKey, JSON.stringify(suggestions));
     }
   }, [suggestions, user?.id]);
@@ -259,8 +240,8 @@ export default function IngredientRecipes() {
     queryKey: ['ingredient-recipe', user?.id],
     queryFn: async () => {
       try {
-        const storageKey = getUserStorageKey(STORAGE_KEY);
-        if (!storageKey) return null;
+        if (!user) return null;
+        const storageKey = `${STORAGE_KEY}-${user.id}`;
         const saved = localStorage.getItem(storageKey);
         if (!saved) return null;
         const parsed = JSON.parse(saved);
@@ -268,8 +249,8 @@ export default function IngredientRecipes() {
         return validatedRecipe;
       } catch (error) {
         console.error('Error parsing saved recipe:', error);
-        const storageKey = getUserStorageKey(STORAGE_KEY);
-        if (storageKey) {
+        if (user) {
+          const storageKey = `${STORAGE_KEY}-${user.id}`;
           localStorage.removeItem(storageKey);
         }
         return null;
@@ -283,12 +264,24 @@ export default function IngredientRecipes() {
 
   const handleAddIngredient = () => {
     if (inputValue.trim()) {
-      if (user?.subscription_tier !== "premium" && ingredients.length >= 3) {
+      // Check ingredient limits based on subscription tier
+      if (user?.subscription_tier !== "premium" && ingredients.length >= FREE_INGREDIENT_LIMIT) {
         setFeatureContext("adding more ingredients");
         setShowSubscriptionModal(true);
         setInputValue("");
         return;
       }
+      
+      if (user?.subscription_tier === "premium" && ingredients.length >= PREMIUM_INGREDIENT_LIMIT) {
+        toast({
+          title: "Ingredient Limit Reached",
+          description: `Premium users can add up to ${PREMIUM_INGREDIENT_LIMIT} ingredients to PantryPal.`,
+          variant: "destructive",
+        });
+        setInputValue("");
+        return;
+      }
+      
       setIngredients([...ingredients, inputValue.trim()]);
       setInputValue("");
     }
@@ -315,17 +308,30 @@ export default function IngredientRecipes() {
       }
     }
 
-    // Make sure tempPreferences has the latest user preferences before showing the modal
-    if (userPreferences) {
+    // Check if user has saved preferences
+    if (userPreferences && (userPreferences.dietary?.length > 0 || userPreferences.allergies?.length > 0)) {
+      // Use saved preferences directly, similar to weekly meal planner
+      console.log('Using saved user preferences for dietary restrictions:', userPreferences.dietary);
+      console.log('Using saved user preferences for allergies:', userPreferences.allergies);
+      
       setTempPreferences({
         dietary: userPreferences.dietary || [],
         allergies: userPreferences.allergies || []
       });
-      console.log('Using user preferences for dietary restrictions:', userPreferences.dietary);
-      console.log('Using user preferences for allergies:', userPreferences.allergies);
+      
+      // Generate suggestions directly without showing modal
+      await handleGenerateWithPreferences({
+        dietary: userPreferences.dietary || [],
+        allergies: userPreferences.allergies || []
+      });
+    } else {
+      // No saved preferences, show the modal to set them
+      setTempPreferences({
+        dietary: [],
+        allergies: []
+      });
+      setShowPreferences(true);
     }
-
-    setShowPreferences(true);
   };
 
   const handleGenerateWithPreferences = async (preferences: { dietary: string[]; allergies: string[] }) => {
@@ -383,8 +389,8 @@ export default function IngredientRecipes() {
     }
     
     setSuggestions([]);
-    const storageKey = getUserStorageKey(STORAGE_KEY);
-    if (storageKey) {
+    if (user) {
+      const storageKey = `${STORAGE_KEY}-${user.id}`;
       localStorage.removeItem(storageKey);
     }
     queryClient.setQueryData(['ingredient-recipe', user?.id], null);
@@ -454,8 +460,8 @@ export default function IngredientRecipes() {
       setSuggestions(data);
       
       // Store in local storage
-      const storageKey = getUserStorageKey('suggestions');
-      if (storageKey) {
+      if (user) {
+        const storageKey = `suggestions-${user.id}`;
         localStorage.setItem(storageKey, JSON.stringify(data));
       }
       
@@ -521,9 +527,9 @@ export default function IngredientRecipes() {
     onSuccess: (recipe: PantryPalRecipe) => {
       try {
         console.log('Saving recipe to storage:', JSON.stringify(recipe, null, 2));
-        const storageKey = getUserStorageKey(STORAGE_KEY);
-        console.log('Storage key:', storageKey);
-        if (storageKey) {
+        if (user) {
+          const storageKey = `${STORAGE_KEY}-${user.id}`;
+          console.log('Storage key:', storageKey);
           localStorage.setItem(storageKey, JSON.stringify(recipe));
           console.log('Recipe saved to localStorage');
         }
@@ -575,8 +581,8 @@ export default function IngredientRecipes() {
       // Clear any existing recipe first
       if (selectedRecipe) {
         console.log('Clearing existing recipe before generating new one');
-        const storageKey = getUserStorageKey(STORAGE_KEY);
-        if (storageKey) {
+        if (user) {
+          const storageKey = `${STORAGE_KEY}-${user.id}`;
           localStorage.removeItem(storageKey);
         }
         queryClient.setQueryData(['ingredient-recipe', user?.id], null);
@@ -606,8 +612,8 @@ export default function IngredientRecipes() {
       };
 
       try {
-        const storageKey = getUserStorageKey(STORAGE_KEY);
-        if (storageKey) {
+        if (user) {
+          const storageKey = `${STORAGE_KEY}-${user.id}`;
           localStorage.setItem(storageKey, JSON.stringify(updatedRecipe));
         }
         queryClient.setQueryData(['ingredient-recipe', user?.id], updatedRecipe);
@@ -625,8 +631,8 @@ export default function IngredientRecipes() {
 
   const handleClearSuggestions = () => {
     setSuggestions([]);
-    const storageKey = getUserStorageKey('suggestions');
-    if (storageKey) {
+    if (user) {
+      const storageKey = `suggestions-${user.id}`;
       localStorage.removeItem(storageKey);
     }
   };
@@ -636,6 +642,26 @@ export default function IngredientRecipes() {
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold mb-2">PantryPal</h1>
         <p className="text-xl text-muted-foreground">Your friendly AI that whips up meals from what you have.</p>
+        
+        {/* Show preferences indicator when user has saved preferences */}
+        {userPreferences && (userPreferences.dietary?.length > 0 || userPreferences.allergies?.length > 0) && (
+          <div className="mt-4 p-3 bg-primary/10 border border-primary/20 rounded-lg max-w-md mx-auto">
+            <div className="flex items-center gap-2 justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-sm font-medium text-primary">Using your saved preferences</span>
+            </div>
+            <div className="flex flex-wrap gap-1 justify-center mt-2">
+              {userPreferences.dietary?.map((diet) => (
+                <Badge key={diet} variant="secondary" className="text-xs">{diet}</Badge>
+              ))}
+              {userPreferences.allergies?.map((allergy) => (
+                <Badge key={allergy} variant="destructive" className="text-xs">{allergy}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <SubscriptionModal
         open={showSubscriptionModal}
@@ -983,23 +1009,50 @@ export default function IngredientRecipes() {
                 inputMode="text"
                 style={{ fontSize: '16px' }}
               />
-              <Button onClick={handleAddIngredient}>Add</Button>
-            </div>
+              <Button 
+                onClick={handleAddIngredient}
+                disabled={
+                  !inputValue.trim() || 
+                  (user?.subscription_tier === "premium" && ingredients.length >= PREMIUM_INGREDIENT_LIMIT) ||
+                  (user?.subscription_tier !== "premium" && ingredients.length >= FREE_INGREDIENT_LIMIT)
+                }
+              >
+                Add
+              </Button>
+                        </div>
 
-            <Button
-              onClick={handleGenerateSuggestions}
-              disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
-              className="w-full"
-            >
-              {generateSuggestionsMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating Ideas...
-                </>
-              ) : (
-                "Generate Recipe Ideas"
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGenerateSuggestions}
+                disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
+                className="flex-1"
+              >
+                {generateSuggestionsMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating Ideas...
+                  </>
+                ) : (
+                  "Generate Recipe Ideas"
+                )}
+              </Button>
+              
+              {/* Show override button only if user has saved preferences */}
+              {userPreferences && (userPreferences.dietary?.length > 0 || userPreferences.allergies?.length > 0) && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPreferences(true)}
+                  disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
+                  className="shrink-0"
+                  title="Override your saved preferences for this generation"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
         </div>
       </div>
