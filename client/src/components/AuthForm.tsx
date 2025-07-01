@@ -87,7 +87,24 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
         setName('');
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setFormError(errorMessage);
+      
+      // Show helpful toast for duplicate email errors
+      if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
+        toast({
+          title: "Account Already Exists",
+          description: "This email is already registered. You can log in to your existing account or reset your password if needed.",
+          variant: "default",
+          duration: 8000,
+        });
+      } else {
+        toast({
+          title: mode === 'register' ? "Registration Error" : "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

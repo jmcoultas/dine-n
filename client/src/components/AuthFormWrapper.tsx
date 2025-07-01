@@ -128,15 +128,29 @@ export function AuthFormWrapper({ initialMode = 'login' }: AuthFormWrapperProps)
              if (result.type === 'DUPLICATE_EMAIL') {
                toast({
                  title: "Account Already Exists",
-                 description: result.suggestion || "Try using the password reset option if you can't access your account.",
-                 variant: "destructive",
+                 description: "This email is already registered. You can log in to your existing account or reset your password if needed.",
+                 variant: "default",
+                 duration: 8000,
                  action: (
-                   <ToastAction 
-                     onClick={() => handleLimboRecovery(data.email)}
-                     altText="Try Password Reset"
-                   >
-                     Try Password Reset
-                   </ToastAction>
+                   <div className="flex gap-2">
+                     <ToastAction 
+                       onClick={() => {
+                         setMode('login');
+                         setError('');
+                       }}
+                       altText="Switch to Login"
+                       className="bg-primary text-primary-foreground hover:bg-primary/90"
+                     >
+                       Login
+                     </ToastAction>
+                     <ToastAction 
+                       onClick={() => handleLimboRecovery(data.email)}
+                       altText="Reset Password"
+                       className="bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                     >
+                       Reset Password
+                     </ToastAction>
+                   </div>
                  )
                });
              } else if (result.type === 'FIREBASE_ERROR') {

@@ -544,11 +544,15 @@ export function setupAuth(app: Express) {
         }
         
         return res.status(400).json({
-          error: "Registration Error",
-          message: "This email address is already registered. If you're having trouble accessing your account, please try the password reset option.",
+          error: "Account Already Exists",
+          message: "An account with this email address already exists. Please use the login page to access your account, or use the 'Forgot Password' option if you need to reset your password.",
           field: "email",
           type: "DUPLICATE_EMAIL",
-          suggestion: "Try using the 'Forgot Password' option if you can't remember your password."
+          suggestion: "Try logging in instead, or use the password reset option if you can't remember your password.",
+          actions: {
+            login: "Switch to login page",
+            resetPassword: "Reset your password"
+          }
         });
       }
 
@@ -616,10 +620,15 @@ export function setupAuth(app: Express) {
 
       if ((error as any)?.code === '23505') {
         return res.status(400).json({
-          error: "Registration Error",
-          message: "This email address is already registered",
+          error: "Account Already Exists",
+          message: "An account with this email address already exists. Please use the login page to access your account, or use the 'Forgot Password' option if you need to reset your password.",
           field: "email",
-          type: "DUPLICATE_EMAIL"
+          type: "DUPLICATE_EMAIL",
+          suggestion: "Try logging in instead, or use the password reset option if you can't remember your password.",
+          actions: {
+            login: "Switch to login page",
+            resetPassword: "Reset your password"
+          }
         });
       }
 
