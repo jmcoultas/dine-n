@@ -9,7 +9,7 @@ import { startExpirationJob } from "./jobs/checkMealPlanExpiration";
 
 const app = express();
 const server = createServer(app);
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 3001;
 
 // Webhook endpoint needs raw body
 app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res, next) => {
@@ -31,7 +31,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use((req, res, next) => {
   const clientUrl = process.env.NODE_ENV === 'production'
     ? process.env.CLIENT_URL
-    : 'http://localhost:5173';
+    : 'http://0.0.0.0:5173';
 
   res.header('Access-Control-Allow-Origin', clientUrl);
   res.header('Access-Control-Allow-Credentials', 'true');
