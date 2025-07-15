@@ -26,7 +26,7 @@ localPort = 6006
 externalPort = 3002
 
 [workflows]
-runButton = "Project"
+runButton = "Development Environment"
 
 [[workflows.workflow]]
 name = "Project"
@@ -60,16 +60,7 @@ args = "cd client && npx vite --host 0.0.0.0 --port 5173"
 waitForPort = 5173
 
 [[workflows.workflow]]
-name = "Development"
-author = 37676718
-mode = "parallel"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-
-[[workflows.workflow]]
-name = "Run Application"
+name = "Development Environment"
 author = 37676718
 mode = "parallel"
 
