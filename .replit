@@ -26,7 +26,6 @@ localPort = 6006
 externalPort = 3002
 
 [workflows]
-runButton = "Start Application"
 
 [[workflows.workflow]]
 name = "Project"
@@ -60,14 +59,10 @@ args = "cd client && npx vite --host 0.0.0.0 --port 5173"
 waitForPort = 5173
 
 [[workflows.workflow]]
-name = "Start Application"
+name = "Start"
+mode = "sequential"
 author = 37676718
-mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3001 tsx watch --clear-screen=false server/index.ts"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd client && npx vite --host 0.0.0.0 --port 5173"
+args = "npm run dev"
