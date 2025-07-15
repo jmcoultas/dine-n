@@ -14,10 +14,6 @@ build = ["npm", "run", "build"]
 run = ["sh", "-c", "npm run start"]
 
 [[ports]]
-localPort = 3000
-externalPort = 3003
-
-[[ports]]
 localPort = 3001
 externalPort = 3000
 
@@ -26,26 +22,11 @@ localPort = 5173
 externalPort = 80
 
 [[ports]]
-localPort = 5174
-externalPort = 3001
-
-[[ports]]
 localPort = 6006
 externalPort = 3002
 
-[[ports]]
-localPort = 6007
-externalPort = 4200
-
-[[ports]]
-localPort = 6008
-externalPort = 5000
-
-[[ports]]
-localPort = 6009
-externalPort = 5173
-
 [workflows]
+runButton = "Run Application"
 
 [[workflows.workflow]]
 name = "Project"
@@ -77,3 +58,25 @@ author = "agent"
 task = "shell.exec"
 args = "cd client && npx vite --host 0.0.0.0 --port 5173"
 waitForPort = 5173
+
+[[workflows.workflow]]
+name = "Development"
+author = 37676718
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+
+[[workflows.workflow]]
+name = "Run Application"
+author = 37676718
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd client && npm run dev"
