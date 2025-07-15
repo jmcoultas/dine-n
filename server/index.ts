@@ -81,11 +81,8 @@ async function startServer() {
 
       server.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE') {
-          console.error(`[express] Port ${PORT} is already in use. Retrying...`);
-          setTimeout(() => {
-            server.close();
-            startHttpServer();
-          }, 1000);
+          console.error(`[express] Port ${PORT} is already in use. Exiting...`);
+          process.exit(1);
         } else {
           console.error("[express] Server error:", error);
           process.exit(1);
