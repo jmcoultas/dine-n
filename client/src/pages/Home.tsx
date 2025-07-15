@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useUser } from "@/hooks/use-user";
-import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock, CookingPot } from "lucide-react";
+import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock } from "lucide-react";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import Footer from "@/components/Footer";
 
@@ -47,7 +47,7 @@ export default function Home() {
           {/* Generate Meal Plan Path */}
           <div className="animate-slideInLeft relative group">
             <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-8 h-full border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-[1.02] flex flex-col items-center text-center">
-              <CookingPot className="w-16 h-16 text-primary mb-4" />
+              <ChefHat className="w-16 h-16 text-primary mb-4" />
               <h2 className="text-2xl font-bold mb-4">Generate Weekly Meal Plans</h2>
               <p className="text-muted-foreground mb-6">
                 Let our AI chef craft a personalized meal plan tailored to your preferences and dietary needs.

@@ -2,12 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { ChefHat, Heart, Wand2, Calendar, X } from "lucide-react";
+import { ChefHat, Heart, Wand2, Calendar, X, ShoppingCart } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { getIngredientSubstitutions } from "@/lib/api";
+import { getIngredientSubstitutions, createInstacartRecipePage } from "@/lib/api";
 import { useSubscription } from "@/hooks/use-subscription";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { CalendarEventModal } from "@/components/CalendarEventModal";
@@ -155,6 +155,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const [selectedIngredient, setSelectedIngredient] = useState<{name: string; amount: number; unit: string} | null>(null);
   const [isFavorited, setIsFavorited] = useState(recipe.favorited ?? false);
   const [localIngredients, setLocalIngredients] = useState(recipe.ingredients ?? []);
+  const [isCreatingInstacartPage, setIsCreatingInstacartPage] = useState(false);
   const { toast } = useToast();
   const { data: user } = useUser();
   const { subscription } = useSubscription();
@@ -186,6 +187,30 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       
       return updatedList;
     });
+  };
+
+  const handleShopWithInstacart = async () => {
+    setIsCreatingInstacartPage(true);
+    try {
+      const result = await createInstacartRecipePage(recipe.id);
+      
+      // Open Instacart recipe page in a new tab
+      window.open(result.instacart_url, '_blank');
+      
+      toast({
+        title: "Success!",
+        description: `Created Instacart recipe page for ${result.recipe_name} with ${result.ingredient_count} ingredients`,
+      });
+    } catch (error) {
+      console.error('Error creating Instacart recipe page:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create Instacart recipe page",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingInstacartPage(false);
+    }
   };
 
   // Fetch user preferences
@@ -366,6 +391,29 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Schedule this recipe in your calendar</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1 bg-green-600/10 hover:bg-green-600/20 border-green-600/20"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShopWithInstacart();
+                      }}
+                      disabled={isCreatingInstacartPage}
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>{isCreatingInstacartPage ? "Creating..." : "Shop Ingredients"}</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Shop for ingredients on Instacart</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

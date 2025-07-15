@@ -807,6 +807,7 @@ export default function MealPlan() {
                     }))
                   ) ?? []
                 }
+                mealPlanId={currentMealPlan?.id}
               />
             </>
           )}

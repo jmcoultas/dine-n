@@ -193,6 +193,8 @@ export function useUser(): UserQueryResult {
     queryKey: ['user'],
     queryFn: fetchUser,
     staleTime: 300000, // Consider data fresh for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnReconnect: false, // Don't refetch on network reconnect
     retry: false, // Don't retry on auth failures
   });
 

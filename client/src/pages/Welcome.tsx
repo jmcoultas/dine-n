@@ -12,7 +12,6 @@ import {
   Sliders,
   Apple,
   Wand,
-  WandSparkles,
   ChevronDown,
   ChevronUp
 } from "lucide-react";
@@ -295,7 +294,7 @@ export default function Welcome() {
               <ul className="space-y-3 mb-6">
                 <li className="flex items-center gap-2">
                   <div className="h-5 w-5 rounded-full bg-primary-foreground/10 flex items-center justify-center">
-                    <WandSparkles className="h-3 w-3 text-primary-foreground" />
+                    <Sparkles className="h-3 w-3 text-primary-foreground" />
                   </div>
                   <span>Everything in Free</span>
                 </li>
@@ -663,7 +662,7 @@ export default function Welcome() {
                     <span>Advanced meal planning & scheduling</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <WandSparkles className="h-5 w-5" />
+                    <Sparkles className="h-5 w-5" />
                     <span>Access to our Ingredient Zapping tool</span>
                   </li>
                 </ul>

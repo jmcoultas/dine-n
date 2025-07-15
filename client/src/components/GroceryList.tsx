@@ -11,8 +11,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Search, Leaf } from "lucide-react";
+import { Download, Search, Leaf, ShoppingCart } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/use-toast";
+import { createInstacartShoppingList } from "@/lib/api";
 
 interface GroceryItem {
   name: string;
@@ -24,12 +26,15 @@ interface GroceryItem {
 
 interface GroceryListProps {
   items: GroceryItem[];
+  mealPlanId?: number;
 }
 
-export default function GroceryList({ items }: GroceryListProps) {
+export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [organicItems, setOrganicItems] = useState<Set<string>>(new Set());
+  const [isCreatingInstacartList, setIsCreatingInstacartList] = useState(false);
+  const { toast } = useToast();
   
   // Define recipeName here
   const recipeName = items.length > 0 ? items[0].name : "Grocery List";
@@ -138,6 +143,39 @@ export default function GroceryList({ items }: GroceryListProps) {
     URL.revokeObjectURL(url);
   };
 
+  const handleShopWithInstacart = async () => {
+    if (!mealPlanId) {
+      toast({
+        title: "Error",
+        description: "No meal plan available for shopping",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreatingInstacartList(true);
+    try {
+      const result = await createInstacartShoppingList(mealPlanId, "My Meal Plan Shopping List");
+      
+      // Open Instacart shopping list in a new tab
+      window.open(result.instacart_url, '_blank');
+      
+      toast({
+        title: "Success!",
+        description: `Created Instacart shopping list with ${result.ingredient_count} ingredients`,
+      });
+    } catch (error) {
+      console.error('Error creating Instacart shopping list:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create Instacart shopping list",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingInstacartList(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -154,6 +192,18 @@ export default function GroceryList({ items }: GroceryListProps) {
           <Download className="h-4 w-4 mr-2" />
           Export List
         </Button>
+        
+        {mealPlanId && (
+          <Button 
+            variant="default" 
+            onClick={handleShopWithInstacart}
+            disabled={isCreatingInstacartList}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            {isCreatingInstacartList ? "Creating..." : "Shop with Instacart"}
+          </Button>
+        )}
       </div>
 
       <ScrollArea className="h-[500px] rounded-md border">

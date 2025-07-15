@@ -9,6 +9,7 @@ import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { MealPlanLoadingState } from "@/components/MealPlanLoadingState";
 import { SuggestionLoadingState } from "@/components/SuggestionLoadingState";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
+
 import { Calendar, Sunrise, Sun, Moon, Wand2, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import { useLocation } from "wouter";
 import { getCurrentMealPlan } from "@/lib/api";
 import type { Preferences } from "@db/schema";
 import { PreferenceSchema } from "@db/schema";
+import type { Recipe } from "@/lib/types";
 
 interface RecipeSuggestion {
   title: string;
@@ -35,6 +37,12 @@ interface SelectedRecipes {
   breakfast: string[];
   lunch: string[];
   dinner: string[];
+}
+
+interface SelectedArchivedRecipes {
+  breakfast: Recipe[];
+  lunch: Recipe[];
+  dinner: Recipe[];
 }
 
 interface CooldownInfo {
@@ -124,6 +132,11 @@ export default function WeeklyPlanner() {
     lunch: [],
     dinner: []
   });
+  const [selectedArchivedRecipes, setSelectedArchivedRecipes] = useState<SelectedArchivedRecipes>({
+    breakfast: [],
+    lunch: [],
+    dinner: []
+  });
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [featureContext, setFeatureContext] = useState("");
   const [cooldownInfo, setCooldownInfo] = useState<CooldownInfo | null>(null);
@@ -151,6 +164,9 @@ export default function WeeklyPlanner() {
   const { data: currentMealPlan, isLoading: isLoadingCurrentPlan } = useQuery({
     queryKey: ['current-meal-plan'],
     queryFn: getCurrentMealPlan,
+    staleTime: 1000 * 60 * 10, // Consider data fresh for 10 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnReconnect: false, // Don't refetch on network reconnect
   });
 
   useEffect(() => {
@@ -312,23 +328,34 @@ export default function WeeklyPlanner() {
           [mealType]: currentSelections.filter(title => title !== recipeTitle)
         };
       } else {
-        // Add selection if under limit
-        if (currentSelections.length < selectedDays) {
-          return {
-            ...prev,
-            [mealType]: [...currentSelections, recipeTitle]
-          };
-        }
+        // Add selection (no limit per meal type)
+        return {
+          ...prev,
+          [mealType]: [...currentSelections, recipeTitle]
+        };
       }
-      
-      return prev;
     });
   };
 
+
+
   const getSelectionProgress = () => {
-    const breakfast = { selected: selectedRecipes.breakfast.length, required: selectedDays };
-    const lunch = { selected: selectedRecipes.lunch.length, required: selectedDays };
-    const dinner = { selected: selectedRecipes.dinner.length, required: selectedDays };
+    const totalArchivedBreakfast = selectedArchivedRecipes.breakfast.length;
+    const totalArchivedLunch = selectedArchivedRecipes.lunch.length;
+    const totalArchivedDinner = selectedArchivedRecipes.dinner.length;
+    
+    const breakfast = { 
+      selected: selectedRecipes.breakfast.length + totalArchivedBreakfast, 
+      required: selectedDays 
+    };
+    const lunch = { 
+      selected: selectedRecipes.lunch.length + totalArchivedLunch, 
+      required: selectedDays 
+    };
+    const dinner = { 
+      selected: selectedRecipes.dinner.length + totalArchivedDinner, 
+      required: selectedDays 
+    };
     const totalSelected = breakfast.selected + lunch.selected + dinner.selected;
     const totalRequired = selectedDays * 3;
 
@@ -336,24 +363,34 @@ export default function WeeklyPlanner() {
   };
 
   const progress = getSelectionProgress();
-  const isSelectionComplete = progress.breakfast.selected === selectedDays && 
-                             progress.lunch.selected === selectedDays && 
-                             progress.dinner.selected === selectedDays;
+  const isSelectionComplete = progress.totalSelected > 0; // Just require at least one recipe
 
   const handleCreatePlan = () => {
     if (!isSelectionComplete) {
       toast({
-        title: "Incomplete Selection",
-        description: "Please select the required number of recipes for each meal type.",
+        title: "No Recipes Selected",
+        description: "Please select at least one recipe to create your meal plan.",
         variant: "destructive",
       });
       return;
     }
 
+    // Combine selected recipe titles and archived recipe data
+    const combinedSelectedRecipes = {
+      breakfast: [...selectedRecipes.breakfast, ...selectedArchivedRecipes.breakfast.map(r => r.name)],
+      lunch: [...selectedRecipes.lunch, ...selectedArchivedRecipes.lunch.map(r => r.name)],
+      dinner: [...selectedRecipes.dinner, ...selectedArchivedRecipes.dinner.map(r => r.name)]
+    };
+
     // The subscription limit check is now handled server-side
     // If the user exceeds their limit, the server will return an error that triggers the modal
-    createMealPlanMutation.mutate({ selectedRecipes, preferences });
+    createMealPlanMutation.mutate({ 
+      selectedRecipes: combinedSelectedRecipes, 
+      preferences 
+    });
   };
+
+
 
   if (isUserLoading || isLoadingCurrentPlan) {
     return (
@@ -503,7 +540,7 @@ export default function WeeklyPlanner() {
               ))}
             </div>
             <p className="text-sm text-muted-foreground mt-3">
-              You'll need to select {selectedDays} recipes for each meal type ({selectedDays * 3} total recipes)
+              Select any combination of recipes across meal types (total recipes needed: {selectedDays * 3})
             </p>
           </CardContent>
         </Card>
@@ -552,6 +589,8 @@ export default function WeeklyPlanner() {
           </CardContent>
         </Card>
 
+        {/* My Favorites Section - temporarily removed until component is implemented */}
+
         {/* Step 3: Recipe Suggestions (only show if we have suggestions) */}
         {hasSuggestions && (
           <Card>
@@ -598,15 +637,15 @@ export default function WeeklyPlanner() {
                             {config.emoji} {config.label}
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Choose {selectedDays} of {SUGGESTIONS_PER_MEAL_TYPE}
+                            Choose any number of {SUGGESTIONS_PER_MEAL_TYPE} options
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={mealProgress.selected === mealProgress.required ? "default" : "secondary"}>
-                          {mealProgress.selected}/{mealProgress.required}
+                        <Badge variant={mealProgress.selected > 0 ? "default" : "secondary"}>
+                          {mealProgress.selected} selected
                         </Badge>
-                        {mealProgress.selected === mealProgress.required && (
+                        {mealProgress.selected > 0 && (
                           <CheckCircle className="h-5 w-5 text-green-500" />
                         )}
                       </div>
@@ -616,7 +655,6 @@ export default function WeeklyPlanner() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {mealSuggestions.map((suggestion, index) => {
                         const isSelected = selectedRecipes[typedMealType].includes(suggestion.title);
-                        const isDisabled = !isSelected && selectedRecipes[typedMealType].length >= selectedDays;
 
                         return (
                           <Card 
@@ -624,11 +662,9 @@ export default function WeeklyPlanner() {
                             className={`cursor-pointer transition-all duration-200 ${
                               isSelected 
                                 ? 'ring-2 ring-primary bg-primary/5' 
-                                : isDisabled 
-                                  ? 'opacity-50 cursor-not-allowed' 
-                                  : 'hover:shadow-md'
+                                : 'hover:shadow-md'
                             }`}
-                            onClick={() => !isDisabled && handleRecipeToggle(typedMealType, suggestion.title)}
+                            onClick={() => handleRecipeToggle(typedMealType, suggestion.title)}
                           >
                             <CardContent className="p-4">
                               <div className="flex items-start justify-between mb-3">
@@ -690,8 +726,8 @@ export default function WeeklyPlanner() {
                 ) : !isSelectionComplete ? (
                   <Alert>
                     <AlertDescription>
-                      Please complete your recipe selections before creating your meal plan.
-                      You need {selectedDays} recipes for each meal type.
+                      Please select at least one recipe to create your meal plan.
+                      You can choose any combination across meal types.
                     </AlertDescription>
                   </Alert>
                 ) : null}

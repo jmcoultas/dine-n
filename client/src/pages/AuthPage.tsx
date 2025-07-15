@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { AuthFormWrapper } from "@/components/AuthFormWrapper";
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -20,7 +20,7 @@ export default function AuthPage() {
   const [newPassword, setNewPassword] = useState('');
   const [oobCode, setOobCode] = useState<string | null>(null);
   const [isValidCode, setIsValidCode] = useState(false);
-  const search = useSearch();
+  const search = new URLSearchParams(window.location.search);
 
   // Check for tab parameter and password reset mode/code
   useEffect(() => {

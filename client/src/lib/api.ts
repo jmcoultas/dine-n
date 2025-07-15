@@ -30,8 +30,19 @@ function transformRecipeData(recipe: any): Recipe {
     ...recipe,
     prepTime: recipe.prep_time,
     cookTime: recipe.cook_time,
-    imageUrl: recipe.image_url,
-    permanentUrl: recipe.permanent_url,
+    imageUrl: recipe.permanent_url || recipe.image_url || null,
+    permanentUrl: recipe.permanent_url || null,
+    isFavorited: recipe.favorited || false,
+    // Ensure required fields have default values
+    ingredients: recipe.ingredients || [],
+    instructions: recipe.instructions || [],
+    tags: recipe.tags || [],
+    nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    favorites_count: recipe.favorites_count || 0,
+    created_at: recipe.created_at ? new Date(recipe.created_at) : new Date(),
+    ...(recipe.expires_at ? { expiresAt: new Date(recipe.expires_at) } : {}),
+    meal: recipe.meal || null,
+    day: recipe.day ? new Date(recipe.day) : null,
   };
 }
 
@@ -90,6 +101,28 @@ export async function getTemporaryRecipes(): Promise<Recipe[]> {
   });
   if (!response.ok) {
     throw new Error("Failed to fetch temporary recipes");
+  }
+  const data = await response.json();
+  return Array.isArray(data) ? data.map(transformRecipeData) : [];
+}
+
+export async function getArchivedPantryPalRecipes(): Promise<Recipe[]> {
+  const response = await fetch(`${API_BASE}/pantrypal-recipes/archived`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch archived PantryPal recipes");
+  }
+  const data = await response.json();
+  return Array.isArray(data) ? data.map(transformRecipeData) : [];
+}
+
+export async function getUserFavorites(): Promise<Recipe[]> {
+  const response = await fetch(`${API_BASE}/user-favorites`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch user favorites");
   }
   const data = await response.json();
   return Array.isArray(data) ? data.map(transformRecipeData) : [];
@@ -168,6 +201,72 @@ export async function createGroceryList(groceryList: Omit<GroceryList, "id">): P
     credentials: "include",
     body: JSON.stringify(groceryList),
   });
+  return response.json();
+}
+
+// Instacart Integration Functions
+export async function createInstacartShoppingList(
+  mealPlanId: number,
+  title?: string
+): Promise<{ success: boolean; instacart_url: string; ingredient_count: number }> {
+  const response = await fetch(`${API_BASE}/instacart/shopping-list`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      meal_plan_id: mealPlanId,
+      title,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to create Instacart shopping list");
+  }
+
+  return response.json();
+}
+
+export async function createInstacartRecipePage(
+  recipeId: number
+): Promise<{ success: boolean; instacart_url: string; recipe_name: string; ingredient_count: number }> {
+  const response = await fetch(`${API_BASE}/instacart/recipe`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      recipe_id: recipeId,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to create Instacart recipe page");
+  }
+
+  return response.json();
+}
+
+export async function getNearbyRetailers(
+  postalCode: string,
+  countryCode: string = 'US'
+): Promise<any> {
+  const response = await fetch(
+    `${API_BASE}/instacart/retailers?postal_code=${postalCode}&country_code=${countryCode}`,
+    {
+      credentials: "include",
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch nearby retailers");
+  }
+
   return response.json();
 }
 

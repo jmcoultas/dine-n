@@ -20,18 +20,6 @@ export default defineConfig({
     },
   },
   root: path.resolve(__dirname, "client"),
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    allowedHosts: [
-      '5456ecce-6292-4348-a917-dffa1b0f3097-00-2vixhj3d06ysw.spock.replit.dev',
-      'localhost',
-      '127.0.0.1',
-      '0.0.0.0',
-      '.replit.dev',
-      '.spock.replit.dev'
-    ],
-  },
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,

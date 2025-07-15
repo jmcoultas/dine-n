@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useUser } from "@/hooks/use-user";
-import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock, CookingPot } from "lucide-react";
+import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock } from "lucide-react";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import Footer from "@/components/Footer";
 import PreferenceSheet from "@/components/PreferenceSheet";
@@ -204,7 +204,7 @@ export default function Onboarding() {
               className="bg-primary hover:bg-primary/90 text-lg px-8 py-3"
               onClick={() => setShowPreferences(true)}
             >
-              <CookingPot className="mr-2 h-5 w-5" />
+                              <ChefHat className="mr-2 h-5 w-5" />
               Let's Get Cooking!
             </Button>
           </div>

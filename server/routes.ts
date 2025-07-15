@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
+import { instacartService } from "./lib/instacart";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
@@ -232,6 +233,32 @@ export function registerRoutes(app: express.Express) {
         error: "Failed to fetch temporary recipes",
         details: error.message
       });
+    }
+  });
+
+  // New endpoint for archived PantryPal recipes
+  app.get("/api/pantrypal-recipes/archived", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const now = new Date();
+
+      // Get archived PantryPal recipes (expired recipes without meal_type)
+      const archivedRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.user_id, user.id),
+            isNull(temporaryRecipes.meal_type), // PantryPal recipes don't have meal_type
+            lt(temporaryRecipes.expires_at, now) // Expired recipes
+          )
+        )
+        .orderBy(desc(temporaryRecipes.created_at));
+
+      res.json(archivedRecipes);
+    } catch (error) {
+      console.error("Error fetching archived PantryPal recipes:", error);
+      res.status(500).json({ error: "Failed to fetch archived PantryPal recipes" });
     }
   });
 
@@ -1255,6 +1282,199 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  // Instacart Integration - Create Shopping List
+  app.post("/api/instacart/shopping-list", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { meal_plan_id, title } = req.body;
+
+      if (!meal_plan_id) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameter: meal_plan_id"
+        });
+      }
+
+      // Get the meal plan and verify ownership
+      const mealPlan = await db.query.mealPlans.findFirst({
+        where: eq(mealPlans.id, meal_plan_id)
+      });
+
+      if (!mealPlan) {
+        return res.status(404).json({ error: "Meal plan not found" });
+      }
+
+      if (mealPlan.user_id !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized to access this meal plan" });
+      }
+
+      // Get associated recipes from meal_plan_recipes table
+      const mealPlanRecipesList = await db
+        .select({
+          recipe_id: mealPlanRecipes.recipe_id,
+          meal: mealPlanRecipes.meal,
+          day: mealPlanRecipes.day
+        })
+        .from(mealPlanRecipes)
+        .where(eq(mealPlanRecipes.meal_plan_id, meal_plan_id));
+
+      const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
+      
+      // Get recipe details from temporary_recipes
+      const recipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(inArray(temporaryRecipes.id, recipeIds));
+
+      // Extract ingredients from all recipes in the meal plan
+      const ingredients: Array<{ name: string; amount: number; unit: string }> = [];
+      
+      recipes.forEach(recipe => {
+        if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+          recipe.ingredients.forEach((ingredient: any) => {
+            if (ingredient.name && ingredient.amount && ingredient.unit) {
+              ingredients.push({
+                name: String(ingredient.name),
+                amount: Number(ingredient.amount),
+                unit: String(ingredient.unit)
+              });
+            }
+          });
+        }
+      });
+
+      if (ingredients.length === 0) {
+        return res.status(400).json({
+          error: "No ingredients found",
+          message: "This meal plan doesn't contain any ingredients to shop for"
+        });
+      }
+
+      // Create Instacart shopping list
+      const instacartResponse = await instacartService.createShoppingList(
+        ingredients,
+        title || `${mealPlan.name} - Shopping List`
+      );
+
+      res.json({
+        success: true,
+        instacart_url: instacartResponse.products_link_url,
+        ingredient_count: ingredients.length
+      });
+    } catch (error: any) {
+      console.error("Error creating Instacart shopping list:", error);
+      res.status(500).json({
+        error: "Failed to create Instacart shopping list",
+        message: error.message
+      });
+    }
+  });
+
+  // Instacart Integration - Create Recipe Page
+  app.post("/api/instacart/recipe", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { recipe_id } = req.body;
+
+      if (!recipe_id) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameter: recipe_id"
+        });
+      }
+
+      // Get the recipe from temporary recipes table
+      const recipe = await db.query.temporaryRecipes.findFirst({
+        where: and(
+          eq(temporaryRecipes.id, recipe_id),
+          eq(temporaryRecipes.user_id, req.user!.id)
+        )
+      });
+
+      if (!recipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      // Prepare ingredients for Instacart
+      const ingredients: Array<{ name: string; amount: number; unit: string }> = [];
+      
+      if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+        recipe.ingredients.forEach((ingredient: any) => {
+          if (ingredient.name && ingredient.amount && ingredient.unit) {
+            ingredients.push({
+              name: String(ingredient.name),
+              amount: Number(ingredient.amount),
+              unit: String(ingredient.unit)
+            });
+          }
+        });
+      }
+
+      // Prepare instructions for Instacart
+      const instructions: string[] = [];
+      if (recipe.instructions && Array.isArray(recipe.instructions)) {
+        recipe.instructions.forEach((instruction: any) => {
+          if (typeof instruction === 'string') {
+            instructions.push(instruction);
+          }
+        });
+      }
+
+      if (ingredients.length === 0) {
+        return res.status(400).json({
+          error: "No ingredients found",
+          message: "This recipe doesn't contain any ingredients to shop for"
+        });
+      }
+
+      // Create Instacart recipe page
+      const instacartResponse = await instacartService.createRecipePage(
+        recipe.name,
+        ingredients,
+        instructions,
+        recipe.image_url || undefined
+      );
+
+      res.json({
+        success: true,
+        instacart_url: instacartResponse.products_link_url,
+        recipe_name: recipe.name,
+        ingredient_count: ingredients.length
+      });
+    } catch (error: any) {
+      console.error("Error creating Instacart recipe page:", error);
+      res.status(500).json({
+        error: "Failed to create Instacart recipe page",
+        message: error.message
+      });
+    }
+  });
+
+  // Instacart Integration - Get Nearby Retailers
+  app.get("/api/instacart/retailers", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { postal_code, country_code = 'US' } = req.query;
+
+      if (!postal_code || typeof postal_code !== 'string') {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameter: postal_code"
+        });
+      }
+
+      const retailers = await instacartService.getNearbyRetailers(
+        postal_code,
+        country_code as string
+      );
+
+      res.json(retailers);
+    } catch (error: any) {
+      console.error("Error fetching nearby retailers:", error);
+      res.status(500).json({
+        error: "Failed to fetch nearby retailers",
+        message: error.message
+      });
+    }
+  });
+
   // User Profile Routes
   app.put("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -2180,9 +2400,30 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         ...selectedRecipes.dinner
       ];
 
-      console.log('Generating full recipes for selected titles:', allSelectedTitles);
+      console.log('Processing selected recipes:', allSelectedTitles);
 
-      // Generate full recipes for each selected title and track their meal types
+      // Check if any of these titles correspond to existing PantryPal recipes
+      const existingRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.user_id, user.id),
+            isNull(temporaryRecipes.meal_type), // PantryPal recipes don't have meal_type
+            inArray(temporaryRecipes.name, allSelectedTitles)
+          )
+        );
+
+      console.log('Found existing PantryPal recipes:', existingRecipes.length);
+
+      // Separate existing recipes from titles that need generation
+      const existingRecipeNames = new Set(existingRecipes.map(r => r.name));
+      const titlesToGenerate = allSelectedTitles.filter(title => !existingRecipeNames.has(title));
+
+      console.log('Titles to generate:', titlesToGenerate);
+      console.log('Existing recipes to reuse:', existingRecipes.map(r => r.name));
+
+      // Generate full recipes for titles that don't exist yet
       const generatedRecipes = [];
       const recipesByMealType: {
         breakfast: any[];
@@ -2196,147 +2437,167 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 2);
 
-      // OPTIMIZED: Generate all recipes in parallel instead of sequentially
-      console.log(`Starting parallel generation of ${allSelectedTitles.length} recipes`);
-      const startTime = Date.now();
+      // Process existing recipes first
+      for (const existingRecipe of existingRecipes) {
+        // Determine meal type based on which array the title came from
+        let mealType: "breakfast" | "lunch" | "dinner" = "dinner";
+        if (selectedRecipes.breakfast.includes(existingRecipe.name)) {
+          mealType = "breakfast";
+        } else if (selectedRecipes.lunch.includes(existingRecipe.name)) {
+          mealType = "lunch";
+        }
 
-      const recipeGenerationPromises = allSelectedTitles.map(async (title) => {
-        try {
-          console.log(`Generating full recipe for: ${title}`);
-          
-          const fullRecipe = await generateRecipeFromTitleAI(title, normalizedPreferences.allergies);
-          
-          if (fullRecipe && fullRecipe.name) {
-            // Determine meal type based on which array the title came from
-            let mealType: "breakfast" | "lunch" | "dinner" = "dinner";
-            if (selectedRecipes.breakfast.includes(title)) {
-              mealType = "breakfast";
-            } else if (selectedRecipes.lunch.includes(title)) {
-              mealType = "lunch";
+        // Update the existing recipe with the new meal type and expiration
+        const [updatedRecipe] = await db
+          .update(temporaryRecipes)
+          .set({
+            meal_type: mealType.charAt(0).toUpperCase() + mealType.slice(1) as z.infer<typeof MealTypeEnum>,
+            expires_at: expirationDate
+          })
+          .where(eq(temporaryRecipes.id, existingRecipe.id))
+          .returning();
+
+        generatedRecipes.push(updatedRecipe);
+        recipesByMealType[mealType].push(updatedRecipe);
+        console.log(`Reused existing ${mealType} recipe: ${existingRecipe.name}`);
+      }
+
+      // Generate new recipes for titles that don't exist yet
+      if (titlesToGenerate.length > 0) {
+        console.log(`Starting parallel generation of ${titlesToGenerate.length} new recipes`);
+        const startTime = Date.now();
+
+        const recipeGenerationPromises = titlesToGenerate.map(async (title) => {
+          try {
+            console.log(`Generating full recipe for: ${title}`);
+            
+            const fullRecipe = await generateRecipeFromTitleAI(title, normalizedPreferences.allergies);
+            
+            if (fullRecipe && fullRecipe.name) {
+              // Determine meal type based on which array the title came from
+              let mealType: "breakfast" | "lunch" | "dinner" = "dinner";
+              if (selectedRecipes.breakfast.includes(title)) {
+                mealType = "breakfast";
+              } else if (selectedRecipes.lunch.includes(title)) {
+                mealType = "lunch";
+              }
+
+              return {
+                recipe: fullRecipe,
+                mealType,
+                title
+              };
+            }
+            return null;
+          } catch (error) {
+            console.error(`Error generating recipe for title "${title}":`, error);
+            return null;
+          }
+        });
+
+        // Wait for all recipe generations to complete
+        const recipeResults = await Promise.all(recipeGenerationPromises);
+        const generationTime = Date.now() - startTime;
+        console.log(`Parallel recipe generation completed in ${generationTime}ms`);
+
+        // Filter successful results and prepare for database insertion
+        const successfulResults = recipeResults.filter(result => result !== null);
+        
+        // OPTIMIZED: Save all new recipes to database in parallel
+        console.log('Starting parallel recipe saving...');
+        const saveStartTime = Date.now();
+
+        const savePromises = successfulResults.map(async (result) => {
+          if (!result) return null;
+
+          const { recipe: fullRecipe, mealType } = result;
+
+          try {
+            const insertData = {
+              user_id: user.id,
+              name: fullRecipe.name || "Untitled Recipe",
+              description: fullRecipe.description || null,
+              image_url: fullRecipe.image_url || null,
+              permanent_url: null,
+              prep_time: fullRecipe.prep_time || 0,
+              cook_time: fullRecipe.cook_time || 0,
+              servings: fullRecipe.servings || 4,
+              ingredients: fullRecipe.ingredients || [],
+              instructions: fullRecipe.instructions || [],
+              meal_type: mealType.charAt(0).toUpperCase() + mealType.slice(1) as z.infer<typeof MealTypeEnum>,
+              cuisine_type: (Array.isArray(fullRecipe.tags)
+                ? (fullRecipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
+                    ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
+                  ) || "Other")
+                : "Other") as z.infer<typeof CuisineTypeEnum>,
+              dietary_restrictions: (Array.isArray(fullRecipe.tags)
+                ? fullRecipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
+                    ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
+                  )
+                : []) as z.infer<typeof DietaryTypeEnum>[],
+              difficulty: (() => {
+                switch(fullRecipe.complexity) {
+                  case 1: return "Easy" as const;
+                  case 2: return "Moderate" as const;
+                  case 3: return "Advanced" as const;
+                  default: return "Moderate" as const;
+                }
+              })() as z.infer<typeof DifficultyEnum>,
+              tags: fullRecipe.tags || [],
+              nutrition: fullRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+              complexity: fullRecipe.complexity || 1,
+              created_at: new Date(),
+              expires_at: expirationDate,
+              favorited: false,
+              favorites_count: 0
+            };
+
+            const [savedRecipe] = await db.insert(temporaryRecipes).values(insertData).returning();
+            
+            // Handle image storage asynchronously (don't block the response)
+            if (savedRecipe.image_url) {
+              downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id))
+                .then(permanentUrl => {
+                  if (permanentUrl) {
+                    db.update(temporaryRecipes)
+                      .set({ permanent_url: permanentUrl })
+                      .where(eq(temporaryRecipes.id, savedRecipe.id))
+                      .catch(error => console.error('Failed to update permanent URL:', error));
+                  }
+                })
+                .catch(error => console.error('Failed to store image:', error));
             }
 
             return {
-              recipe: fullRecipe,
-              mealType,
-              title
+              savedRecipe,
+              mealType
             };
+          } catch (error) {
+            console.error(`Error saving recipe for "${fullRecipe.name}":`, error);
+            return null;
           }
-          return null;
-        } catch (error) {
-          console.error(`Error generating recipe for title "${title}":`, error);
-          return null;
-        }
-      });
-
-      // Wait for all recipe generations to complete
-      const recipeResults = await Promise.all(recipeGenerationPromises);
-      const generationTime = Date.now() - startTime;
-      console.log(`Parallel recipe generation completed in ${generationTime}ms`);
-
-      // Filter successful results and prepare for database insertion
-      const successfulResults = recipeResults.filter(result => result !== null);
-      
-      if (successfulResults.length === 0) {
-        return res.status(500).json({
-          error: "Failed to generate meal plan",
-          message: "Could not generate any recipes from the selected titles"
         });
-      }
 
-      // OPTIMIZED: Save all recipes to database in parallel
-      console.log('Starting parallel recipe saving...');
-      const saveStartTime = Date.now();
+        const saveResults = await Promise.all(savePromises);
+        const saveTime = Date.now() - saveStartTime;
+        console.log(`Parallel recipe saving completed in ${saveTime}ms`);
 
-      const savePromises = successfulResults.map(async (result) => {
-        if (!result) return null;
-
-        const { recipe: fullRecipe, mealType } = result;
-
-        try {
-          const insertData = {
-            user_id: user.id,
-            name: fullRecipe.name || "Untitled Recipe",
-            description: fullRecipe.description || null,
-            image_url: fullRecipe.image_url || null,
-            permanent_url: null,
-            prep_time: fullRecipe.prep_time || 0,
-            cook_time: fullRecipe.cook_time || 0,
-            servings: fullRecipe.servings || 4,
-            ingredients: fullRecipe.ingredients || [],
-            instructions: fullRecipe.instructions || [],
-            meal_type: mealType.charAt(0).toUpperCase() + mealType.slice(1) as z.infer<typeof MealTypeEnum>,
-            cuisine_type: (Array.isArray(fullRecipe.tags)
-              ? (fullRecipe.tags.find((tag): tag is z.infer<typeof CuisineTypeEnum> => 
-                  ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag as string)
-                ) || "Other")
-              : "Other") as z.infer<typeof CuisineTypeEnum>,
-            dietary_restrictions: (Array.isArray(fullRecipe.tags)
-              ? fullRecipe.tags.filter((tag): tag is z.infer<typeof DietaryTypeEnum> => 
-                  ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag as string)
-                )
-              : []) as z.infer<typeof DietaryTypeEnum>[],
-            difficulty: (() => {
-              switch(fullRecipe.complexity) {
-                case 1: return "Easy" as const;
-                case 2: return "Moderate" as const;
-                case 3: return "Advanced" as const;
-                default: return "Moderate" as const;
-              }
-            })() as z.infer<typeof DifficultyEnum>,
-            tags: fullRecipe.tags || [],
-            nutrition: fullRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-            complexity: fullRecipe.complexity || 1,
-            created_at: new Date(),
-            expires_at: expirationDate,
-            favorited: false,
-            favorites_count: 0
-          };
-
-          const [savedRecipe] = await db.insert(temporaryRecipes).values(insertData).returning();
-          
-          // Handle image storage asynchronously (don't block the response)
-          if (savedRecipe.image_url) {
-            downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id))
-              .then(permanentUrl => {
-                if (permanentUrl) {
-                  db.update(temporaryRecipes)
-                    .set({ permanent_url: permanentUrl })
-                    .where(eq(temporaryRecipes.id, savedRecipe.id))
-                    .catch(error => console.error('Failed to update permanent URL:', error));
-                }
-              })
-              .catch(error => console.error('Failed to store image:', error));
+        // Process saved results and organize by meal type
+        const successfulSaves = saveResults.filter(result => result !== null);
+        
+        for (const result of successfulSaves) {
+          if (result) {
+            generatedRecipes.push(result.savedRecipe);
+            recipesByMealType[result.mealType].push(result.savedRecipe);
+            console.log(`Successfully generated ${result.mealType} recipe: ${result.savedRecipe.name}`);
           }
-
-          return {
-            savedRecipe,
-            mealType
-          };
-        } catch (error) {
-          console.error(`Error saving recipe for "${fullRecipe.name}":`, error);
-          return null;
-        }
-      });
-
-      const saveResults = await Promise.all(savePromises);
-      const saveTime = Date.now() - saveStartTime;
-      console.log(`Parallel recipe saving completed in ${saveTime}ms`);
-
-      // Process saved results and organize by meal type
-      const successfulSaves = saveResults.filter(result => result !== null);
-      
-      for (const result of successfulSaves) {
-        if (result) {
-          generatedRecipes.push(result.savedRecipe);
-          recipesByMealType[result.mealType].push(result.savedRecipe);
-          console.log(`Successfully generated ${result.mealType} recipe: ${result.savedRecipe.name}`);
         }
       }
 
       if (generatedRecipes.length === 0) {
         return res.status(500).json({
           error: "Failed to generate meal plan",
-          message: "Could not generate any recipes from the selected titles"
+          message: "Could not generate or reuse any recipes from the selected titles"
         });
       }
 
@@ -2930,6 +3191,65 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     } catch (error) {
       console.error('Error toggling admin status:', error);
       res.status(500).json({ error: 'Failed to toggle admin status' });
+    }
+  });
+
+  // Get archived PantryPal recipes
+  app.get("/api/pantrypal-recipes/archived", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const now = new Date();
+
+      // Get archived PantryPal recipes (expired recipes without meal_type)
+      const archivedRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.user_id, user.id),
+            isNull(temporaryRecipes.meal_type), // PantryPal recipes don't have meal_type
+            lt(temporaryRecipes.expires_at, now) // Expired recipes
+          )
+        )
+        .orderBy(desc(temporaryRecipes.created_at));
+
+      res.json(archivedRecipes);
+    } catch (error) {
+      console.error("Error fetching archived PantryPal recipes:", error);
+      res.status(500).json({ error: "Failed to fetch archived PantryPal recipes" });
+    }
+  });
+
+  // Get all user's favorite recipes (both archived PantryPal and explicitly favorited)
+  app.get("/api/user-favorites", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const now = new Date();
+
+      // Get all favorite recipes - both archived PantryPal and explicitly favorited
+      const favoriteRecipes = await db
+        .select()
+        .from(temporaryRecipes)
+        .where(
+          and(
+            eq(temporaryRecipes.user_id, user.id),
+            or(
+              // Archived PantryPal recipes (expired, no meal_type)
+              and(
+                isNull(temporaryRecipes.meal_type),
+                lt(temporaryRecipes.expires_at, now)
+              ),
+              // Explicitly favorited recipes
+              eq(temporaryRecipes.favorited, true)
+            )
+          )
+        )
+        .orderBy(desc(temporaryRecipes.created_at));
+
+      res.json(favoriteRecipes);
+    } catch (error) {
+      console.error("Error fetching user favorite recipes:", error);
+      res.status(500).json({ error: "Failed to fetch user favorite recipes" });
     }
   });
 }

@@ -1,7 +1,6 @@
 import { MealTypeEnum } from "@db/schema";
-import { z } from "zod";
 
-type MealType = z.infer<typeof MealTypeEnum>;
+type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack" | "Dessert";
 
 // Get time based on meal type
 export const getMealTime = (mealType: MealType): { hour: number; minute: number } => {
