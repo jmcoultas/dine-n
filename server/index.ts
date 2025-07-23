@@ -11,15 +11,26 @@ const app = express();
 const server = createServer(app);
 const PORT = Number(process.env.PORT) || 3000;
 
-// Webhook endpoint needs raw body
-app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res, next) => {
-  console.log('🎯 Webhook request received');
-  next();
+// CRITICAL: Register webhook handler FIRST, before ANY other middleware
+// This ensures no other middleware can interfere with the raw body
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  // Import the webhook handler dynamically to avoid circular imports
+  try {
+    const { registerWebhookHandler } = await import('./routes');
+    await registerWebhookHandler(req, res);
+  } catch (error) {
+    console.error('Error in webhook handler:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// Other routes can use JSON parsing
+// IMPORTANT: All other middleware comes AFTER the webhook handler
+// This is handled in routes.ts with express.raw({ type: 'application/json' })
+
+// Apply JSON parsing to all routes EXCEPT the webhook endpoint
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/webhook') {
+    // Skip JSON parsing for webhook endpoint - it needs raw body
     next();
   } else {
     express.json()(req, res, next);

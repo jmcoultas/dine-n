@@ -52,13 +52,243 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ error: "Not authenticated" });
 }
 
+// Extract webhook handler as a separate function to avoid middleware conflicts
+export async function registerWebhookHandler(req: Request, res: Response) {
+  console.log('🎯 Webhook received at:', new Date().toISOString());
+  
+  const signature = req.headers['stripe-signature'];
+  let rawBody = req.body;
+  
+  // Debug webhook signature verification
+  console.log('Webhook signature debug:', {
+    hasSignature: !!signature,
+    signatureLength: signature ? signature.length : 0,
+    signatureStart: signature ? (typeof signature === 'string' ? signature.substring(0, 50) + '...' : String(signature)) : 'none',
+    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+    webhookSecretLength: process.env.STRIPE_WEBHOOK_SECRET?.length || 0,
+    webhookSecretStart: process.env.STRIPE_WEBHOOK_SECRET ? process.env.STRIPE_WEBHOOK_SECRET.substring(0, 20) + '...' : 'none',
+    bodyType: typeof rawBody,
+    bodyLength: rawBody?.length || 0,
+    isBuffer: Buffer.isBuffer(rawBody),
+    contentType: req.headers['content-type'],
+    userAgent: req.headers['user-agent'],
+    originalUrl: req.originalUrl,
+    method: req.method,
+    rawHeaders: req.rawHeaders?.slice(0, 20), // First 10 header pairs for debugging
+    // Log first 200 chars of body for debugging (if it's a string)
+    bodyPreview: typeof rawBody === 'string' ? rawBody.substring(0, 200) + '...' : 'not a string'
+  });
+
+  if (!signature || typeof signature !== 'string') {
+    console.error('❌ Missing stripe signature in webhook request');
+    return res.status(400).json({
+      error: 'Missing stripe signature',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('❌ STRIPE_WEBHOOK_SECRET environment variable not set');
+    return res.status(500).json({
+      error: 'Webhook secret not configured',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  try {
+    // Handle different body formats that might be caused by hosting environment
+    if (typeof rawBody === 'string') {
+      console.log('⚠️ Body received as string, converting to Buffer');
+      rawBody = Buffer.from(rawBody, 'utf8');
+    } else if (!Buffer.isBuffer(rawBody)) {
+      console.error('❌ Expected raw body to be a Buffer or string, got:', typeof rawBody);
+      // Try to convert whatever we got to a buffer
+      if (rawBody && typeof rawBody === 'object') {
+        rawBody = Buffer.from(JSON.stringify(rawBody), 'utf8');
+      } else {
+        throw new Error(`Expected raw body to be a Buffer or string, got: ${typeof rawBody}`);
+      }
+    }
+
+    console.log('🔍 Attempting webhook signature verification with processed body...');
+    console.log('Final body info:', {
+      isBuffer: Buffer.isBuffer(rawBody),
+      length: rawBody?.length || 0,
+      first100Chars: rawBody ? rawBody.toString('utf8').substring(0, 100) + '...' : 'empty'
+    });
+
+    // Process the webhook event
+    const result = await stripeService.handleWebhook(rawBody, signature);
+    console.log('✅ Webhook processed successfully:', {
+      result, 
+      timestamp: new Date().toISOString()
+    });
+
+    // Send a 200 response to acknowledge receipt of the event
+    res.json({
+      received: true,
+      timestamp: new Date().toISOString(),
+      result
+    });
+  } catch (error) {
+    // Log the full error details for debugging
+    console.error('❌ Webhook processing failed:', {
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        type: error.constructor.name
+      } : error,
+      timestamp: new Date().toISOString(),
+      requestInfo: {
+        method: req.method,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        headers: {
+          'content-type': req.headers['content-type'],
+          'stripe-signature': signature ? (typeof signature === 'string' ? signature.substring(0, 50) + '...' : String(signature)) : 'none',
+          'user-agent': req.headers['user-agent'],
+          'host': req.headers['host'],
+          'x-forwarded-for': req.headers['x-forwarded-for'],
+          'x-real-ip': req.headers['x-real-ip']
+        },
+        bodyInfo: {
+          type: typeof req.body,
+          isBuffer: Buffer.isBuffer(req.body),
+          length: req.body?.length || 0
+        }
+      }
+    });
+
+    // Send a 400 status code so Stripe will retry the webhook
+    return res.status(400).json({
+      error: 'Webhook processing failed',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString(),
+      type: error instanceof Error ? error.constructor.name : 'Unknown'
+    });
+  }
+}
+
 export function registerRoutes(app: express.Express) {
-  // Configure body parsing middleware
-  app.use((req, res, next) => {
-    if (req.originalUrl === '/api/webhook') {
-      next();
-    } else {
-      express.json()(req, res, next);
+  // Webhook handler is now registered in index.ts to avoid middleware conflicts
+  
+  // Test webhook endpoint accessibility
+  app.get("/api/webhook", async (req: Request, res: Response) => {
+    res.json({
+      message: "Webhook endpoint is accessible",
+      method: "This endpoint only accepts POST requests from Stripe",
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // TEMPORARY DEBUG: Add a test endpoint that bypasses signature verification
+  app.post("/api/webhook-test", express.json(), async (req: Request, res: Response) => {
+    console.log('🧪 TEST WEBHOOK (no signature verification):', new Date().toISOString());
+    
+    try {
+      // Create a mock Stripe event for testing
+      const mockEvent = {
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: req.body.session_id || 'cs_test_mock',
+            customer: req.body.customer_id,
+            payment_status: 'paid',
+            subscription: req.body.subscription_id || 'sub_test_mock123',
+            metadata: {
+              user_id: req.body.user_id
+            }
+          }
+        }
+      };
+
+      console.log('Mock event created:', mockEvent);
+
+      // Simulate the webhook processing without signature verification
+      const result = await db.transaction(async (tx) => {
+        const session = mockEvent.data.object;
+        const customerId = session.customer;
+
+        console.log('TEST: Processing mock checkout session:', {
+          sessionId: session.id,
+          customerId,
+          subscriptionId: session.subscription
+        });
+
+        // Find user by customer ID or user ID
+        let customer;
+        if (customerId) {
+          [customer] = await tx.select().from(users).where(eq(users.stripe_customer_id, customerId)).limit(1);
+        }
+        
+        if (!customer && session.metadata?.user_id) {
+          [customer] = await tx.select().from(users).where(eq(users.id, parseInt(session.metadata.user_id))).limit(1);
+        }
+
+        if (!customer) {
+          throw new Error('Customer not found for test');
+        }
+
+        // Update the user's subscription
+        const subscriptionEndDate = new Date();
+        subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+
+        const [updatedUser] = await tx
+          .update(users)
+          .set({
+            subscription_status: 'active' as const,
+            subscription_tier: 'premium' as const,
+            subscription_end_date: subscriptionEndDate,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: session.subscription
+          })
+          .where(eq(users.id, customer.id))
+          .returning();
+
+        console.log('TEST: Database update result:', {
+          success: !!updatedUser,
+          userId: updatedUser?.id,
+          newStatus: updatedUser?.subscription_status,
+          newTier: updatedUser?.subscription_tier,
+          newSubscriptionId: updatedUser?.stripe_subscription_id
+        });
+
+        return { success: true, user: updatedUser };
+      });
+
+      res.json({
+        success: true,
+        message: 'Test webhook processed successfully',
+        result,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('TEST WEBHOOK ERROR:', error);
+      res.status(500).json({
+        error: 'Test webhook failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Test Stripe connection
+  app.get("/api/test-stripe", async (req: Request, res: Response) => {
+    try {
+      const { testStripeConnection } = await import('./services/stripe');
+      const isConnected = await testStripeConnection();
+      res.json({ 
+        connected: isConnected,
+        message: isConnected ? 'Stripe connection successful' : 'Stripe connection failed'
+      });
+    } catch (error) {
+      console.error('Error testing Stripe connection:', error);
+      res.status(500).json({ 
+        connected: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   });
 
@@ -66,90 +296,58 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/subscription/create-checkout", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
+      console.log('Creating checkout session for user:', {
+        userId: user.id,
+        email: user.email,
+        hasStripeCustomerId: !!user.stripe_customer_id,
+        timestamp: new Date().toISOString()
+      });
 
+      // Check if user has a stored customer ID and if it's valid
+      if (user.stripe_customer_id) {
+        try {
+          // Verify the customer still exists in Stripe
+          const { stripe } = await import('./services/stripe');
+          await stripe.customers.retrieve(user.stripe_customer_id);
+          console.log('Existing Stripe customer verified:', user.stripe_customer_id);
+        } catch (error: any) {
+          if (error.code === 'resource_missing') {
+            console.log('Stored customer ID no longer exists in Stripe, creating new customer');
+            // Clear the invalid customer ID
+            user.stripe_customer_id = null;
+            await db.update(users).set({ stripe_customer_id: null }).where(eq(users.id, user.id));
+          } else {
+            throw error; // Re-throw other errors
+          }
+        }
+      }
+
+      // Create new customer if needed
       if (!user.stripe_customer_id) {
+        console.log('Creating new Stripe customer for user:', user.id);
         const customer = await stripeService.createCustomer(user.email, user.id);
         user.stripe_customer_id = customer.id;
+        console.log('Stripe customer created:', customer.id);
       }
 
       const session = await stripeService.createCheckoutSession(user.stripe_customer_id);
-      res.json({
-        sessionId: session.id,
-        url: session.url
-      });
-    } catch (error: any) {
-      console.error("Error creating checkout session:", error);
-      res.status(500).json({ error: "Failed to create checkout session" });
-    }
-  });
-
-  // Use raw bodyParser for Stripe webhooks
-  app.post("/api/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
-    console.log('Webhook received:', {
-      headers: req.headers,
-      body: req.body.toString(),
-      timestamp: new Date().toISOString()
-    });
-    const signature = req.headers['stripe-signature'];
-    console.log('Webhook signature verification:', {
-      hasSignature: !!signature,
-      signatureType: typeof signature,
-      webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-      timestamp: new Date().toISOString()
-    });
-
-    if (!signature || typeof signature !== 'string') {
-      console.error('Missing stripe signature in webhook request');
-      return res.status(400).json({
-        error: 'Missing stripe signature',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    try {
-      // The raw body is available as a Buffer in req.body
-      const rawBody = req.body;
-      if (!Buffer.isBuffer(rawBody)) {
-        throw new Error('Expected raw body to be a Buffer');
-      }
-
-      console.log('🎯 Webhook received:', {
-        signature,
-        timestamp: new Date().toISOString(),
-        bodyLength: rawBody.length,
-        headers: req.headers
-      });
-
-      // Process the webhook event
-      const result = await stripeService.handleWebhook(rawBody, signature);
-      console.log('Webhook processed:', {result, timestamp: new Date().toISOString()}); //Added logging here
-
-      // Send a 200 response to acknowledge receipt of the event
-      res.json({
-        received: true,
-        timestamp: new Date().toISOString(),
-        result
-      });
+      console.log('Checkout session created successfully:', session.id);
+      
+      res.json({ url: session.url });
     } catch (error) {
-      // Log the full error details for debugging
-      console.error('Webhook processing failed:', {
+      console.error("Error creating checkout session:", {
         error: error instanceof Error ? {
           name: error.name,
           message: error.message,
           stack: error.stack,
-          type: error.constructor.name
+          code: (error as any).code,
+          type: (error as any).type,
+          statusCode: (error as any).statusCode
         } : error,
-        timestamp: new Date().toISOString(),
-        headers: req.headers
+        userId: req.user?.id,
+        timestamp: new Date().toISOString()
       });
-
-      // Send a 400 status code so Stripe will retry the webhook
-      return res.status(400).json({
-        error: 'Webhook processing failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString(),
-        type: error instanceof Error ? error.constructor.name : 'Unknown'
-      });
+      res.status(500).json({ error: "Failed to create checkout session" });
     }
   });
 
@@ -3250,6 +3448,206 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     } catch (error) {
       console.error("Error fetching user favorite recipes:", error);
       res.status(500).json({ error: "Failed to fetch user favorite recipes" });
+    }
+  });
+
+  // Debug route to check user's current subscription status
+  app.get("/api/debug/subscription-status", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      
+      // Get current user data from database
+      const [dbUser] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          stripe_customer_id: users.stripe_customer_id,
+          stripe_subscription_id: users.stripe_subscription_id,
+          subscription_status: users.subscription_status,
+          subscription_tier: users.subscription_tier,
+          subscription_end_date: users.subscription_end_date
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      
+      res.json({
+        user_id: user.id,
+        email: user.email,
+        database_record: dbUser,
+        session_data: {
+          subscription_status: user.subscription_status,
+          subscription_tier: user.subscription_tier,
+          stripe_customer_id: user.stripe_customer_id
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching subscription status:', error);
+      res.status(500).json({ error: 'Failed to fetch subscription status' });
+    }
+  });
+
+  // Debug route to check user's stripe customer ID
+  // Test the database update manually (for debugging subscription issues)
+  app.post("/api/debug/test-subscription-update", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { customer_id, subscription_id } = req.body;
+
+      console.log('Manual subscription update test for user:', {
+        userId: user.id,
+        customerId: customer_id,
+        subscriptionId: subscription_id
+      });
+
+      // Update the user's subscription manually
+      const subscriptionEndDate = new Date();
+      subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          subscription_status: 'active' as const,
+          subscription_tier: 'premium' as const,
+          subscription_end_date: subscriptionEndDate,
+          stripe_customer_id: customer_id || user.stripe_customer_id,
+          stripe_subscription_id: subscription_id || 'sub_test_manual'
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      res.json({
+        success: true,
+        message: 'Subscription updated manually',
+        user: updatedUser,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Manual subscription update failed:', error);
+      res.status(500).json({
+        error: 'Manual update failed',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.get("/api/debug/user-stripe-id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      
+      // Get current user data from database
+      const [dbUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      
+      res.json({
+        user_id: user.id,
+        email: user.email,
+        session_stripe_customer_id: user.stripe_customer_id,
+        db_stripe_customer_id: dbUser?.stripe_customer_id,
+        subscription_status: dbUser?.subscription_status,
+        subscription_tier: dbUser?.subscription_tier,
+        subscription_end_date: dbUser?.subscription_end_date
+      });
+    } catch (error) {
+      console.error('Error fetching user stripe ID:', error);
+      res.status(500).json({ error: 'Failed to fetch user data' });
+    }
+  });
+
+  // Debug route to manually update subscription status
+  app.post("/api/debug/update-subscription", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      
+      // Calculate subscription end date (30 days from now)
+      const subscriptionEndDate = new Date();
+      subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+
+      // Update the user's subscription status
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          subscription_status: 'active' as const,
+          subscription_tier: 'premium' as const,
+          subscription_end_date: subscriptionEndDate
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      console.log('Manual subscription update result:', {
+        userId: user.id,
+        updatedUser: updatedUser ? {
+          id: updatedUser.id,
+          subscription_status: updatedUser.subscription_status,
+          subscription_tier: updatedUser.subscription_tier,
+          subscription_end_date: updatedUser.subscription_end_date
+        } : null
+      });
+
+      res.json({
+        success: true,
+        message: 'Subscription status updated manually',
+        user: updatedUser ? {
+          id: updatedUser.id,
+          subscription_status: updatedUser.subscription_status,
+          subscription_tier: updatedUser.subscription_tier,
+          subscription_end_date: updatedUser.subscription_end_date
+        } : null
+      });
+    } catch (error) {
+      console.error('Error updating subscription status:', error);
+      res.status(500).json({ error: 'Failed to update subscription status' });
+    }
+  });
+
+  // Debug route to test webhook secret configuration
+  app.get("/api/debug/webhook-secret-test", async (req: Request, res: Response) => {
+    try {
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      
+      if (!webhookSecret) {
+        return res.json({
+          error: 'STRIPE_WEBHOOK_SECRET not configured',
+          configured: false
+        });
+      }
+
+      // Check if it looks like a valid webhook secret
+      const isValidFormat = webhookSecret.startsWith('whsec_');
+      
+      res.json({
+        configured: true,
+        valid_format: isValidFormat,
+        secret_length: webhookSecret.length,
+        secret_prefix: webhookSecret.substring(0, 10) + '...',
+        expected_format: 'whsec_...',
+        instructions: isValidFormat ? 
+          'Webhook secret appears to be correctly formatted' : 
+          'Webhook secret should start with "whsec_". Please check your Stripe dashboard for the correct webhook secret.'
+      });
+    } catch (error) {
+      console.error('Error checking webhook secret:', error);
+      res.status(500).json({ error: 'Failed to check webhook secret' });
+    }
+  });
+
+  // Debug route to check webhook configuration
+  app.get("/api/debug/webhook-config", async (req: Request, res: Response) => {
+    try {
+      res.json({
+        webhook_secret_configured: !!process.env.STRIPE_WEBHOOK_SECRET,
+        webhook_secret_length: process.env.STRIPE_WEBHOOK_SECRET?.length || 0,
+        stripe_secret_configured: !!process.env.STRIPE_SECRET_KEY,
+        stripe_publishable_configured: !!process.env.STRIPE_PUBLISHABLE_KEY,
+        base_url: process.env.NODE_ENV === 'production' ? 'https://dine-n.replit.app' : 'http://localhost:3001'
+      });
+    } catch (error) {
+      console.error('Error checking webhook config:', error);
+      res.status(500).json({ error: 'Failed to check webhook config' });
     }
   });
 }
