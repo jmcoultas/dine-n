@@ -22,11 +22,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
-import { Recipe, MealTypeEnum } from "@db/schema";
+import { Recipe } from "@db/schema";
 import { CalendarEventModal } from "@/components/CalendarEventModal";
-import { z } from "zod";
 
-type MealType = z.infer<typeof MealTypeEnum>;
+type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack" | "Dessert";
 
 interface RecipeCardProps {
   recipe: {

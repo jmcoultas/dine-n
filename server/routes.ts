@@ -161,12 +161,29 @@ export async function registerWebhookHandler(req: Request, res: Response) {
     });
 
     // Send a 400 status code so Stripe will retry the webhook
-    return res.status(400).json({
+    const errorResponse = {
       error: 'Webhook processing failed',
       message: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
       type: error instanceof Error ? error.constructor.name : 'Unknown'
-    });
+    };
+
+    // Add additional context for date-related errors
+    if (error instanceof Error && (error.message.includes('Invalid time value') || error.name === 'RangeError')) {
+      console.error('Date parsing error in webhook - full request details:', {
+        headers: req.headers,
+        bodyType: typeof req.body,
+        isBuffer: Buffer.isBuffer(req.body),
+        bodyLength: req.body?.length || 0,
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        }
+      });
+    }
+
+    return res.status(400).json(errorResponse);
   }
 }
 
@@ -356,19 +373,43 @@ export function registerRoutes(app: express.Express) {
     try {
       const user = req.user!;
 
+      // For real-time accuracy, always fetch fresh data from database
+      const [freshUser] = await db
+        .select({
+          subscription_status: users.subscription_status,
+          subscription_tier: users.subscription_tier,
+          subscription_end_date: users.subscription_end_date
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+
+      if (!freshUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
       // Check if subscription is still valid even if cancelled
-      const isStillValid = user.subscription_end_date && new Date() <= user.subscription_end_date;
-      const hasPremiumAccess = user.subscription_tier === 'premium' && 
-        (user.subscription_status === 'active' || 
-         (user.subscription_status === 'cancelled' && isStillValid));
+      const isStillValid = freshUser.subscription_end_date && new Date() <= freshUser.subscription_end_date;
+      const hasPremiumAccess = freshUser.subscription_tier === 'premium' && 
+        (freshUser.subscription_status === 'active' || 
+         (freshUser.subscription_status === 'cancelled' && isStillValid));
 
       const subscriptionData = {
         isActive: hasPremiumAccess,
-        tier: user.subscription_tier,
-        endDate: user.subscription_end_date,
-        status: user.subscription_status,
-        isCancelled: user.subscription_status === 'cancelled'
+        tier: freshUser.subscription_tier,
+        endDate: freshUser.subscription_end_date,
+        status: freshUser.subscription_status,
+        isCancelled: freshUser.subscription_status === 'cancelled'
       };
+
+      console.log('Subscription status check:', {
+        userId: user.id,
+        sessionStatus: user.subscription_status,
+        dbStatus: freshUser.subscription_status,
+        finalStatus: subscriptionData.status,
+        isActive: subscriptionData.isActive,
+        timestamp: new Date().toISOString()
+      });
 
       res.json(subscriptionData);
     } catch (error: any) {
@@ -382,14 +423,84 @@ export function registerRoutes(app: express.Express) {
     try {
       const user = req.user!;
 
+      console.log('Cancel subscription request for user:', {
+        userId: user.id,
+        email: user.email,
+        stripeSubscriptionId: user.stripe_subscription_id,
+        currentStatus: user.subscription_status,
+        currentTier: user.subscription_tier,
+        timestamp: new Date().toISOString()
+      });
+
       if (!user.stripe_subscription_id) {
+        console.log('No stripe subscription ID found for user:', user.id);
         return res.status(400).json({ error: "No active subscription found" });
       }
 
-      await stripeService.cancelSubscription(user.stripe_subscription_id);
-      res.json({ message: "Subscription cancelled successfully" });
+      // Cancel the subscription in Stripe
+      console.log('Cancelling subscription in Stripe:', user.stripe_subscription_id);
+      const cancelledSubscription = await stripeService.cancelSubscription(user.stripe_subscription_id);
+      console.log('Stripe cancellation result:', {
+        id: cancelledSubscription.id,
+        status: cancelledSubscription.status,
+        canceledAt: cancelledSubscription.canceled_at,
+        currentPeriodEnd: cancelledSubscription.current_period_end
+      });
+      
+      // Immediately update the database to reflect the cancelled status
+      console.log('Updating database for user:', user.id);
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          subscription_status: 'cancelled' as const,
+          // Keep the tier as premium until the end date
+          // The webhook will later set it to 'free' when appropriate
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      console.log('Database update result:', {
+        success: !!updatedUser,
+        userId: updatedUser?.id,
+        newStatus: updatedUser?.subscription_status,
+        newTier: updatedUser?.subscription_tier,
+        endDate: updatedUser?.subscription_end_date,
+        timestamp: new Date().toISOString()
+      });
+
+      if (!updatedUser) {
+        console.error('Failed to update user in database:', user.id);
+        return res.status(500).json({ error: "Failed to update subscription status" });
+      }
+
+      // Update the session user object to reflect the change
+      if (req.user) {
+        req.user.subscription_status = 'cancelled';
+      }
+
+      console.log('Subscription cancelled successfully for user:', {
+        userId: user.id,
+        stripeSubscriptionId: user.stripe_subscription_id,
+        newStatus: updatedUser.subscription_status,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json({ 
+        message: "Subscription cancelled successfully",
+        subscription_status: updatedUser.subscription_status,
+        subscription_tier: updatedUser.subscription_tier,
+        subscription_end_date: updatedUser.subscription_end_date
+      });
     } catch (error: any) {
-      console.error("Error cancelling subscription:", error);
+      console.error("Error cancelling subscription:", {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        userId: req.user?.id,
+        timestamp: new Date().toISOString()
+      });
       res.status(500).json({ error: "Failed to cancel subscription" });
     }
   });
@@ -3470,6 +3581,14 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         .from(users)
         .where(eq(users.id, user.id))
         .limit(1);
+
+      // Check if there's a mismatch between session and database
+      const mismatch = {
+        status: user.subscription_status !== dbUser?.subscription_status,
+        tier: user.subscription_tier !== dbUser?.subscription_tier,
+        stripe_customer_id: user.stripe_customer_id !== dbUser?.stripe_customer_id,
+        stripe_subscription_id: user.stripe_subscription_id !== dbUser?.stripe_subscription_id
+      };
       
       res.json({
         user_id: user.id,
@@ -3478,8 +3597,11 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         session_data: {
           subscription_status: user.subscription_status,
           subscription_tier: user.subscription_tier,
-          stripe_customer_id: user.stripe_customer_id
-        }
+          stripe_customer_id: user.stripe_customer_id,
+          stripe_subscription_id: user.stripe_subscription_id
+        },
+        data_mismatch: mismatch,
+        has_mismatch: Object.values(mismatch).some(Boolean)
       });
     } catch (error) {
       console.error('Error fetching subscription status:', error);

@@ -95,18 +95,9 @@ export function useSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
-      toast({
-        title: "Success",
-        description: "Your subscription has been cancelled",
-      });
+      queryClient.invalidateQueries({ queryKey: ['user'] });
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to cancel subscription",
-        variant: "destructive",
-      });
-    },
+    // Let the component handle error/success toasts to avoid duplicates
   });
 
   return {

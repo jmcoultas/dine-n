@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchRecipes } from "@/lib/api";
 import { useUser } from "@/hooks/use-user";
 import { useSubscription } from "@/hooks/use-subscription";
 import RecipeCard from "@/components/RecipeCard";
-import RecipeMoodBoard from "@/components/RecipeMoodBoard";
+import { MyRecipes } from "@/components/MyRecipes";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -54,8 +55,11 @@ export default function Recipes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showUnfavoriteModal, setShowUnfavoriteModal] = useState(false);
+  const [recipeToUnfavorite, setRecipeToUnfavorite] = useState<Recipe | null>(null);
   const { subscription } = useSubscription();
   const { data: user } = useUser();
+  const queryClient = useQueryClient();
   
   // Query for user's favorite recipes
   const { data: favoriteRecipes = [], isLoading: isLoadingFavorites } = useQuery({
@@ -246,6 +250,54 @@ export default function Recipes() {
     return true;
   };
 
+  const handleFavoriteToggle = async (recipe: any) => {
+    const isFavorited = favoritedRecipeIds.has(recipe.id);
+    
+    if (isFavorited) {
+      // Show confirmation modal for unfavoriting
+      setRecipeToUnfavorite(recipe);
+      setShowUnfavoriteModal(true);
+    } else {
+      // Directly favorite the recipe
+      await performFavoriteToggle(recipe, false);
+    }
+  };
+
+  const performFavoriteToggle = async (recipe: any, isFavorited: boolean) => {
+    try {
+      const method = isFavorited ? 'DELETE' : 'POST';
+      
+      const response = await fetch(`/api/recipes/${recipe.id}/favorite`, {
+        method,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update favorite status');
+      }
+
+      // Refetch favorite recipes to update the UI
+      queryClient.invalidateQueries({ queryKey: ["recipes", "favorites", user?.id] });
+      
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      // Could add a toast notification here if needed
+    }
+  };
+
+  const handleConfirmUnfavorite = async () => {
+    if (recipeToUnfavorite) {
+      await performFavoriteToggle(recipeToUnfavorite, true);
+      setShowUnfavoriteModal(false);
+      setRecipeToUnfavorite(null);
+    }
+  };
+
+  const handleCancelUnfavorite = () => {
+    setShowUnfavoriteModal(false);
+    setRecipeToUnfavorite(null);
+  };
+
   return (
     <div className="space-y-6">
       <SubscriptionModal
@@ -253,6 +305,29 @@ export default function Recipes() {
         onOpenChange={setShowSubscriptionModal}
         feature="My Recipes"
       />
+
+      <AlertDialog open={showUnfavoriteModal} onOpenChange={setShowUnfavoriteModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from Favorites?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove "{recipeToUnfavorite?.name}" from your favorites? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelUnfavorite}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmUnfavorite}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove from Favorites
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="flex flex-col gap-4">
         <h1 className="text-4xl font-bold">Recipe Collection</h1>
@@ -332,10 +407,15 @@ export default function Recipes() {
 
         <TabsContent value="favorites" className="space-y-6">
           {subscription?.tier === "premium" ? (
-            <RecipeMoodBoard
-              recipes={filteredFavoriteRecipes}
+            <MyRecipes
+              recipes={filteredFavoriteRecipes.map(recipe => ({ ...recipe, favorited: true }))}
               onRecipeClick={(recipe) => setSelectedRecipe(recipe as Recipe)}
+              onFavoriteToggle={handleFavoriteToggle}
               isLoading={isLoadingFavorites}
+              showSearch={false}
+              showFilters={true}
+              layout="grid"
+              columns={3}
             />
           ) : (
             <div className="flex items-center justify-center h-[40vh]">

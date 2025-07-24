@@ -34,6 +34,70 @@ const baseUrl = 'https://dine-n.replit.app';
 
 console.log('Base URL for webhooks:', baseUrl);
 
+// Utility function to safely convert Stripe Unix timestamp to Date
+function safeTimestampToDate(timestamp: number | null | undefined, context?: string): Date | null {
+  console.log(`🔍 safeTimestampToDate called with:`, {
+    timestamp,
+    type: typeof timestamp,
+    isNull: timestamp === null,
+    isUndefined: timestamp === undefined,
+    context: context || 'unknown context'
+  });
+
+  if (!timestamp || typeof timestamp !== 'number') {
+    console.warn(`Invalid timestamp in ${context || 'unknown context'}:`, {
+      timestamp,
+      type: typeof timestamp,
+      isNull: timestamp === null,
+      isUndefined: timestamp === undefined
+    });
+    return null;
+  }
+  
+  // Additional validation for reasonable timestamp values
+  if (timestamp < 0 || timestamp > 2147483647) { // Max 32-bit Unix timestamp (year 2038)
+    console.warn(`Timestamp out of reasonable range in ${context || 'unknown context'}:`, timestamp);
+    return null;
+  }
+
+  console.log(`🔢 Converting timestamp ${timestamp} to date in ${context || 'unknown context'}`);
+  
+  try {
+    const date = new Date(timestamp * 1000);
+    console.log(`📅 Date conversion result:`, {
+      timestamp,
+      multiplied: timestamp * 1000,
+      date: date.toISOString(),
+      isValid: !isNaN(date.getTime()),
+      context: context || 'unknown context'
+    });
+    
+    if (isNaN(date.getTime())) {
+      console.error(`Invalid date created from timestamp in ${context || 'unknown context'}:`, {
+        timestamp,
+        timestampType: typeof timestamp,
+        multipliedValue: timestamp * 1000,
+        resultingDate: date,
+        dateString: date.toString(),
+        dateTime: date.getTime()
+      });
+      return null;
+    }
+    
+    return date;
+  } catch (error) {
+    console.error(`Exception during date conversion in ${context || 'unknown context'}:`, {
+      timestamp,
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : error
+    });
+    return null;
+  }
+}
+
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
     try {
@@ -190,6 +254,17 @@ export const stripeService = {
       while (retryCount < maxRetries) {
         try {
           console.log(`Webhook processing attempt ${retryCount + 1}/${maxRetries}`);
+          
+          // Check for any date-related fields in the event data before processing
+          console.log('🔍 Pre-processing date field analysis:', {
+            eventType: event.type,
+            eventId: event.id,
+            dataObject: event.data.object,
+            dateFields: Object.entries(event.data.object).filter(([key, value]) => 
+              key.includes('date') || key.includes('period') || key.includes('at') || key.includes('time')
+            )
+          });
+          
           const result = await db.transaction(async (tx) => {
             console.log('Transaction started for event:', event.type);
             
@@ -410,7 +485,8 @@ export const stripeService = {
                   subscriptionId: subscription.id,
                   customerId,
                   status: subscription.status,
-                  currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                  currentPeriodEnd: safeTimestampToDate(subscription.current_period_end, 'subscription update'),
+                  currentPeriodEndRaw: subscription.current_period_end,
                   metadata: subscription.metadata
                 });
 
@@ -447,7 +523,7 @@ export const stripeService = {
                   stripe_subscription_id: subscription.id,
                   subscription_status: status,
                   subscription_tier: status === 'active' ? 'premium' as const : 'free' as const,
-                  subscription_end_date: new Date(subscription.current_period_end * 1000)
+                  subscription_end_date: safeTimestampToDate(subscription.current_period_end, `subscription ${subscription.id} update`)
                 };
 
                 const [updatedUser] = await tx
@@ -478,10 +554,18 @@ export const stripeService = {
                 const subscription = event.data.object as Stripe.Subscription;
                 const customerId = subscription.customer as string;
 
-                console.log('Processing subscription deletion:', {
+                console.log('🔥 Processing subscription deletion webhook:', {
                   subscriptionId: subscription.id,
                   customerId,
-                  metadata: subscription.metadata
+                  status: subscription.status,
+                  canceledAt: subscription.canceled_at,
+                  currentPeriodEnd: subscription.current_period_end,
+                  currentPeriodEndType: typeof subscription.current_period_end,
+                  endedAt: subscription.ended_at,
+                  endedAtType: typeof subscription.ended_at,
+                  metadata: subscription.metadata,
+                  fullSubscriptionObject: JSON.stringify(subscription, null, 2),
+                  timestamp: new Date().toISOString()
                 });
 
                 const [customer] = await tx
@@ -491,27 +575,63 @@ export const stripeService = {
                   .limit(1);
 
                 if (!customer) {
+                  console.error('❌ Customer not found for subscription deletion:', {
+                    stripeCustomerId: customerId,
+                    subscriptionId: subscription.id
+                  });
                   throw new Error(`Customer not found for Stripe customerId: ${customerId}`);
                 }
+
+                console.log('👤 Found customer for subscription deletion:', {
+                  userId: customer.id,
+                  email: customer.email,
+                  currentStatus: customer.subscription_status,
+                  currentTier: customer.subscription_tier,
+                  stripeSubscriptionId: customer.stripe_subscription_id
+                });
+
+                const subscriptionEndDate = safeTimestampToDate(subscription.current_period_end, `subscription ${subscription.id} deletion`);
+                
+                console.log('📅 Calculated subscription end date:', {
+                  rawTimestamp: subscription.current_period_end,
+                  calculatedDate: subscriptionEndDate,
+                  subscriptionId: subscription.id
+                });
 
                 const [updatedUser] = await tx
                   .update(users)
                   .set({
                     subscription_status: 'cancelled' as const,
                     subscription_tier: 'free' as const,
-                    subscription_end_date: new Date(subscription.current_period_end * 1000)
+                    subscription_end_date: subscriptionEndDate
                   })
                   .where(eq(users.id, customer.id))
                   .returning();
 
                 if (!updatedUser) {
+                  console.error('❌ Failed to update user in subscription deletion webhook:', {
+                    userId: customer.id,
+                    subscriptionId: subscription.id
+                  });
                   throw new Error(`Failed to cancel subscription for user ${customer.id}`);
                 }
+
+                console.log('✅ Successfully processed subscription deletion webhook:', {
+                  userId: updatedUser.id,
+                  oldStatus: customer.subscription_status,
+                  newStatus: updatedUser.subscription_status,
+                  oldTier: customer.subscription_tier,
+                  newTier: updatedUser.subscription_tier,
+                  endDate: updatedUser.subscription_end_date,
+                  subscriptionId: subscription.id,
+                  timestamp: new Date().toISOString()
+                });
 
                 return { 
                   success: true, 
                   user: updatedUser,
-                  metadata: subscription.metadata
+                  metadata: subscription.metadata,
+                  event: 'subscription_deleted'
                 };
               }
 
@@ -531,9 +651,25 @@ export const stripeService = {
         } catch (error) {
           lastError = error instanceof Error ? error : new Error('Unknown error');
           console.error(`Webhook processing attempt ${retryCount + 1} failed:`, {
-            error: lastError,
+            error: {
+              name: lastError.name,
+              message: lastError.message,
+              stack: lastError.stack,
+              type: lastError.constructor.name
+            },
+            eventType: event.type,
+            eventId: event.id,
             timestamp: new Date().toISOString()
           });
+
+          // Log specific details for date-related errors
+          if (lastError.message.includes('Invalid time value') || lastError.name === 'RangeError') {
+            console.error('Date parsing error detected in webhook:', {
+              eventData: event.data.object,
+              eventType: event.type,
+              timestamp: new Date().toISOString()
+            });
+          }
 
           retryCount++;
           if (retryCount < maxRetries) {
