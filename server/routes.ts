@@ -3650,4 +3650,25 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
       res.status(500).json({ error: 'Failed to check webhook config' });
     }
   });
+
+  // Debug route to check Instacart API configuration
+  app.get("/api/debug/instacart-config", async (req: Request, res: Response) => {
+    try {
+      const instacartKey = process.env.INSTACART_TEST_KEY;
+      res.json({
+        instacart_key_configured: !!instacartKey,
+        instacart_key_length: instacartKey?.length || 0,
+        instacart_key_prefix: instacartKey ? instacartKey.substring(0, 10) + '...' : 'Not configured',
+        node_env: process.env.NODE_ENV,
+        repl_slug: process.env.REPL_SLUG,
+        repl_owner: process.env.REPL_OWNER,
+        base_url: process.env.NODE_ENV === 'production' 
+          ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev`
+          : 'http://localhost:3001'
+      });
+    } catch (error) {
+      console.error('Error checking Instacart config:', error);
+      res.status(500).json({ error: 'Failed to check Instacart config' });
+    }
+  });
 }
