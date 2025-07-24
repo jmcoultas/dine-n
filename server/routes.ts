@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
-import { instacartService } from "./lib/instacart";
+import { instacartService, getInstacartService } from "./lib/instacart";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
@@ -3655,6 +3655,22 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
   app.get("/api/debug/instacart-config", async (req: Request, res: Response) => {
     try {
       const instacartKey = process.env.INSTACART_TEST_KEY;
+      
+      // Force service initialization to see what happens
+      let serviceInitError = null;
+      let serviceInitialized = false;
+                    let serviceStatus = null;
+       try {
+         console.log('Debug endpoint: Attempting to initialize Instacart service...');
+         const service = getInstacartService(); // Direct initialization call
+         serviceInitialized = true;
+         serviceStatus = service.getConfigStatus();
+         console.log('Debug endpoint: Service initialized successfully, status:', serviceStatus);
+       } catch (error: any) {
+         serviceInitError = error.message;
+         console.error('Debug endpoint: Service initialization failed:', error);
+       }
+
       res.json({
         instacart_key_configured: !!instacartKey,
         instacart_key_length: instacartKey?.length || 0,
@@ -3664,7 +3680,13 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         repl_owner: process.env.REPL_OWNER,
         base_url: process.env.NODE_ENV === 'production' 
           ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev`
-          : 'http://localhost:3001'
+          : 'http://localhost:3001',
+                 service_initialization: {
+           initialized: serviceInitialized,
+           error: serviceInitError,
+           timestamp: new Date().toISOString(),
+           status: serviceStatus
+         }
       });
     } catch (error) {
       console.error('Error checking Instacart config:', error);

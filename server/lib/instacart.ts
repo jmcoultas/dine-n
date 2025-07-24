@@ -41,6 +41,17 @@ class InstacartService {
   private partnerLinkbackUrl: string;
 
   constructor() {
+    // Log detailed environment info for debugging
+    console.log('InstacartService constructor called at:', new Date().toISOString());
+    console.log('Environment variables available:', {
+      NODE_ENV: process.env.NODE_ENV,
+      REPL_SLUG: process.env.REPL_SLUG,
+      REPL_OWNER: process.env.REPL_OWNER,
+      INSTACART_TEST_KEY_present: !!process.env.INSTACART_TEST_KEY,
+      INSTACART_TEST_KEY_length: process.env.INSTACART_TEST_KEY?.length || 0,
+      all_env_keys_with_INSTACART: Object.keys(process.env).filter(key => key.includes('INSTACART'))
+    });
+
     this.apiKey = process.env.INSTACART_TEST_KEY || '';
     this.baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://connect.instacart.com' 
@@ -65,6 +76,22 @@ class InstacartService {
         throw new Error('INSTACART_TEST_KEY environment variable is required');
       }
     }
+  }
+
+  // Public method to check if the service is properly configured
+  public isConfigured(): boolean {
+    return !!this.apiKey;
+  }
+
+  // Public method to get configuration status for debugging
+  public getConfigStatus() {
+    return {
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey?.length || 0,
+      baseUrl: this.baseUrl,
+      nodeEnv: process.env.NODE_ENV,
+      partnerLinkbackUrl: this.partnerLinkbackUrl
+    };
   }
 
   private normalizeIngredientName(name: string): string {
@@ -542,4 +569,23 @@ class InstacartService {
   }
 }
 
-export const instacartService = new InstacartService(); 
+// Lazy initialization to ensure environment variables are loaded
+let _instacartService: InstacartService | null = null;
+
+export function getInstacartService(): InstacartService {
+  if (!_instacartService) {
+    console.log('Lazy initializing InstacartService - this should happen after environment variables are loaded...');
+    _instacartService = new InstacartService();
+    console.log('InstacartService lazy initialization complete, configured:', _instacartService.isConfigured());
+  }
+  return _instacartService;
+}
+
+// For backwards compatibility, export a getter that creates the service on demand
+export const instacartService = new Proxy({} as InstacartService, {
+  get(target, prop) {
+    const service = getInstacartService();
+    const value = (service as any)[prop];
+    return typeof value === 'function' ? value.bind(service) : value;
+  }
+}); 
