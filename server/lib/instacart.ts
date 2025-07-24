@@ -42,14 +42,10 @@ class InstacartService {
 
   constructor() {
     this.apiKey = process.env.INSTACART_TEST_KEY || '';
-    
-    // Better production detection for Replit deployments
-    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.REPL_DEPLOYMENT;
-    
-    this.baseUrl = isProduction
+    this.baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://connect.instacart.com' 
       : 'https://connect.dev.instacart.tools';
-    this.partnerLinkbackUrl = isProduction
+    this.partnerLinkbackUrl = process.env.NODE_ENV === 'production'
       ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev/meal-plan`
       : 'http://localhost:5173/meal-plan';
     
@@ -57,8 +53,6 @@ class InstacartService {
     console.log('InstacartService constructor - API Key length:', this.apiKey?.length || 0);
     console.log('InstacartService constructor - Base URL:', this.baseUrl);
     console.log('InstacartService constructor - NODE_ENV:', process.env.NODE_ENV);
-    console.log('InstacartService constructor - REPL_DEPLOYMENT:', process.env.REPL_DEPLOYMENT);
-    console.log('InstacartService constructor - Is Production:', isProduction);
     
     if (!this.apiKey) {
       console.error('INSTACART_TEST_KEY environment variable is missing');
