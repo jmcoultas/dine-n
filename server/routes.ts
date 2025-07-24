@@ -1628,7 +1628,7 @@ export function registerRoutes(app: express.Express) {
         recipe.name,
         ingredients,
         instructions,
-        recipe.image_url || undefined
+        recipe.permanent_url || undefined
       );
 
       res.json({

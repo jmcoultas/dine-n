@@ -10,10 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { downloadCalendarEvent } from "@/lib/calendar";
-import { MealTypeEnum } from "@db/schema";
-import { z } from "zod";
-
-type MealType = z.infer<typeof MealTypeEnum>;
+type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack" | "Dessert";
 
 interface CalendarEventModalProps {
   isOpen: boolean;

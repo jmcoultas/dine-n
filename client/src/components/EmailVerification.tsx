@@ -39,7 +39,7 @@ export default function EmailVerification() {
       userAgent: navigator.userAgent,
       platform: navigator.platform,
       isMobile: isMobile.toString(),
-      searchString: search
+      searchString: search.toString()
     });
     
     // Extract specific parameters we need

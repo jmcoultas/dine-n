@@ -11,9 +11,7 @@ import { getIngredientSubstitutions, createInstacartRecipePage } from "@/lib/api
 import { useSubscription } from "@/hooks/use-subscription";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { CalendarEventModal } from "@/components/CalendarEventModal";
-import { MealTypeEnum } from "@db/schema";
 import type { Preferences } from "@db/schema";
-import { z } from "zod";
 import type { Recipe } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -22,7 +20,7 @@ type ComplexityLevel = 1 | 2 | 3;
 const isValidComplexity = (value: number): value is ComplexityLevel =>
   value === 1 || value === 2 || value === 3;
 
-type MealType = z.infer<typeof MealTypeEnum>;
+type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack" | "Dessert";
 
 interface MealPlanCardProps {
   recipe: Recipe;
