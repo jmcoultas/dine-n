@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@/hooks/use-user";
-import { type Preferences } from "@db/schema";
+import { type Preferences, PreferenceSchema } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useSubscription } from "@/hooks/use-subscription";
 import { DietaryPreferencesStep } from "@/components/onboarding/DietaryPreferencesStep";
 import { AllergiesStep } from "@/components/onboarding/AllergiesStep";
 import { CuisineStep } from "@/components/onboarding/CuisineStep";
@@ -29,6 +30,7 @@ export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { data: user, isLoading: isUserLoading } = useUser();
   const { toast } = useToast();
+  const { createCheckoutSession } = useSubscription();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('dietary');
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('free');
@@ -124,13 +126,34 @@ export default function Onboarding() {
 
   const handleSelectPremium = async () => {
     setSelectedPlan('premium');
-    await savePreferencesAndProceed();
+    await savePreferencesOnly();
+    // After saving preferences, go to Stripe checkout
+    await redirectToStripe();
   };
 
-  const savePreferencesAndProceed = async () => {
+  const savePreferencesOnly = async () => {
     try {
       // Save preferences to user account
       if (user) {
+        // Ensure chefPreferences has all required fields
+        const completePreferences = {
+          ...preferences,
+          chefPreferences: preferences.chefPreferences || {
+            difficulty: 'Moderate',
+            cookTime: '30-60 minutes',
+            servingSize: '4'
+          }
+        };
+
+        console.log('Saving preferences:', completePreferences);
+        
+        // Validate preferences before sending
+        const validation = PreferenceSchema.safeParse(completePreferences);
+        if (!validation.success) {
+          console.error('Preferences validation failed:', validation.error);
+          throw new Error('Invalid preferences format');
+        }
+        
         const response = await fetch('/api/user/profile', {
           method: 'PUT',
           headers: {
@@ -138,20 +161,22 @@ export default function Onboarding() {
           },
           credentials: 'include',
           body: JSON.stringify({
-            preferences: preferences
+            preferences: completePreferences
           }),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to save preferences to account');
+          const errorData = await response.text();
+          console.error('API Error:', response.status, errorData);
+          throw new Error(`Failed to save preferences to account: ${response.status}`);
         }
+
+        const responseData = await response.json();
+        console.log('Preferences saved successfully:', responseData);
       }
 
       // Clear the onboarding flag
       localStorage.removeItem('registrationCompleted');
-      
-      // Move to celebration step
-      setCurrentStep('celebration');
       
     } catch (error) {
       console.error('Error saving preferences:', error);
@@ -160,6 +185,34 @@ export default function Onboarding() {
         description: "Failed to save preferences. Please try again.",
         variant: "destructive",
       });
+      throw error; // Re-throw so calling function knows it failed
+    }
+  };
+
+  const redirectToStripe = async () => {
+    try {
+      await createCheckoutSession();
+    } catch (error) {
+      console.error('Stripe checkout error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start checkout process. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const savePreferencesAndProceed = async () => {
+    try {
+      // Save preferences first
+      await savePreferencesOnly();
+      
+      // Move to celebration step
+      setCurrentStep('celebration');
+      
+    } catch (error) {
+      // Error handling is already done in savePreferencesOnly
+      // Just prevent proceeding to celebration if save failed
     }
   };
 
@@ -236,6 +289,7 @@ export default function Onboarding() {
       return (
         <PricingStep
           onSelectFree={handleSelectFree}
+          onSelectPremium={handleSelectPremium}
           onBack={handleBack}
         />
       );

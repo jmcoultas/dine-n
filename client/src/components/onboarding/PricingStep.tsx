@@ -6,11 +6,13 @@ import { useState } from "react";
 
 interface PricingStepProps {
   onSelectFree: () => void;
+  onSelectPremium: () => void;
   onBack: () => void;
 }
 
 export function PricingStep({
   onSelectFree,
+  onSelectPremium,
   onBack
 }: PricingStepProps) {
   const { createCheckoutSession, isLoading } = useSubscription();
@@ -18,12 +20,8 @@ export function PricingStep({
 
   const handleUpgrade = async () => {
     setSelectedPlan('premium');
-    try {
-      await createCheckoutSession();
-    } catch (error) {
-      console.error('Subscription error:', error);
-      setSelectedPlan(null);
-    }
+    // Call the parent's onSelectPremium which will save preferences AND handle Stripe
+    onSelectPremium();
   };
 
   const handleSelectFree = () => {

@@ -18,6 +18,10 @@ const meta: Meta<typeof PricingStep> = {
       action: 'free-selected',
       description: 'Callback when user chooses to continue with free plan',
     },
+    onSelectPremium: {
+      action: 'premium-selected',
+      description: 'Callback when user chooses to upgrade to premium',
+    },
     onBack: {
       action: 'back-clicked',
       description: 'Callback when user clicks back button',
@@ -31,6 +35,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: {
     onSelectFree: () => console.log('User selected free plan'),
+    onSelectPremium: () => console.log('User selected premium plan'),
     onBack: () => console.log('User clicked back'),
   },
   parameters: {
