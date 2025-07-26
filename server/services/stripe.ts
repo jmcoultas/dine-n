@@ -3,8 +3,9 @@ import { db } from '../../db';
 import { users } from '@db/schema';
 import { eq } from 'drizzle-orm';
 import { createFirebaseToken } from './firebase';
+import { config } from '../config/environment';
 
-const stripeKey = process.env.STRIPE_SECRET_KEY;
+const stripeKey = config.stripeSecretKey;
 if (!stripeKey || typeof stripeKey !== 'string') {
   throw new Error('Missing or invalid Stripe secret key');
 }

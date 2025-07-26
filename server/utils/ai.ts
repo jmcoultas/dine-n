@@ -2,11 +2,12 @@ import OpenAI from "openai";
 import type { Recipe, TemporaryRecipe } from "@db/schema";
 import { MealTypeEnum } from "@db/schema";
 import { z } from "zod";
+import { config } from "../config/environment";
 
 type MealType = z.infer<typeof MealTypeEnum>;
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: config.openaiApiKey,
 });
 
 interface RecipeGenerationParams {

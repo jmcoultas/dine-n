@@ -1,3 +1,5 @@
+import { config } from '../config/environment';
+
 interface InstacartIngredient {
   name: string;
   display_text: string;
@@ -52,8 +54,8 @@ class InstacartService {
       all_env_keys_with_INSTACART: Object.keys(process.env).filter(key => key.includes('INSTACART'))
     });
 
-    this.apiKey = process.env.INSTACART_TEST_KEY || '';
-    this.baseUrl = process.env.NODE_ENV === 'production' 
+    this.apiKey = config.instacartApiKey || '';
+    this.baseUrl = config.isProduction 
       ? 'https://connect.instacart.com' 
       : 'https://connect.dev.instacart.tools';
     this.partnerLinkbackUrl = process.env.NODE_ENV === 'production'
