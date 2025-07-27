@@ -146,6 +146,7 @@ function Router() {
   const { data: user, isLoading } = useUser();
   const [isRegistrationComplete, setIsRegistrationComplete] = useState(false);
   const [isLoadingComplete, setIsLoadingComplete] = useState(false);
+  const [, setLocation] = useLocation();
   
   // Check for the registration completed flag and handle post-registration state
   useEffect(() => {
@@ -175,6 +176,14 @@ function Router() {
       return () => clearTimeout(timer);
     }
   }, [isLoading]);
+
+  // Check if user needs onboarding (has is_partial_registration flag)
+  useEffect(() => {
+    if (!isLoading && user && user.is_partial_registration && window.location.pathname !== '/onboarding') {
+      console.log("User has partial registration flag, redirecting to onboarding");
+      setLocation('/onboarding');
+    }
+  }, [user, isLoading, setLocation]);
 
   // Show a consistent loading state during initial load or right after registration
   if (isLoading || !isLoadingComplete) {

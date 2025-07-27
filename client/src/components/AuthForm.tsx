@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 
 // Google Logo SVG Component
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -48,6 +48,7 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
   const [email, setEmail] = useState(initialEmail || '');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [, setLocation] = useLocation();
   const [resetSent, setResetSent] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -140,6 +141,21 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
       const result = await signInWithGoogle();
       queryClient.setQueryData<AuthUser | null>(['user'], result.user || null);
       queryClient.invalidateQueries({ queryKey: ['user'] });
+      
+      // If this is a new user, redirect them to onboarding
+      if (result.isNewUser) {
+        console.log("New user detected via Google sign-in, redirecting to onboarding");
+        
+        // Use the same mechanism as CompleteSignup for consistent behavior
+        if (window.history && window.history.pushState) {
+          window.history.pushState({}, document.title, '/onboarding');
+        }
+        
+        // Redirect to onboarding using the router
+        setTimeout(() => {
+          setLocation('/onboarding');
+        }, 100);
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to sign in with Google');
     } finally {

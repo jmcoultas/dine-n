@@ -1798,10 +1798,14 @@ export function registerRoutes(app: express.Express) {
         });
       }
 
-      // Update user preferences in database
+      // Update user preferences in database and clear partial registration flag
+      // This handles the case where users complete onboarding after Google sign-in
       await db
         .update(users)
-        .set({ preferences: parsedPrefs.data })
+        .set({ 
+          preferences: parsedPrefs.data,
+          is_partial_registration: false // Clear partial registration flag when preferences are saved
+        })
         .where(eq(users.id, req.user!.id));
 
       res.json({ message: "Preferences updated successfully" });
@@ -1830,6 +1834,8 @@ export function registerRoutes(app: express.Express) {
         .where(eq(users.email, email.toLowerCase()))
         .limit(1);
       
+      let isNewUser = false;
+      
       if (!user) {
         // Create new user if they don't exist
         const [newUser] = await db
@@ -1844,9 +1850,11 @@ export function registerRoutes(app: express.Express) {
             meal_plans_generated: 0,
             ingredient_recipes_generated: 0,
             created_at: new Date(),
+            is_partial_registration: true, // Mark as partial so they go through onboarding
           })
           .returning();
         user = newUser;
+        isNewUser = true;
       }
       
       // Create a custom token for Firebase
@@ -1866,11 +1874,12 @@ export function registerRoutes(app: express.Express) {
         if (err) {
           return res.status(500).json({ message: 'Error logging in' });
         }
-        return res.json(publicUser);
+        // Include isNewUser flag in response so frontend can handle onboarding
+        return res.json({ ...publicUser, isNewUser });
       });
     } catch (error) {
-      console.error('Error in Google auth:', error);
-      res.status(500).json({ message: 'Authentication failed' });
+      console.error('Google auth error:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   });
 
