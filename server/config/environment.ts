@@ -39,8 +39,8 @@ function getEnvironmentVariable(devKey: string, prodKey: string): string {
 
 export const config: EnvironmentConfig = {
   nodeEnv: process.env.NODE_ENV || 'development',
-  isProduction: process.env.NODE_ENV === 'production',
-  isDevelopment: process.env.NODE_ENV !== 'production',
+  isProduction: process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === 'true',
+  isDevelopment: process.env.NODE_ENV !== 'production' && process.env.REPLIT_DEPLOYMENT !== 'true',
   
   // API Keys - automatically select dev or prod versions
   openaiApiKey: getEnvironmentVariable('OPENAI_API_KEY_DEV', 'OPENAI_API_KEY_PROD'),
@@ -72,4 +72,8 @@ console.log('Environment Configuration:', {
   hasFirebaseConfig: !!(config.firebaseProjectId && config.firebaseClientEmail && config.firebasePrivateKey),
   hasCloudinaryConfig: !!(config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret),
   hasDatabaseUrl: !!config.databaseUrl,
+  // Debug database URL selection
+  databaseUrlSource: config.isProduction ? 'DATABASE_URL_PROD' : 'DATABASE_URL_DEV',
+  databaseUrlFound: config.isProduction ? !!process.env.DATABASE_URL_PROD : !!process.env.DATABASE_URL_DEV,
+  fallbackDatabaseUrl: !!process.env.DATABASE_URL,
 }); 
