@@ -33,8 +33,8 @@ export function PricingStep({
     <OnboardingStep
       title="Unlock Your Full Culinary Potential! 🍽️"
       description="You're all set up for success! Ready to supercharge your cooking journey with premium features, or continue exploring with our generous free plan?"
-      currentStep={6}
-      totalSteps={6}
+      currentStep={7}
+      totalSteps={7}
       onBack={onBack}
       canGoBack={!isLoading}
       canGoNext={false} // No next button - user must choose a plan

@@ -1817,7 +1817,7 @@ export function registerRoutes(app: express.Express) {
 
   app.post('/api/auth/google', async (req, res) => {
     try {
-      const { idToken } = req.body;
+      const { idToken, isNewUser: firebaseIsNewUser } = req.body;
       
       // Verify the Firebase ID token
       const decodedToken = await auth.verifyIdToken(idToken);
@@ -1827,7 +1827,7 @@ export function registerRoutes(app: express.Express) {
         return res.status(400).json({ message: 'No email found in Google account' });
       }
       
-      // Check if user exists
+      // Check if user exists in our database
       let [user] = await db
         .select()
         .from(users)
@@ -1850,11 +1850,19 @@ export function registerRoutes(app: express.Express) {
             meal_plans_generated: 0,
             ingredient_recipes_generated: 0,
             created_at: new Date(),
-            is_partial_registration: true, // Mark as partial so they go through onboarding
+            // Use Firebase's isNewUser detection to set partial registration flag
+            is_partial_registration: firebaseIsNewUser || false,
           })
           .returning();
         user = newUser;
-        isNewUser = true;
+        isNewUser = firebaseIsNewUser || false;
+      } else {
+        // User exists in our database, but check if they need onboarding
+        // If Firebase says it's a new user but we have a record, they might have
+        // signed up via email and are now using Google for the first time
+        if (firebaseIsNewUser && user.is_partial_registration) {
+          isNewUser = true;
+        }
       }
       
       // Create a custom token for Firebase
@@ -1867,6 +1875,7 @@ export function registerRoutes(app: express.Express) {
         subscription_tier: user.subscription_tier || 'free',
         meal_plans_generated: user.meal_plans_generated || 0,
         is_admin: user.is_admin || false,
+        is_partial_registration: user.is_partial_registration ?? false,
         firebaseToken
       };
       

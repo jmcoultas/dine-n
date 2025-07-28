@@ -21,8 +21,8 @@ export function CuisineStep({
     <OnboardingStep
       title="Around the World in 80 Bites 🌍"
       description="Passport not required! Which cuisines make your taste buds do a happy dance? From spicy Thai to comforting Italian - the world is your oyster (unless you're allergic to shellfish)."
-      currentStep={3}
-      totalSteps={6}
+      currentStep={4}
+      totalSteps={7}
       onNext={onNext}
       onBack={onBack}
       canGoNext={selectedCuisine.length > 0}

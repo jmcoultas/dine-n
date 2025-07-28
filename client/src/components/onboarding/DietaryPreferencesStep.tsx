@@ -23,8 +23,8 @@ export function DietaryPreferencesStep({
     <OnboardingStep
       title="First Things First - What's Your Vibe? 🌱"
       description="Time for a quick taste test! Are you team keto, going green with vegetarian, or just here for the good vibes? Don't worry, we won't judge your midnight pizza cravings."
-      currentStep={1}
-      totalSteps={6}
+      currentStep={2}
+      totalSteps={7}
       onNext={onNext}
       onBack={onBack}
       canGoNext={true} // Allow proceeding even with no selections

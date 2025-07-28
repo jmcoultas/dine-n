@@ -4,6 +4,7 @@ import { useUser } from "@/hooks/use-user";
 import { type Preferences, PreferenceSchema } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/hooks/use-subscription";
+import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { DietaryPreferencesStep } from "@/components/onboarding/DietaryPreferencesStep";
 import { AllergiesStep } from "@/components/onboarding/AllergiesStep";
 import { CuisineStep } from "@/components/onboarding/CuisineStep";
@@ -12,7 +13,7 @@ import { ChefPreferencesStep } from "@/components/onboarding/ChefPreferencesStep
 import { PricingStep } from "@/components/onboarding/PricingStep";
 import { CelebrationStep } from "@/components/onboarding/CelebrationStep";
 
-type OnboardingStep = 'dietary' | 'allergies' | 'cuisine' | 'meatTypes' | 'chefPreferences' | 'pricing' | 'celebration';
+type OnboardingStep = 'welcome' | 'dietary' | 'allergies' | 'cuisine' | 'meatTypes' | 'chefPreferences' | 'pricing' | 'celebration';
 
 const defaultPreferences: Preferences = {
   dietary: [],
@@ -31,7 +32,7 @@ export default function Onboarding() {
   const { data: user, isLoading: isUserLoading } = useUser();
   const { toast } = useToast();
   const { createCheckoutSession } = useSubscription();
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('dietary');
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('free');
 
@@ -57,6 +58,9 @@ export default function Onboarding() {
   // Step navigation handlers
   const handleNext = () => {
     switch (currentStep) {
+      case 'welcome':
+        setCurrentStep('dietary');
+        break;
       case 'dietary':
         setCurrentStep('allergies');
         break;
@@ -79,6 +83,9 @@ export default function Onboarding() {
 
   const handleBack = () => {
     switch (currentStep) {
+      case 'dietary':
+        setCurrentStep('welcome');
+        break;
       case 'allergies':
         setCurrentStep('dietary');
         break;
@@ -230,6 +237,13 @@ export default function Onboarding() {
 
   // Render the appropriate step
   switch (currentStep) {
+    case 'welcome':
+      return (
+        <WelcomeStep
+          onNext={handleNext}
+        />
+      );
+
     case 'dietary':
       return (
         <DietaryPreferencesStep
@@ -237,7 +251,7 @@ export default function Onboarding() {
           onDietaryChange={handleDietaryChange}
           onNext={handleNext}
           onBack={handleBack}
-          canGoBack={false} // First step
+          canGoBack={true}
         />
       );
 

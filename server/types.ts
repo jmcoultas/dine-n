@@ -16,6 +16,7 @@ export const UserSchema = z.object({
   firebase_uid: z.string().nullable(),
   ingredient_recipes_generated: z.number().default(0),
   created_at: z.date(),
+  is_partial_registration: z.boolean().default(false),
   is_admin: z.boolean().default(false)
 });
 

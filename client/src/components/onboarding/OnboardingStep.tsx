@@ -44,7 +44,7 @@ export function OnboardingStep({
       </div>
 
       {/* Step Counter */}
-      <div className="text-center py-4 border-b border-border/50">
+      <div className="text-center py-3 border-b border-border/50">
         <span className="text-sm text-muted-foreground">
           Step {currentStep} of {totalSteps}
         </span>
@@ -52,13 +52,13 @@ export function OnboardingStep({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        <div className={cn("flex-1 container mx-auto px-4 py-8 max-w-4xl", className)}>
+        <div className={cn("flex-1 container mx-auto px-4 py-4 sm:py-6 max-w-4xl", className)}>
           {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
               {title}
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
               {description}
             </p>
           </div>
@@ -71,7 +71,7 @@ export function OnboardingStep({
 
         {/* Navigation Footer */}
         <div className="border-t border-border/50 bg-background/80 backdrop-blur-sm">
-          <div className="container mx-auto px-4 py-6 max-w-4xl">
+          <div className="container mx-auto px-4 py-4 sm:py-6 max-w-4xl">
             <div className="flex justify-between items-center">
               <Button
                 variant="outline"

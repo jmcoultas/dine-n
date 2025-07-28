@@ -340,8 +340,23 @@ export default function EmailVerification() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[50vh]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center py-12 px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Email Verification</CardTitle>
+            <CardDescription>
+              Verifying your email address...
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            <div className="flex flex-col items-center text-center gap-4 py-8">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p>Please wait while we verify your email address.</p>
+              <p className="text-sm text-muted-foreground">This should only take a few seconds.</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -376,28 +391,6 @@ export default function EmailVerification() {
               <p>{error || 'The verification link is invalid or has expired.'}</p>
               <p className="text-sm text-muted-foreground">Please try registering again to receive a new verification link.</p>
             </div>
-          )}
-          
-          {/* Show debug information in development or any environment for troubleshooting */}
-          {(import.meta.env.DEV || true) && (
-            <Alert className="mt-4">
-              <AlertDescription>
-                <details>
-                  <summary className="cursor-pointer font-semibold">Debug Information</summary>
-                  <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-[200px]">
-                    {JSON.stringify(debugInfo, null, 2)}
-                  </pre>
-                  {apiResponse && (
-                    <>
-                      <summary className="cursor-pointer font-semibold mt-2">API Response</summary>
-                      <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-[200px]">
-                        {JSON.stringify(apiResponse, null, 2)}
-                      </pre>
-                    </>
-                  )}
-                </details>
-              </AlertDescription>
-            </Alert>
           )}
         </CardContent>
         

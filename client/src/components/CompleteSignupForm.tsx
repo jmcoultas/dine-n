@@ -150,20 +150,6 @@ export function CompleteSignupForm({ email, onSubmit, error }: CompleteSignupFor
       </div>
       
       <div>
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          value={email}
-          disabled
-          className="bg-gray-50"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Your email has been verified
-        </p>
-      </div>
-      
-      <div>
         <Label htmlFor="password">Password</Label>
         <Input
           id="password"

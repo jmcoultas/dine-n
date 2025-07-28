@@ -103,7 +103,8 @@ export function setupAuth(app: Express) {
           meal_plans_generated: foundUser.meal_plans_generated || 0,
           ingredient_recipes_generated: foundUser.ingredient_recipes_generated || 0,
           firebase_uid: foundUser.firebase_uid || null,
-          is_admin: foundUser.is_admin || false
+          is_admin: foundUser.is_admin || false,
+          is_partial_registration: foundUser.is_partial_registration ?? false
         };
 
         // Create Firebase custom token after successful authentication
@@ -140,7 +141,8 @@ export function setupAuth(app: Express) {
         meal_plans_generated: foundUser.meal_plans_generated || 0,
         ingredient_recipes_generated: foundUser.ingredient_recipes_generated || 0,
         firebase_uid: foundUser.firebase_uid || null,
-        is_admin: foundUser.is_admin || false
+        is_admin: foundUser.is_admin || false,
+        is_partial_registration: foundUser.is_partial_registration ?? false
       };
 
       done(null, user);
@@ -451,7 +453,8 @@ export function setupAuth(app: Express) {
               meal_plans_generated: updatedUser.meal_plans_generated || 0,
               ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
               firebase_uid: updatedUser.firebase_uid || null,
-              is_admin: updatedUser.is_admin || false
+              is_admin: updatedUser.is_admin || false,
+              is_partial_registration: updatedUser.is_partial_registration ?? false
             };
             
             const customToken = await createFirebaseToken(publicUser.id.toString());
@@ -517,7 +520,9 @@ export function setupAuth(app: Express) {
                 subscription_tier: updatedUser.subscription_tier || 'free',
                 meal_plans_generated: updatedUser.meal_plans_generated || 0,
                 ingredient_recipes_generated: updatedUser.ingredient_recipes_generated || 0,
-                firebase_uid: updatedUser.firebase_uid || null
+                firebase_uid: updatedUser.firebase_uid || null,
+                is_admin: updatedUser.is_admin || false,
+                is_partial_registration: updatedUser.is_partial_registration ?? false
               };
               
               const customToken = await createFirebaseToken(publicUser.id.toString());
@@ -594,7 +599,8 @@ export function setupAuth(app: Express) {
         meal_plans_generated: newUser.meal_plans_generated || 0,
         ingredient_recipes_generated: newUser.ingredient_recipes_generated || 0,
         firebase_uid: newUser.firebase_uid || null,
-        is_admin: newUser.is_admin || false
+        is_admin: newUser.is_admin || false,
+        is_partial_registration: newUser.is_partial_registration ?? false
       };
 
       const customToken = await createFirebaseToken(publicUser.id.toString());
@@ -699,7 +705,8 @@ export function setupAuth(app: Express) {
               meal_plans_generated: newUser.meal_plans_generated || 0,
               ingredient_recipes_generated: newUser.ingredient_recipes_generated || 0,
               firebase_uid: newUser.firebase_uid || null,
-              is_admin: newUser.is_admin || false
+              is_admin: newUser.is_admin || false,
+              is_partial_registration: newUser.is_partial_registration ?? false
             };
             
             // Create a custom token for Firebase authentication
@@ -741,7 +748,9 @@ export function setupAuth(app: Express) {
           subscription_tier: existingUser.subscription_tier || 'free',
           meal_plans_generated: existingUser.meal_plans_generated || 0,
           ingredient_recipes_generated: existingUser.ingredient_recipes_generated || 0,
-          firebase_uid: uid
+          firebase_uid: uid,
+          is_admin: existingUser.is_admin || false,
+          is_partial_registration: existingUser.is_partial_registration ?? false
         };
         
         // Create a custom token for Firebase authentication

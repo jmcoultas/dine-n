@@ -14,6 +14,7 @@ export interface AuthUser extends Omit<User, 'password_hash'> {
   subscription_tier: string;
   meal_plans_generated: number;
   is_admin: boolean;
+  is_partial_registration: boolean;
   firebaseToken?: string;
 }
 

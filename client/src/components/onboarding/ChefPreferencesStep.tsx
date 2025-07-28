@@ -105,8 +105,8 @@ export function ChefPreferencesStep({
     <OnboardingStep
       title={stepInfo.title}
       description={stepInfo.description}
-      currentStep={5}
-      totalSteps={6}
+      currentStep={6}
+      totalSteps={7}
       onNext={handleNext}
       onBack={handleBack}
       canGoNext={canGoNext()}

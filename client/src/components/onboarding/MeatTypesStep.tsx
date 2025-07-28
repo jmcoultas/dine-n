@@ -22,8 +22,8 @@ export function MeatTypesStep({
     <OnboardingStep
       title="The Protein Plot Thickens 🥩"
       description="Let's talk about the main event! What proteins are you excited to see on your plate? Or maybe you're team plants-only? We've got options for every appetite."
-      currentStep={4}
-      totalSteps={6}
+      currentStep={5}
+      totalSteps={7}
       onNext={onNext}
       onBack={onBack}
       canGoNext={true} // Allow proceeding even with no selections (for vegetarians)

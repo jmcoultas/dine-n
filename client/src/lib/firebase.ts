@@ -13,6 +13,7 @@ import {
   signInWithEmailLink,
   sendEmailVerification,
   User,
+  UserCredential,
   AuthError
 } from 'firebase/auth';
 
@@ -35,13 +36,22 @@ export async function signInWithGoogle() {
     const result = await signInWithPopup(auth, googleProvider);
     const idToken = await result.user.getIdToken();
     
+    // Firebase provides additionalUserInfo.isNewUser to detect first-time sign-ins
+    // Type assertion needed as additionalUserInfo might not be in the base UserCredential type
+    const isNewUser = (result as any).additionalUserInfo?.isNewUser || false;
+    console.log("🔍 Firebase sign-in result:", {
+      email: result.user?.email,
+      isNewUser: isNewUser,
+      additionalUserInfo: (result as any).additionalUserInfo
+    });
+    
     // Send the token to your backend to create/update user
     const response = await fetch('/api/auth/google', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ idToken, isNewUser }),
       credentials: 'include',
     });
     
@@ -49,7 +59,13 @@ export async function signInWithGoogle() {
       throw new Error('Failed to authenticate with backend');
     }
     
-    return response.json();
+    const backendResult = await response.json();
+    
+    // Return both backend result and Firebase's isNewUser detection
+    return {
+      ...backendResult,
+      isNewUser: isNewUser
+    };
   } catch (error) {
     console.error('Error signing in with Google:', error);
     throw error;

@@ -53,7 +53,6 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
   const [verificationSent, setVerificationSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState(error);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -75,17 +74,7 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
     setIsLoading(true);
     setFormError('');
     
-    // Check terms acceptance for registration
-    if (mode === 'register' && !acceptedTerms) {
-      setFormError('You must accept the Terms and Conditions to continue');
-      setIsLoading(false);
-      toast({
-        title: "Terms Required",
-        description: "Please accept the Terms and Conditions to create an account.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Terms are handled in the onboarding flow, so no need to check here
     
     try {
       if (mode === 'register') {
@@ -123,28 +112,22 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
   };
 
   const handleGoogleSignIn = async () => {
-    // Check terms acceptance for registration via Google
-    if (mode === 'register' && !acceptedTerms) {
-      setFormError('You must accept the Terms and Conditions to continue');
-      toast({
-        title: "Terms Required",
-        description: "Please accept the Terms and Conditions to create an account.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoading(true);
     setFormError('');
     
     try {
       const result = await signInWithGoogle();
+      console.log("Google sign-in result:", result);
+      console.log("User data:", result.user);
+      console.log("Is new user:", result.isNewUser);
+      console.log("User partial registration flag:", result.user?.is_partial_registration);
+      
       queryClient.setQueryData<AuthUser | null>(['user'], result.user || null);
       queryClient.invalidateQueries({ queryKey: ['user'] });
       
       // If this is a new user, redirect them to onboarding
       if (result.isNewUser) {
-        console.log("New user detected via Google sign-in, redirecting to onboarding");
+        console.log("🔄 New user detected via Google sign-in, redirecting to onboarding");
         
         // Use the same mechanism as CompleteSignup for consistent behavior
         if (window.history && window.history.pushState) {
@@ -155,6 +138,8 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
         setTimeout(() => {
           setLocation('/onboarding');
         }, 100);
+      } else {
+        console.log("✅ Existing user signed in via Google, not redirecting to onboarding");
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to sign in with Google');
@@ -255,33 +240,7 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
         </div>
       )}
 
-      {/* Terms and Conditions checkbox for registration */}
-      {mode === 'register' && (
-        <div className="space-y-3">
-          <div className="flex items-start space-x-2">
-            <Checkbox
-              id="terms"
-              checked={acceptedTerms}
-              onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
-              className="mt-1"
-            />
-            <div className="grid gap-1.5 leading-none">
-              <Label
-                htmlFor="terms"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                I agree to the{' '}
-                <Link href="/terms" className="text-primary hover:underline">
-                  Terms and Conditions
-                </Link>
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                By creating an account, you acknowledge that you understand our AI-generated content is for informational purposes only and you will exercise your own judgment regarding food safety and dietary decisions.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {formError && (
         <div className="text-sm text-red-500">{formError}</div>
@@ -291,7 +250,7 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
         <Button
           type="submit"
           className="w-full"
-          disabled={isLoading || (mode === 'register' && !acceptedTerms)}
+          disabled={isLoading}
         >
           {isLoading ? 'Loading...' : 
             mode === 'login' ? 'Sign In' : 
@@ -317,7 +276,7 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
               variant="outline"
               className="w-full flex items-center justify-center gap-2"
               onClick={handleGoogleSignIn}
-              disabled={isLoading || (mode === 'register' && !acceptedTerms)}
+              disabled={isLoading}
             >
               {!isLoading && <GoogleLogo className="w-5 h-5" />}
               {isLoading ? 'Loading...' : 'Continue with Google'}
