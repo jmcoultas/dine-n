@@ -3,6 +3,10 @@ interface EnvironmentConfig {
   isProduction: boolean;
   isDevelopment: boolean;
   
+  // Base URLs
+  baseUrl: string;
+  clientUrl: string;
+  
   // API Keys
   openaiApiKey: string;
   instacartApiKey: string;
@@ -41,6 +45,10 @@ export const config: EnvironmentConfig = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === 'true',
   isDevelopment: process.env.NODE_ENV !== 'production' && process.env.REPLIT_DEPLOYMENT !== 'true',
+  
+  // Base URLs
+  baseUrl: process.env.NODE_ENV === 'production' ? 'https://dinen.ai' : 'http://localhost:3001',
+  clientUrl: process.env.NODE_ENV === 'production' ? 'https://dinen.ai' : 'http://localhost:5173',
   
   // API Keys - automatically select dev or prod versions
   openaiApiKey: getEnvironmentVariable('OPENAI_API_KEY_DEV', 'OPENAI_API_KEY_PROD'),

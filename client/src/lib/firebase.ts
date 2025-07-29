@@ -84,7 +84,7 @@ export async function initializeFirebaseAuth(token: string) {
 export async function resetPassword(email: string) {
   try {
     const actionCodeSettings = {
-      url: 'https://dine-n.replit.app/auth',
+      url: `${window.location.origin}/auth`,
       handleCodeInApp: true
     };
     await sendPasswordResetEmail(auth, email, actionCodeSettings);

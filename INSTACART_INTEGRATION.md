@@ -238,9 +238,7 @@ class InstacartService {
     this.baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://connect.instacart.com' 
       : 'https://connect.dev.instacart.tools';
-    this.partnerLinkbackUrl = process.env.NODE_ENV === 'production'
-      ? 'https://your-domain.com/meal-plan'  // Update for production
-      : 'http://localhost:5173/meal-plan';
+    this.partnerLinkbackUrl = `${config.baseUrl}/meal-plan`;
   }
 }
 ```

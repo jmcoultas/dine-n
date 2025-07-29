@@ -31,7 +31,7 @@ export async function testStripeConnection() {
   }
 }
 
-const baseUrl = 'https://dine-n.replit.app';
+const baseUrl = config.baseUrl;
 
 console.log('Base URL for webhooks:', baseUrl);
 

@@ -42,7 +42,7 @@ async function testInstacartShoppingList() {
     title: "Test Shopping List",
     line_items: testIngredients,
     landing_page_configuration: {
-      partner_linkback_url: "http://localhost:5173/meal-plan",
+      partner_linkback_url: "https://dinen.ai/meal-plan",
       enable_pantry_items: true
     }
   };
@@ -122,7 +122,7 @@ async function testInstacartRecipe() {
     ],
     ingredients: testIngredients,
     landing_page_configuration: {
-      partner_linkback_url: "http://localhost:5173/meal-plan",
+      partner_linkback_url: "https://dinen.ai/meal-plan",
       enable_pantry_items: true
     }
   };

@@ -6,6 +6,7 @@ import { setupAuth } from "./auth";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { startExpirationJob } from "./jobs/checkMealPlanExpiration";
+import { config } from "./config/environment";
 
 const app = express();
 const server = createServer(app);
@@ -40,9 +41,7 @@ app.use(express.urlencoded({ extended: false }));
 
 // Development CORS settings
 app.use((req, res, next) => {
-  const clientUrl = process.env.NODE_ENV === 'production'
-    ? process.env.CLIENT_URL
-    : 'http://localhost:5173';
+  const clientUrl = process.env.CLIENT_URL || config.clientUrl;
 
   res.header('Access-Control-Allow-Origin', clientUrl);
   res.header('Access-Control-Allow-Credentials', 'true');

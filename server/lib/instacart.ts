@@ -58,9 +58,7 @@ class InstacartService {
     this.baseUrl = config.isProduction 
       ? 'https://connect.instacart.com' 
       : 'https://connect.dev.instacart.tools';
-    this.partnerLinkbackUrl = process.env.NODE_ENV === 'production'
-      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev/meal-plan`
-      : 'http://localhost:5173/meal-plan';
+    this.partnerLinkbackUrl = `${config.baseUrl}/meal-plan`;
     
     console.log('InstacartService constructor - API Key present:', !!this.apiKey);
     console.log('InstacartService constructor - API Key length:', this.apiKey?.length || 0);

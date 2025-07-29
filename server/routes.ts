@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "drizzle-orm";
 import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
 import { instacartService, getInstacartService } from "./lib/instacart";
+import { config } from "./config/environment";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
@@ -3780,7 +3781,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         webhook_secret_length: process.env.STRIPE_WEBHOOK_SECRET?.length || 0,
         stripe_secret_configured: !!process.env.STRIPE_SECRET_KEY,
         stripe_publishable_configured: !!process.env.STRIPE_PUBLISHABLE_KEY,
-        base_url: process.env.NODE_ENV === 'production' ? 'https://dine-n.replit.app' : 'http://localhost:3001'
+        base_url: config.baseUrl
       });
     } catch (error) {
       console.error('Error checking webhook config:', error);
