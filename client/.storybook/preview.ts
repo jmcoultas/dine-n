@@ -23,7 +23,6 @@ const preview: Preview = {
         },
       ],
     },
-    actions: { argTypesRegex: '^on[A-Z].*' },
     docs: {
       extractComponentDescription: (component, { notes }) => {
         if (notes) {

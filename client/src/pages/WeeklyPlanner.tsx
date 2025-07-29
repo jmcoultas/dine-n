@@ -9,6 +9,7 @@ import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { MealPlanLoadingState } from "@/components/MealPlanLoadingState";
 import { SuggestionLoadingState } from "@/components/SuggestionLoadingState";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
+import FavoritesSection from "@/components/FavoritesSection";
 
 import { Calendar, Sunrise, Sun, Moon, Wand2, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -337,6 +338,27 @@ export default function WeeklyPlanner() {
     });
   };
 
+  const handleAddFavoriteToMealPlan = (recipe: Recipe, mealType: 'breakfast' | 'lunch' | 'dinner') => {
+    setSelectedArchivedRecipes(prev => {
+      const currentSelections = prev[mealType];
+      const isAlreadySelected = currentSelections.some(selected => selected.id === recipe.id);
+      
+      if (isAlreadySelected) {
+        // Remove if already selected
+        return {
+          ...prev,
+          [mealType]: currentSelections.filter(selected => selected.id !== recipe.id)
+        };
+      } else {
+        // Add to selections
+        return {
+          ...prev,
+          [mealType]: [...currentSelections, recipe]
+        };
+      }
+    });
+  };
+
 
 
   const getSelectionProgress = () => {
@@ -589,7 +611,11 @@ export default function WeeklyPlanner() {
           </CardContent>
         </Card>
 
-        {/* My Favorites Section - temporarily removed until component is implemented */}
+        {/* My Favorites Section */}
+        <FavoritesSection
+          onAddToMealPlan={handleAddFavoriteToMealPlan}
+          selectedArchivedRecipes={selectedArchivedRecipes}
+        />
 
         {/* Step 3: Recipe Suggestions (only show if we have suggestions) */}
         {hasSuggestions && (

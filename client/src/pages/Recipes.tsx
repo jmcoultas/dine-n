@@ -15,6 +15,10 @@ import { Search, ChevronLeft, ChevronRight, ChefHat } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
+import { InstacartCTA } from "@/components/InstacartCTA";
+import { useTheme } from "@/hooks/use-theme";
+import { useToast } from "@/components/ui/use-toast";
+import { createInstacartRecipePage } from "@/lib/api";
 
 interface RecipeNutrition {
   calories: number;
@@ -57,9 +61,20 @@ export default function Recipes() {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showUnfavoriteModal, setShowUnfavoriteModal] = useState(false);
   const [recipeToUnfavorite, setRecipeToUnfavorite] = useState<Recipe | null>(null);
+  const [isCreatingInstacartPage, setIsCreatingInstacartPage] = useState(false);
   const { subscription } = useSubscription();
   const { data: user } = useUser();
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  
+  // Helper function to resolve the actual theme
+  const getResolvedTheme = () => {
+    if (theme === "system") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return theme;
+  };
   
   // Query for user's favorite recipes
   const { data: favoriteRecipes = [], isLoading: isLoadingFavorites } = useQuery({
@@ -293,6 +308,62 @@ export default function Recipes() {
     }
   };
 
+  const handleShopWithInstacart = async () => {
+    if (!selectedRecipe?.id) {
+      toast({
+        title: "Error",
+        description: "Recipe ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Attempting to create Instacart page for recipe:', {
+      recipeId: selectedRecipe.id,
+      recipeName: selectedRecipe.name,
+      hasIngredients: selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0
+    });
+    
+    setIsCreatingInstacartPage(true);
+    try {
+      const result = await createInstacartRecipePage(selectedRecipe.id);
+      
+      // Open Instacart recipe page in a new tab
+      window.open(result.instacart_url, '_blank');
+      
+      toast({
+        title: "Success!",
+        description: `Created Instacart recipe page for ${result.recipe_name} with ${result.ingredient_count} ingredients`,
+      });
+    } catch (error) {
+      console.error('Error creating Instacart recipe page:', {
+        error,
+        recipeId: selectedRecipe.id,
+        recipeName: selectedRecipe.name,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      let errorMessage = "Failed to create Instacart recipe page";
+      if (error instanceof Error) {
+        if (error.message.includes("Recipe not found")) {
+          errorMessage = "This recipe could not be found.";
+        } else if (error.message.includes("No ingredients found")) {
+          errorMessage = "This recipe doesn't contain any ingredients to shop for.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingInstacartPage(false);
+    }
+  };
+
   const handleCancelUnfavorite = () => {
     setShowUnfavoriteModal(false);
     setRecipeToUnfavorite(null);
@@ -503,6 +574,24 @@ export default function Recipes() {
                       <li key={i}>{step}</li>
                     ))}
                   </ol>
+                </div>
+              </div>
+
+              {/* Shop for Ingredients CTA */}
+              <div className="bg-gradient-to-r from-[#FAF1E5]/20 to-[#FAF1E5]/10 border border-[#EFE9E1] rounded-lg p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">Get Recipe Ingredients</h3>
+                    <p className="text-muted-foreground">
+                      Shop for all the ingredients you need for this recipe
+                    </p>
+                  </div>
+                  <InstacartCTA
+                    contentType="recipe"
+                    theme={getResolvedTheme()}
+                    onClick={handleShopWithInstacart}
+                    disabled={isCreatingInstacartPage}
+                  />
                 </div>
               </div>
 

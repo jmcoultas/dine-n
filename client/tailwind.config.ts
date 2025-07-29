@@ -50,6 +50,14 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Instacart brand colors for CTA component
+        instacart: {
+          'dark-green': '#003D29',
+          'light-cream': '#FAF1E5',
+          'stroke-light': '#EFE9E1',
+          'orange': '#FF7009',
+          'green': '#0AAD0A',
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

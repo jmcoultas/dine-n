@@ -2,12 +2,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { ChefHat, Heart, Wand2, Calendar, X, ShoppingCart } from "lucide-react";
+import { ChefHat, Heart, Wand2, Calendar, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { getIngredientSubstitutions, createInstacartRecipePage } from "@/lib/api";
+import { InstacartCTA } from "@/components/InstacartCTA";
+import { useTheme } from "@/hooks/use-theme";
 import { useSubscription } from "@/hooks/use-subscription";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { CalendarEventModal } from "@/components/CalendarEventModal";
@@ -154,6 +156,15 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const [isFavorited, setIsFavorited] = useState(recipe.favorited ?? false);
   const [localIngredients, setLocalIngredients] = useState(recipe.ingredients ?? []);
   const [isCreatingInstacartPage, setIsCreatingInstacartPage] = useState(false);
+  const { theme } = useTheme();
+  
+  // Helper function to resolve the actual theme
+  const getResolvedTheme = () => {
+    if (theme === "system") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return theme;
+  };
   const { toast } = useToast();
   const { data: user } = useUser();
   const { subscription } = useSubscription();
@@ -393,28 +404,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                 </Tooltip>
               </TooltipProvider>
               
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-1 bg-green-600/10 hover:bg-green-600/20 border-green-600/20"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShopWithInstacart();
-                      }}
-                      disabled={isCreatingInstacartPage}
-                    >
-                      <ShoppingCart className="h-4 w-4" />
-                      <span>{isCreatingInstacartPage ? "Creating..." : "Shop Ingredients"}</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Shop for ingredients on Instacart</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+
             </div>
           </div>
         </CardContent>
@@ -499,6 +489,24 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                   </li>
                 ))}
               </ol>
+            </div>
+
+            {/* Shop for Ingredients CTA */}
+            <div className="bg-gradient-to-r from-[#FAF1E5]/20 to-[#FAF1E5]/10 border border-[#EFE9E1] rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold mb-1">Get Recipe Ingredients</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Shop for all the ingredients you need for this recipe
+                  </p>
+                </div>
+                <InstacartCTA
+                  contentType="recipe"
+                  theme={getResolvedTheme()}
+                  onClick={handleShopWithInstacart}
+                  disabled={isCreatingInstacartPage}
+                />
+              </div>
             </div>
 
             <div>

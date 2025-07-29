@@ -4,6 +4,11 @@ import { Recipe } from "@db/schema";
 import { Clock, Users } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { RecipeSchema } from "@/components/RecipeSchema";
+import { InstacartCTA } from "@/components/InstacartCTA";
+import { useTheme } from "@/hooks/use-theme";
+import { useToast } from "@/components/ui/use-toast";
+import { createInstacartRecipePage } from "@/lib/api";
+import { useState } from "react";
 
 interface RecipeIngredient {
   name: string;
@@ -27,6 +32,17 @@ export interface RecipeData extends Omit<Recipe, 'ingredients' | 'instructions' 
 
 export default function RecipeView() {
   const params = useParams<{ id: string }>();
+  const [isCreatingInstacartPage, setIsCreatingInstacartPage] = useState(false);
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  
+  // Helper function to resolve the actual theme
+  const getResolvedTheme = () => {
+    if (theme === "system") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return theme;
+  };
   
   // Parse the ID directly since we're not using recipe title in URL
   const numericId = params.id ? parseInt(params.id) : null;
@@ -95,6 +111,62 @@ export default function RecipeView() {
     retry: false, // Disable retries so we can see errors immediately
     enabled: numericId !== null // Only run query if we have a valid numeric ID
   });
+
+  const handleShopWithInstacart = async () => {
+    if (!recipe?.id) {
+      toast({
+        title: "Error",
+        description: "Recipe ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Attempting to create Instacart page for recipe:', {
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      hasIngredients: recipe.ingredients && recipe.ingredients.length > 0
+    });
+    
+    setIsCreatingInstacartPage(true);
+    try {
+      const result = await createInstacartRecipePage(recipe.id);
+      
+      // Open Instacart recipe page in a new tab
+      window.open(result.instacart_url, '_blank');
+      
+      toast({
+        title: "Success!",
+        description: `Created Instacart recipe page for ${result.recipe_name} with ${result.ingredient_count} ingredients`,
+      });
+    } catch (error) {
+      console.error('Error creating Instacart recipe page:', {
+        error,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      let errorMessage = "Failed to create Instacart recipe page";
+      if (error instanceof Error) {
+        if (error.message.includes("Recipe not found")) {
+          errorMessage = "This recipe could not be found.";
+        } else if (error.message.includes("No ingredients found")) {
+          errorMessage = "This recipe doesn't contain any ingredients to shop for.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingInstacartPage(false);
+    }
+  };
 
   if (isLoading) {
     console.log('Recipe view loading...', {
@@ -191,6 +263,26 @@ export default function RecipeView() {
               </li>
             ))}
           </ol>
+        </div>
+      </div>
+
+      {/* Shop for Ingredients CTA */}
+      <div className="mt-8">
+        <div className="bg-gradient-to-r from-[#FAF1E5]/20 to-[#FAF1E5]/10 border border-[#EFE9E1] rounded-lg p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold mb-2">Get Recipe Ingredients</h3>
+              <p className="text-muted-foreground">
+                Shop for all the ingredients you need for this recipe
+              </p>
+            </div>
+            <InstacartCTA
+              contentType="recipe"
+              theme={getResolvedTheme()}
+              onClick={handleShopWithInstacart}
+              disabled={isCreatingInstacartPage}
+            />
+          </div>
         </div>
       </div>
 

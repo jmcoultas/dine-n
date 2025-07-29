@@ -1679,7 +1679,7 @@ export function registerRoutes(app: express.Express) {
   });
 
   // Instacart Integration - Create Recipe Page
-  app.post("/api/instacart/recipe", isAuthenticated, async (req: Request, res: Response) => {
+  app.post("/api/instacart/recipe", async (req: Request, res: Response) => {
     try {
       const { recipe_id } = req.body;
 
@@ -1690,12 +1690,9 @@ export function registerRoutes(app: express.Express) {
         });
       }
 
-      // Get the recipe from temporary recipes table
+      // Get the recipe from temporary recipes table (no user ownership check for community sharing)
       const recipe = await db.query.temporaryRecipes.findFirst({
-        where: and(
-          eq(temporaryRecipes.id, recipe_id),
-          eq(temporaryRecipes.user_id, req.user!.id)
-        )
+        where: eq(temporaryRecipes.id, recipe_id)
       });
 
       if (!recipe) {

@@ -11,10 +11,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Search, Leaf, ShoppingCart } from "lucide-react";
+import { Download, Search, Leaf } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { createInstacartShoppingList } from "@/lib/api";
+import { InstacartCTA } from "@/components/InstacartCTA";
+import { useTheme } from "@/hooks/use-theme";
 
 interface GroceryItem {
   name: string;
@@ -34,6 +36,15 @@ export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [organicItems, setOrganicItems] = useState<Set<string>>(new Set());
   const [isCreatingInstacartList, setIsCreatingInstacartList] = useState(false);
+  const { theme } = useTheme();
+  
+  // Helper function to resolve the actual theme
+  const getResolvedTheme = () => {
+    if (theme === "system") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return theme;
+  };
   const { toast } = useToast();
   
   // Define recipeName here
@@ -194,15 +205,12 @@ export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
         </Button>
         
         {mealPlanId && (
-          <Button 
-            variant="default" 
+          <InstacartCTA
+            contentType="grocery"
+            theme={getResolvedTheme()}
             onClick={handleShopWithInstacart}
             disabled={isCreatingInstacartList}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            {isCreatingInstacartList ? "Creating..." : "Shop with Instacart"}
-          </Button>
+          />
         )}
       </div>
 
