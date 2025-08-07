@@ -5,6 +5,26 @@ import { eq } from 'drizzle-orm';
 import { createFirebaseToken } from './firebase';
 import { config } from '../config/environment';
 
+// Configuration for subscription pricing
+const SUBSCRIPTION_CONFIG = {
+  // Option 1: Use a specific product/price from Stripe Dashboard
+  PRODUCT_ID: 'prod_SncR91waZDrn6E',
+  PRICE_ID: config.stripePriceId || null, // Set this to use a specific price ID
+  
+  // Option 2: Fallback to dynamic price_data (current approach)
+  FALLBACK_PRICE_DATA: {
+    currency: 'usd',
+    recurring: {
+      interval: 'month' as const
+    },
+    product_data: {
+      name: 'Premium Subscription',
+      description: 'Monthly subscription for unlimited meal plans'
+    },
+    unit_amount: 999, // $9.99 per month
+  }
+};
+
 const stripeKey = config.stripeSecretKey;
 if (!stripeKey || typeof stripeKey !== 'string') {
   throw new Error('Missing or invalid Stripe secret key');
@@ -99,6 +119,50 @@ function safeTimestampToDate(timestamp: number | null | undefined, context?: str
   }
 }
 
+// Helper function to get or create a price for the configured product
+async function getOrCreatePrice(productId: string): Promise<string> {
+  try {
+    // First, check if there's already a suitable price for this product
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+      limit: 10
+    });
+
+    // Look for a monthly recurring price with the right amount
+    const existingPrice = prices.data.find(price => 
+      price.recurring && 
+      price.recurring.interval === 'month' && 
+      price.unit_amount === SUBSCRIPTION_CONFIG.FALLBACK_PRICE_DATA.unit_amount
+    );
+
+    if (existingPrice) {
+      console.log('Found existing price for product:', existingPrice.id);
+      return existingPrice.id;
+    }
+
+    // If no suitable price exists, create one
+    console.log('Creating new price for product:', productId);
+    const newPrice = await stripe.prices.create({
+      product: productId,
+      unit_amount: SUBSCRIPTION_CONFIG.FALLBACK_PRICE_DATA.unit_amount,
+      currency: SUBSCRIPTION_CONFIG.FALLBACK_PRICE_DATA.currency,
+      recurring: SUBSCRIPTION_CONFIG.FALLBACK_PRICE_DATA.recurring,
+      nickname: 'Premium Monthly Subscription',
+      metadata: {
+        created_by: 'stripe_service',
+        description: SUBSCRIPTION_CONFIG.FALLBACK_PRICE_DATA.product_data.description
+      }
+    });
+
+    console.log('Created new price:', newPrice.id);
+    return newPrice.id;
+  } catch (error) {
+    console.error('Error getting/creating price for product:', productId, error);
+    throw error;
+  }
+}
+
 export const stripeService = {
   async createCustomer(email: string, userId: number) {
     try {
@@ -123,7 +187,7 @@ export const stripeService = {
     }
   },
 
-  async createCheckoutSession(customerId: string) {
+  async createCheckoutSession(customerId: string, couponCode?: string) {
     console.log('Creating checkout session for customer:', customerId);
     const [user] = await db
       .select()
@@ -140,42 +204,67 @@ export const stripeService = {
       const firebaseToken = await createFirebaseToken(user.id.toString());
       
       console.log('Creating Stripe checkout session with customer ID:', customerId);
-      const session = await stripe.checkout.sessions.create({
+      
+      // Determine line item configuration
+      let lineItem;
+      if (SUBSCRIPTION_CONFIG.PRICE_ID) {
+        // Use specific price ID from environment/config
+        console.log('Using configured price ID:', SUBSCRIPTION_CONFIG.PRICE_ID);
+        lineItem = {
+          price: SUBSCRIPTION_CONFIG.PRICE_ID,
+          quantity: 1,
+        };
+      } else {
+        // Get or create a price for the configured product
+        console.log('Getting/creating price for product:', SUBSCRIPTION_CONFIG.PRODUCT_ID);
+        const priceId = await getOrCreatePrice(SUBSCRIPTION_CONFIG.PRODUCT_ID);
+        lineItem = {
+          price: priceId,
+          quantity: 1,
+        };
+      }
+
+      // Base session configuration
+      const sessionConfig: any = {
         customer: customerId,
         mode: 'subscription',
         payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              recurring: {
-                interval: 'month'
-              },
-              product_data: {
-                name: 'Premium Subscription',
-                description: 'Monthly subscription for unlimited meal plans'
-              },
-              unit_amount: 999, // $9.99 per month
-            },
-            quantity: 1,
-          },
-        ],
+        line_items: [lineItem],
         success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}&auth_token=${encodeURIComponent(firebaseToken)}`,
         cancel_url: `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}`,
         subscription_data: {
           metadata: {
             tier: 'premium',
-            user_id: user.id.toString()
+            user_id: user.id.toString(),
+            product_id: SUBSCRIPTION_CONFIG.PRODUCT_ID
           }
+        },
+        // Allow promotion codes to be entered during checkout
+        allow_promotion_codes: true,
+      };
+
+      // Add coupon if provided
+      if (couponCode) {
+        try {
+          // Verify the coupon exists and is valid
+          const coupon = await stripe.coupons.retrieve(couponCode);
+          console.log('Applying coupon to checkout session:', couponCode);
+          sessionConfig.discounts = [{ coupon: couponCode }];
+        } catch (error) {
+          console.warn('Invalid coupon code provided:', couponCode, error);
+          // Don't fail the checkout, just proceed without the coupon
         }
-      });
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionConfig);
 
       console.log('Checkout session created successfully:', {
         sessionId: session.id,
         customerId: session.customer,
         userId: user.id,
         successUrl: session.success_url,
-        cancelUrl: session.cancel_url
+        cancelUrl: session.cancel_url,
+        couponApplied: !!couponCode
       });
 
       // Double-check that the customer ID is properly stored in the database
@@ -211,6 +300,7 @@ export const stripeService = {
         } : error,
         customerId,
         userId: user.id,
+        couponCode,
         timestamp: new Date().toISOString()
       });
       throw error;

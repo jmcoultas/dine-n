@@ -1,8 +1,11 @@
 import { OnboardingStep } from "./OnboardingStep";
 import { PricingCard } from "../PricingCard";
 import { useSubscription } from "@/hooks/use-subscription";
-import { Loader2 } from "lucide-react";
+import { Loader2, Tag } from "lucide-react";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 
 interface PricingStepProps {
   onSelectFree: () => void;
@@ -16,12 +19,26 @@ export function PricingStep({
   onBack
 }: PricingStepProps) {
   const { createCheckoutSession, isLoading } = useSubscription();
+  const { toast } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium' | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [showCouponInput, setShowCouponInput] = useState(false);
 
   const handleUpgrade = async () => {
     setSelectedPlan('premium');
-    // Call the parent's onSelectPremium which will save preferences AND handle Stripe
-    onSelectPremium();
+    try {
+      await createCheckoutSession(couponCode || undefined);
+      // Call the parent's onSelectPremium to save preferences
+      onSelectPremium();
+    } catch (error) {
+      console.error('Stripe checkout error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start checkout process. Please try again.",
+        variant: "destructive",
+      });
+      setSelectedPlan(null);
+    }
   };
 
   const handleSelectFree = () => {
@@ -48,6 +65,50 @@ export function PricingStep({
             showGetStarted={false}
             onUpgrade={handleUpgrade}
           />
+        </div>
+
+        {/* Coupon Code Section */}
+        <div className="mb-6 text-center">
+          {!showCouponInput ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowCouponInput(true)}
+              className="text-sm text-muted-foreground hover:text-primary"
+              disabled={isLoading}
+            >
+              <Tag className="mr-2 h-4 w-4" />
+              Have a coupon code?
+            </Button>
+          ) : (
+            <div className="max-w-sm mx-auto space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                  disabled={isLoading}
+                  className="flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowCouponInput(false);
+                    setCouponCode('');
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
+              {couponCode && (
+                <p className="text-xs text-muted-foreground">
+                  Coupon will be applied at checkout
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Single Action Button */}

@@ -314,10 +314,13 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/subscription/create-checkout", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
+      const { couponCode } = req.body; // Extract coupon code from request body
+      
       console.log('Creating checkout session for user:', {
         userId: user.id,
         email: user.email,
         hasStripeCustomerId: !!user.stripe_customer_id,
+        couponCode: couponCode || 'none',
         timestamp: new Date().toISOString()
       });
 
@@ -348,7 +351,7 @@ export function registerRoutes(app: express.Express) {
         console.log('Stripe customer created:', customer.id);
       }
 
-      const session = await stripeService.createCheckoutSession(user.stripe_customer_id);
+      const session = await stripeService.createCheckoutSession(user.stripe_customer_id, couponCode);
       console.log('Checkout session created successfully:', session.id);
       
       res.json({ url: session.url });
@@ -1627,32 +1630,127 @@ export function registerRoutes(app: express.Express) {
         .from(mealPlanRecipes)
         .where(eq(mealPlanRecipes.meal_plan_id, meal_plan_id));
 
+      console.log('Meal plan recipes found:', {
+        mealPlanId: meal_plan_id,
+        count: mealPlanRecipesList.length,
+        recipes: mealPlanRecipesList
+      });
+
       const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
       
+      console.log('Recipe IDs to fetch:', recipeIds);
+      
       // Get recipe details from temporary_recipes
-      const recipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(inArray(temporaryRecipes.id, recipeIds));
+      let recipes: any[] = [];
+      if (recipeIds.length > 0) {
+        recipes = await db
+          .select()
+          .from(temporaryRecipes)
+          .where(inArray(temporaryRecipes.id, recipeIds));
+      } else {
+        console.warn('No recipe IDs found for meal plan:', meal_plan_id);
+      }
+
+      console.log('Recipes fetched from database:', {
+        count: recipes.length,
+        recipeNames: recipes.map(r => r.name),
+        allRecipeIngredients: recipes.map(r => ({
+          id: r.id,
+          name: r.name,
+          ingredientsType: typeof r.ingredients,
+          ingredientsIsArray: Array.isArray(r.ingredients),
+          ingredientsLength: Array.isArray(r.ingredients) ? r.ingredients.length : 'N/A',
+          firstTwoIngredients: Array.isArray(r.ingredients) ? r.ingredients.slice(0, 2) : r.ingredients,
+          ingredientsRaw: r.ingredients
+        }))
+      });
 
       // Extract ingredients from all recipes in the meal plan
       const ingredients: Array<{ name: string; amount: number; unit: string }> = [];
       
       recipes.forEach(recipe => {
+        console.log(`Processing recipe: ${recipe.name} (ID: ${recipe.id})`);
+        
         if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
-          recipe.ingredients.forEach((ingredient: any) => {
-            if (ingredient.name && ingredient.amount && ingredient.unit) {
-              ingredients.push({
-                name: String(ingredient.name),
+          console.log(`Recipe has ${recipe.ingredients.length} ingredients`);
+          
+          recipe.ingredients.forEach((ingredient: any, index: number) => {
+            console.log(`Processing ingredient ${index + 1}:`, {
+              ingredient,
+              types: {
+                name: typeof ingredient.name,
+                amount: typeof ingredient.amount,
+                unit: typeof ingredient.unit
+              },
+              values: {
+                name: ingredient.name,
+                amount: ingredient.amount,
+                unit: ingredient.unit
+              }
+            });
+            
+            // More robust validation
+            const hasName = ingredient.name && String(ingredient.name).trim().length > 0;
+            const hasAmount = ingredient.amount !== null && ingredient.amount !== undefined && !isNaN(Number(ingredient.amount)) && Number(ingredient.amount) > 0;
+            const hasUnit = ingredient.unit && String(ingredient.unit).trim().length > 0;
+            
+            if (hasName && hasAmount && hasUnit) {
+              const processedIngredient = {
+                name: String(ingredient.name).trim(),
                 amount: Number(ingredient.amount),
-                unit: String(ingredient.unit)
+                unit: String(ingredient.unit).trim()
+              };
+              
+              console.log(`✓ Adding ingredient:`, processedIngredient);
+              ingredients.push(processedIngredient);
+            } else {
+              console.warn(`✗ Skipping ingredient due to validation failures:`, {
+                ingredient,
+                validationResults: {
+                  hasName,
+                  hasAmount,
+                  hasUnit
+                },
+                reasons: {
+                  name: !hasName ? 'Missing or empty name' : 'OK',
+                  amount: !hasAmount ? 'Missing, null, undefined, NaN, or <= 0' : 'OK',
+                  unit: !hasUnit ? 'Missing or empty unit' : 'OK'
+                }
               });
             }
+          });
+        } else {
+          console.warn('Recipe has no ingredients or ingredients is not an array:', {
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            ingredientsType: typeof recipe.ingredients,
+            ingredientsValue: recipe.ingredients,
+            isNull: recipe.ingredients === null,
+            isUndefined: recipe.ingredients === undefined
           });
         }
       });
 
+      console.log('Final ingredient extraction summary:', {
+        totalRecipes: recipes.length,
+        totalIngredients: ingredients.length,
+        sampleIngredients: ingredients.slice(0, 3)
+      });
+
       if (ingredients.length === 0) {
+        console.error('No ingredients found - debugging info:', {
+          mealPlanId: meal_plan_id,
+          recipesCount: recipes.length,
+          mealPlanRecipesCount: mealPlanRecipesList.length,
+          recipeIds: recipeIds,
+          recipesWithIngredients: recipes.map(r => ({
+            id: r.id,
+            name: r.name,
+            hasIngredients: !!(r.ingredients && Array.isArray(r.ingredients) && r.ingredients.length > 0),
+            ingredientsCount: Array.isArray(r.ingredients) ? r.ingredients.length : 0
+          }))
+        });
+        
         return res.status(400).json({
           error: "No ingredients found",
           message: "This meal plan doesn't contain any ingredients to shop for"
@@ -1705,13 +1803,37 @@ export function registerRoutes(app: express.Express) {
       
       if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
         recipe.ingredients.forEach((ingredient: any) => {
+          console.log('Processing recipe ingredient:', {
+            ingredient,
+            types: {
+              name: typeof ingredient.name,
+              amount: typeof ingredient.amount,
+              unit: typeof ingredient.unit
+            }
+          });
+          
           if (ingredient.name && ingredient.amount && ingredient.unit) {
             ingredients.push({
               name: String(ingredient.name),
               amount: Number(ingredient.amount),
               unit: String(ingredient.unit)
             });
+          } else {
+            console.warn('Skipping recipe ingredient due to missing fields:', {
+              ingredient,
+              missing: {
+                name: !ingredient.name,
+                amount: !ingredient.amount,
+                unit: !ingredient.unit
+              }
+            });
           }
+        });
+      } else {
+        console.warn('Recipe has no ingredients or ingredients is not an array:', {
+          recipeId: recipe.id,
+          recipeName: recipe.name,
+          ingredients: recipe.ingredients
         });
       }
 
@@ -3789,46 +3911,83 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     }
   });
 
-  // Debug route to check Instacart API configuration
+  // Debug route to check meal plan contents
+  app.get("/api/debug/meal-plan/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const mealPlanId = parseInt(req.params.id);
+      
+      // Get meal plan
+      const mealPlan = await db.query.mealPlans.findFirst({
+        where: eq(mealPlans.id, mealPlanId)
+      });
+      
+      if (!mealPlan) {
+        return res.status(404).json({ error: "Meal plan not found" });
+      }
+      
+      if (mealPlan.user_id !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+      
+      // Get meal plan recipes
+      const mealPlanRecipesList = await db
+        .select()
+        .from(mealPlanRecipes)
+        .where(eq(mealPlanRecipes.meal_plan_id, mealPlanId));
+      
+      const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
+      
+      // Get actual recipes
+      let recipes: any[] = [];
+      if (recipeIds.length > 0) {
+        recipes = await db
+          .select()
+          .from(temporaryRecipes)
+          .where(inArray(temporaryRecipes.id, recipeIds));
+      }
+      
+      res.json({
+        mealPlan: {
+          id: mealPlan.id,
+          name: mealPlan.name,
+          user_id: mealPlan.user_id
+        },
+        mealPlanRecipes: mealPlanRecipesList,
+        recipeIds,
+        recipes: recipes.map(r => ({
+          id: r.id,
+          name: r.name,
+          ingredientsType: typeof r.ingredients,
+          ingredientsIsArray: Array.isArray(r.ingredients),
+          ingredientsCount: Array.isArray(r.ingredients) ? r.ingredients.length : 0,
+          ingredients: r.ingredients
+        }))
+      });
+    } catch (error) {
+      console.error('Error debugging meal plan:', error);
+      res.status(500).json({ error: 'Failed to debug meal plan' });
+    }
+  });
+
+  // Debug route to check Instacart configuration
   app.get("/api/debug/instacart-config", async (req: Request, res: Response) => {
     try {
-      const instacartKey = process.env.INSTACART_TEST_KEY;
+      const instacartConfigured = instacartService.isConfigured();
       
-      // Force service initialization to see what happens
-      let serviceInitError = null;
-      let serviceInitialized = false;
-                    let serviceStatus = null;
-       try {
-         console.log('Debug endpoint: Attempting to initialize Instacart service...');
-         const service = getInstacartService(); // Direct initialization call
-         serviceInitialized = true;
-         serviceStatus = service.getConfigStatus();
-         console.log('Debug endpoint: Service initialized successfully, status:', serviceStatus);
-       } catch (error: any) {
-         serviceInitError = error.message;
-         console.error('Debug endpoint: Service initialization failed:', error);
-       }
-
       res.json({
-        instacart_key_configured: !!instacartKey,
-        instacart_key_length: instacartKey?.length || 0,
-        instacart_key_prefix: instacartKey ? instacartKey.substring(0, 10) + '...' : 'Not configured',
+        instacart_api_key_configured: instacartConfigured,
+        instacart_test_key_present: !!process.env.INSTACART_TEST_KEY,
+        instacart_test_key_length: process.env.INSTACART_TEST_KEY?.length || 0,
+        instacart_api_key_dev_present: !!process.env.INSTACART_API_KEY_DEV,
+        instacart_api_key_prod_present: !!process.env.INSTACART_API_KEY_PROD,
         node_env: process.env.NODE_ENV,
-        repl_slug: process.env.REPL_SLUG,
-        repl_owner: process.env.REPL_OWNER,
-        base_url: process.env.NODE_ENV === 'production' 
-          ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.dev`
-          : 'http://localhost:3001',
-                 service_initialization: {
-           initialized: serviceInitialized,
-           error: serviceInitError,
-           timestamp: new Date().toISOString(),
-           status: serviceStatus
-         }
+        config_instacart_key_present: !!config.instacartApiKey,
+        config_instacart_key_length: config.instacartApiKey?.length || 0,
+        all_instacart_env_vars: Object.keys(process.env).filter(key => key.toLowerCase().includes('instacart'))
       });
     } catch (error) {
       console.error('Error checking Instacart config:', error);
-      res.status(500).json({ error: 'Failed to check Instacart config' });
+      res.status(500).json({ error: 'Failed to check Instacart configuration' });
     }
   });
 }

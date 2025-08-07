@@ -23,9 +23,9 @@ export function SubscriptionManager() {
   const [isCancelling, setIsCancelling] = useState(false);
   const queryClient = useQueryClient();
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = async (couponCode?: string) => {
     try {
-      await createCheckoutSession();
+      await createCheckoutSession(couponCode);
     } catch (error) {
       console.error('Stripe checkout error:', error);
       toast({
@@ -35,6 +35,9 @@ export function SubscriptionManager() {
       });
     }
   };
+
+  const handleResubscribe = () => handleUpgrade();
+  const handleUpgradeClick = () => handleUpgrade();
 
   const handleCancelConfirm = async () => {
     try {
@@ -115,9 +118,9 @@ export function SubscriptionManager() {
               Cancel Subscription
             </Button>
           ) : subscription?.isCancelled ? (
-            <Button onClick={handleUpgrade}>Resubscribe</Button>
+            <Button onClick={handleResubscribe}>Resubscribe</Button>
           ) : (
-            <Button onClick={handleUpgrade}>Upgrade to Premium</Button>
+            <Button onClick={handleUpgradeClick}>Upgrade to Premium</Button>
           )}
         </CardFooter>
       </Card>

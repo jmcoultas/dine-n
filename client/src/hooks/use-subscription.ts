@@ -43,14 +43,18 @@ export function useSubscription() {
   const createCheckoutSessionMutation = useMutation<
     CheckoutSessionResponse,
     Error,
-    void,
+    { couponCode?: string },
     unknown
   >({
-    mutationFn: async () => {
+    mutationFn: async ({ couponCode }) => {
       setIsLoading(true);
       try {
         const response = await fetch('/api/subscription/create-checkout', {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ couponCode }),
         });
 
         if (!response.ok) {
@@ -103,7 +107,7 @@ export function useSubscription() {
   return {
     subscription,
     isLoading: isLoading || isLoadingStatus,
-    createCheckoutSession: createCheckoutSessionMutation.mutateAsync,
+    createCheckoutSession: (couponCode?: string) => createCheckoutSessionMutation.mutateAsync({ couponCode }),
     cancelSubscription: cancelSubscriptionMutation.mutateAsync,
   };
 }

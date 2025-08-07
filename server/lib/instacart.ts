@@ -2,9 +2,9 @@ import { config } from '../config/environment';
 
 interface InstacartIngredient {
   name: string;
-  display_text: string;
-  measurements: Array<{
-    quantity: number;
+  display_text?: string;
+  line_item_measurements: Array<{
+    quantity: string;
     unit: string;
   }>;
 }
@@ -95,19 +95,48 @@ class InstacartService {
   }
 
   private normalizeIngredientName(name: string): string {
-    let normalized = name.toLowerCase()
-      // Remove common preparation adjectives
+    const original = name.toLowerCase();
+
+    // Remove parenthetical information first
+    const noParens = original.replace(/\([^)]*\)/g, '');
+
+    // Only strip comma tails if they look like preparation notes
+    const prepTailPatterns = /(,\s*(chopped|minced|diced|sliced|drained|rinsed|peeled|seeded|optional).*)$/i;
+    const safeComma = noParens.replace(prepTailPatterns, '');
+
+    // Remove common leading adjectives at the start only
+    let normalized = safeComma
       .replace(/^(fresh|dried|frozen|canned|diced|sliced|chopped|minced|ground|cooked|raw|organic|free-range|grass-fed|wild-caught)\s+/, '')
-      // Remove parenthetical information
-      .replace(/\([^)]*\)/g, '')
-      // Remove everything after commas (often additional descriptions)
-      .replace(/,.*$/, '')
-      // Remove brand names and common descriptors
-      .replace(/\b(brand|extra|super|premium|quality|grade|pure|natural|whole|lean|boneless|skinless)\b\s*/gi, '')
-      // Clean up multiple spaces
+      // Remove brand/descriptors but KEEP nouns after commas (we already handled comma tails)
+      .replace(/\b(brand|extra|super|premium|quality|grade|pure|natural|whole|lean)\b\s*/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
-    
+
+    // Fallback: if we ended up with empty or too-short string, try to extract a core noun phrase
+    if (!normalized || normalized.length < 3) {
+      const corePairs: Array<[RegExp, string]> = [
+        [/chicken\s*breast(s)?/i, 'chicken breast'],
+        [/chicken\s*thigh(s)?/i, 'chicken thighs'],
+        [/chicken/i, 'chicken'],
+        [/pork\s*shoulder/i, 'pork shoulder'],
+        [/pork\s*loin/i, 'pork loin'],
+        [/pork/i, 'pork'],
+        [/beef/i, 'beef'],
+        [/shrimp/i, 'shrimp'],
+        [/salmon/i, 'salmon'],
+        [/turkey/i, 'turkey']
+      ];
+      for (const [re, target] of corePairs) {
+        if (re.test(noParens)) {
+          normalized = target;
+          break;
+        }
+      }
+    }
+
+    // Clean again
+    normalized = (normalized || '').replace(/\s+/g, ' ').trim();
+
     // Apply common ingredient name mappings for better matching
     const ingredientMappings: Record<string, string> = {
       // Proteins
@@ -345,14 +374,16 @@ class InstacartService {
       }
     });
 
-    return Object.values(aggregated).map(item => ({
-      name: item.normalizedName,
-      display_text: item.displayText,
-      measurements: [{
-        quantity: item.amount,
-        unit: item.unit
-      }]
-    }));
+    return Object.values(aggregated)
+      .filter(item => item.normalizedName && item.normalizedName.trim().length > 0)
+      .map(item => ({
+        name: item.normalizedName,
+        display_text: item.displayText,
+        line_item_measurements: [{
+          quantity: item.amount.toString(),
+          unit: item.unit
+        }]
+      }));
   }
 
   private generateDisplayText(name: string, amount: number, unit: string): string {
@@ -384,10 +415,28 @@ class InstacartService {
                        ingredient.unit.trim().length > 0;
         
         if (!isValid) {
-          console.warn('Skipping invalid ingredient:', ingredient);
+          console.warn('Skipping invalid ingredient:', {
+            ingredient,
+            reasons: {
+              noName: !ingredient.name,
+              emptyName: ingredient.name && ingredient.name.trim().length === 0,
+              noAmount: !ingredient.amount,
+              zeroAmount: ingredient.amount && ingredient.amount <= 0,
+              noUnit: !ingredient.unit,
+              emptyUnit: ingredient.unit && ingredient.unit.trim().length === 0
+            }
+          });
         }
         
         return isValid;
+      });
+      
+      console.log('Ingredient validation summary:', {
+        originalCount: ingredients.length,
+        validCount: validIngredients.length,
+        invalidCount: ingredients.length - validIngredients.length,
+        sampleOriginalIngredients: ingredients.slice(0, 3),
+        sampleValidIngredients: validIngredients.slice(0, 3)
       });
       
       if (validIngredients.length === 0) {
@@ -416,6 +465,15 @@ class InstacartService {
       
       // Log the exact request structure for debugging
       console.log('Full Instacart request body:', JSON.stringify(requestBody, null, 2));
+      
+      // Log a sample line item to verify format
+      if (requestBody.line_items.length > 0) {
+        console.log('Sample line item format:', {
+          sampleItem: requestBody.line_items[0],
+          hasLineItemMeasurements: 'line_item_measurements' in requestBody.line_items[0],
+          measurementFormat: requestBody.line_items[0].line_item_measurements?.[0]
+        });
+      }
 
       const response = await fetch(`${this.baseUrl}/idp/v1/products/products_link`, {
         method: 'POST',
@@ -472,7 +530,47 @@ class InstacartService {
       if (!this.apiKey) {
         throw new Error('Instacart API key is not configured. Please set INSTACART_TEST_KEY environment variable.');
       }
-      const aggregatedIngredients = this.aggregateIngredients(ingredients);
+      
+      // Filter and validate ingredients
+      const validIngredients = ingredients.filter(ingredient => {
+        const isValid = ingredient.name && 
+                       ingredient.name.trim().length > 0 && 
+                       ingredient.amount && 
+                       ingredient.amount > 0 && 
+                       ingredient.unit && 
+                       ingredient.unit.trim().length > 0;
+        
+        if (!isValid) {
+          console.warn('Skipping invalid ingredient in recipe:', {
+            ingredient,
+            reasons: {
+              noName: !ingredient.name,
+              emptyName: ingredient.name && ingredient.name.trim().length === 0,
+              noAmount: !ingredient.amount,
+              zeroAmount: ingredient.amount && ingredient.amount <= 0,
+              noUnit: !ingredient.unit,
+              emptyUnit: ingredient.unit && ingredient.unit.trim().length === 0
+            }
+          });
+        }
+        
+        return isValid;
+      });
+      
+      console.log('Recipe ingredient validation summary:', {
+        recipeName,
+        originalCount: ingredients.length,
+        validCount: validIngredients.length,
+        invalidCount: ingredients.length - validIngredients.length,
+        sampleOriginalIngredients: ingredients.slice(0, 3),
+        sampleValidIngredients: validIngredients.slice(0, 3)
+      });
+      
+      if (validIngredients.length === 0) {
+        throw new Error('No valid ingredients found to create recipe page');
+      }
+      
+      const aggregatedIngredients = this.aggregateIngredients(validIngredients);
       
       const requestBody: InstacartRecipeRequest = {
         title: recipeName,
