@@ -571,8 +571,12 @@ export const stripeService = {
               case 'customer.subscription.updated': {
                 const subscription = event.data.object as Stripe.Subscription;
                 const customerId = subscription.customer as string;
+                const eventType = event.type;
+                const eventCreated = event.created;
 
-                console.log('Processing subscription update:', {
+                console.log('Processing subscription event:', {
+                  eventType,
+                  eventCreated: new Date(eventCreated * 1000).toISOString(),
                   subscriptionId: subscription.id,
                   customerId,
                   status: subscription.status,
@@ -605,15 +609,74 @@ export const stripeService = {
                   }
                 };
 
-                // Always set status to active for valid subscription states
-                const status = subscription.status === 'active' || subscription.status === 'trialing' 
+                // Determine new status
+                const newStatus = subscription.status === 'active' || subscription.status === 'trialing' 
                   ? 'active' as const 
                   : getSubscriptionStatus(subscription.status);
 
+                // Smart update logic to prevent race conditions
+                const currentStatus = customer.subscription_status;
+                const currentTier = customer.subscription_tier;
+
+                // Prevent downgrading from active to inactive due to race conditions
+                const shouldUpdate = (() => {
+                  // Always allow upgrades to active status
+                  if (newStatus === 'active') {
+                    console.log('✅ Allowing upgrade to active status');
+                    return true;
+                  }
+                  
+                  // Allow downgrades to cancelled (legitimate cancellations)
+                  if (newStatus === 'cancelled') {
+                    console.log('✅ Allowing downgrade to cancelled status');
+                    return true;
+                  }
+                  
+                  // For inactive status, be more careful
+                  if (newStatus === 'inactive') {
+                    // If current status is already active, this might be a race condition
+                    if (currentStatus === 'active') {
+                      console.log('⚠️ Preventing downgrade from active to inactive (possible race condition)', {
+                        eventType,
+                        subscriptionStatus: subscription.status,
+                        currentStatus,
+                        eventAge: Date.now() - (eventCreated * 1000)
+                      });
+                      
+                      // Only allow if the subscription is genuinely in an incomplete state
+                      // and this is a very recent event (within 5 minutes)
+                      const eventAge = Date.now() - (eventCreated * 1000);
+                      const isRecentEvent = eventAge < 5 * 60 * 1000; // 5 minutes
+                      const isIncompleteStatus = ['incomplete', 'incomplete_expired'].includes(subscription.status);
+                      
+                      if (eventType === 'customer.subscription.created' && isIncompleteStatus && !isRecentEvent) {
+                        console.log('🚫 Blocking late incomplete subscription.created event');
+                        return false;
+                      }
+                    }
+                    
+                    console.log('✅ Allowing update to inactive status');
+                    return true;
+                  }
+                  
+                  return true;
+                })();
+
+                if (!shouldUpdate) {
+                  console.log('⏭️ Skipping subscription update due to race condition prevention');
+                  return { 
+                    success: true, 
+                    skipped: true,
+                    reason: 'race_condition_prevention',
+                    user: customer,
+                    metadata: subscription.metadata
+                  };
+                }
+
                 const updateData = {
                   stripe_subscription_id: subscription.id,
-                  subscription_status: status,
-                  subscription_tier: status === 'active' ? 'premium' as const : 'free' as const,
+                  subscription_status: newStatus,
+                  subscription_tier: newStatus === 'active' ? 'premium' as const : 'free' as const,
                   subscription_end_date: safeTimestampToDate(subscription.current_period_end, `subscription ${subscription.id} update`)
                 };
 
@@ -627,10 +690,13 @@ export const stripeService = {
                   throw new Error(`Failed to update user ${customer.id} subscription status`);
                 }
 
-                console.log('Successfully updated subscription status:', {
+                console.log('✅ Successfully updated subscription status:', {
                   userId: customer.id,
-                  status,
-                  tier: updateData.subscription_tier,
+                  eventType,
+                  oldStatus: currentStatus,
+                  newStatus,
+                  oldTier: currentTier,
+                  newTier: updateData.subscription_tier,
                   endDate: updateData.subscription_end_date
                 });
 
