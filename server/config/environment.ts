@@ -12,6 +12,7 @@ interface EnvironmentConfig {
   instacartApiKey: string;
   stripeSecretKey: string;
   stripePriceId?: string;
+  stripeProductId: string;
   
   // Firebase
   firebaseProjectId: string;
@@ -56,6 +57,7 @@ export const config: EnvironmentConfig = {
   instacartApiKey: process.env.INSTACART_TEST_KEY || getEnvironmentVariable('INSTACART_API_KEY_DEV', 'INSTACART_API_KEY_PROD'),
   stripeSecretKey: getEnvironmentVariable('STRIPE_SECRET_KEY_DEV', 'STRIPE_SECRET_KEY_PROD'),
   stripePriceId: getEnvironmentVariable('STRIPE_PRICE_ID_DEV', 'STRIPE_PRICE_ID_PROD'),
+  stripeProductId: getEnvironmentVariable('STRIPE_PRODUCT_ID_DEV', 'STRIPE_PRODUCT_ID_PROD'),
   
   // Firebase
   firebaseProjectId: getEnvironmentVariable('FIREBASE_PROJECT_ID_DEV', 'FIREBASE_PROJECT_ID_PROD'),

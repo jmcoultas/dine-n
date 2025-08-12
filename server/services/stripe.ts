@@ -8,7 +8,7 @@ import { config } from '../config/environment';
 // Configuration for subscription pricing
 const SUBSCRIPTION_CONFIG = {
   // Option 1: Use a specific product/price from Stripe Dashboard
-  PRODUCT_ID: 'prod_SncR91waZDrn6E',
+  PRODUCT_ID: config.stripeProductId, // Environment-based product ID
   PRICE_ID: config.stripePriceId || null, // Set this to use a specific price ID
   
   // Option 2: Fallback to dynamic price_data (current approach)

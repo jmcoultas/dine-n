@@ -21,7 +21,21 @@ const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
 });
 
-const productId = process.argv[2] || 'prod_SncR91waZDrn6E';
+// Use environment-based product ID with fallback
+function getProductId() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const key = isProduction ? 'STRIPE_PRODUCT_ID_PROD' : 'STRIPE_PRODUCT_ID_DEV';
+  const envProductId = process.env[key];
+  
+  if (envProductId) {
+    return envProductId;
+  }
+  
+  // Fallback to command line argument or default
+  return process.argv[2] || process.env.STRIPE_PRODUCT_ID || 'prod_SncR91waZDrn6E';
+}
+
+const productId = getProductId();
 
 async function checkProduct() {
   console.log(`🔍 Checking product: ${productId}\n`);
