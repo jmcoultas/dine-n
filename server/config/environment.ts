@@ -55,7 +55,7 @@ export const config: EnvironmentConfig = {
   openaiApiKey: getEnvironmentVariable('OPENAI_API_KEY_DEV', 'OPENAI_API_KEY_PROD'),
   instacartApiKey: process.env.INSTACART_TEST_KEY || getEnvironmentVariable('INSTACART_API_KEY_DEV', 'INSTACART_API_KEY_PROD'),
   stripeSecretKey: getEnvironmentVariable('STRIPE_SECRET_KEY_DEV', 'STRIPE_SECRET_KEY_PROD'),
-  stripePriceId: process.env.STRIPE_PRICE_ID,
+  stripePriceId: getEnvironmentVariable('STRIPE_PRICE_ID_DEV', 'STRIPE_PRICE_ID_PROD'),
   
   // Firebase
   firebaseProjectId: getEnvironmentVariable('FIREBASE_PROJECT_ID_DEV', 'FIREBASE_PROJECT_ID_PROD'),

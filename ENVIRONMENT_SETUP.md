@@ -29,6 +29,7 @@ FIREBASE_PROJECT_ID_DEV=your_firebase_dev_project_id
 FIREBASE_CLIENT_EMAIL_DEV=your_firebase_dev_client_email
 FIREBASE_PRIVATE_KEY_DEV=your_firebase_dev_private_key
 STRIPE_SECRET_KEY_DEV=sk_test_your_stripe_dev_key
+STRIPE_PRICE_ID_DEV=price_your_dev_price_id
 CLOUDINARY_CLOUD_NAME_DEV=your_cloudinary_dev_cloud_name
 CLOUDINARY_API_KEY_DEV=your_cloudinary_dev_api_key
 CLOUDINARY_API_SECRET_DEV=your_cloudinary_dev_api_secret
@@ -45,6 +46,7 @@ FIREBASE_PROJECT_ID_PROD=your_firebase_prod_project_id
 FIREBASE_CLIENT_EMAIL_PROD=your_firebase_prod_client_email
 FIREBASE_PRIVATE_KEY_PROD=your_firebase_prod_private_key
 STRIPE_SECRET_KEY_PROD=sk_live_your_stripe_prod_key
+STRIPE_PRICE_ID_PROD=price_your_prod_price_id
 CLOUDINARY_CLOUD_NAME_PROD=your_cloudinary_prod_cloud_name
 CLOUDINARY_API_KEY_PROD=your_cloudinary_prod_api_key
 CLOUDINARY_API_SECRET_PROD=your_cloudinary_prod_api_secret
@@ -57,6 +59,7 @@ Your existing environment variables will continue to work as fallbacks:
 - `OPENAI_API_KEY`
 - `INSTACART_TEST_KEY` 
 - `STRIPE_SECRET_KEY`
+- `STRIPE_PRICE_ID`
 - `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 
