@@ -13,6 +13,7 @@ interface EnvironmentConfig {
   stripeSecretKey: string;
   stripePriceId?: string;
   stripeProductId: string;
+  stripeWebhookSecret: string;
   
   // Firebase
   firebaseProjectId: string;
@@ -58,6 +59,7 @@ export const config: EnvironmentConfig = {
   stripeSecretKey: getEnvironmentVariable('STRIPE_SECRET_KEY_DEV', 'STRIPE_SECRET_KEY_PROD'),
   stripePriceId: getEnvironmentVariable('STRIPE_PRICE_ID_DEV', 'STRIPE_PRICE_ID_PROD'),
   stripeProductId: getEnvironmentVariable('STRIPE_PRODUCT_ID_DEV', 'STRIPE_PRODUCT_ID_PROD'),
+  stripeWebhookSecret: getEnvironmentVariable('STRIPE_WEBHOOK_SECRET_DEV', 'STRIPE_WEBHOOK_SECRET_PROD'),
   
   // Firebase
   firebaseProjectId: getEnvironmentVariable('FIREBASE_PROJECT_ID_DEV', 'FIREBASE_PROJECT_ID_PROD'),

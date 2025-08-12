@@ -320,14 +320,14 @@ export const stripeService = {
     let event: Stripe.Event;
 
     try {
-      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      if (!config.stripeWebhookSecret) {
         throw new Error('Missing Stripe webhook secret');
       }
 
       event = stripe.webhooks.constructEvent(
         rawBody,
         signature,
-        process.env.STRIPE_WEBHOOK_SECRET
+        config.stripeWebhookSecret
       );
 
       console.log('🔔 Processing webhook event:', {

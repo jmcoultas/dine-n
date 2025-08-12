@@ -65,9 +65,9 @@ export async function registerWebhookHandler(req: Request, res: Response) {
     hasSignature: !!signature,
     signatureLength: signature ? signature.length : 0,
     signatureStart: signature ? (typeof signature === 'string' ? signature.substring(0, 50) + '...' : String(signature)) : 'none',
-    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-    webhookSecretLength: process.env.STRIPE_WEBHOOK_SECRET?.length || 0,
-    webhookSecretStart: process.env.STRIPE_WEBHOOK_SECRET ? process.env.STRIPE_WEBHOOK_SECRET.substring(0, 20) + '...' : 'none',
+    hasWebhookSecret: !!config.stripeWebhookSecret,
+    webhookSecretLength: config.stripeWebhookSecret?.length || 0,
+    webhookSecretStart: config.stripeWebhookSecret ? config.stripeWebhookSecret.substring(0, 20) + '...' : 'none',
     bodyType: typeof rawBody,
     bodyLength: rawBody?.length || 0,
     isBuffer: Buffer.isBuffer(rawBody),
@@ -88,7 +88,7 @@ export async function registerWebhookHandler(req: Request, res: Response) {
     });
   }
 
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  if (!config.stripeWebhookSecret) {
     console.error('❌ STRIPE_WEBHOOK_SECRET environment variable not set');
     return res.status(500).json({
       error: 'Webhook secret not configured',
@@ -3867,12 +3867,14 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
   // Debug route to test webhook secret configuration
   app.get("/api/debug/webhook-secret-test", async (req: Request, res: Response) => {
     try {
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      const webhookSecret = config.stripeWebhookSecret;
       
       if (!webhookSecret) {
         return res.json({
           error: 'STRIPE_WEBHOOK_SECRET not configured',
-          configured: false
+          configured: false,
+          environment: config.nodeEnv,
+          expected_vars: config.isProduction ? 'STRIPE_WEBHOOK_SECRET_PROD' : 'STRIPE_WEBHOOK_SECRET_DEV'
         });
       }
 
@@ -3885,6 +3887,8 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         secret_length: webhookSecret.length,
         secret_prefix: webhookSecret.substring(0, 10) + '...',
         expected_format: 'whsec_...',
+        environment: config.nodeEnv,
+        using_var: config.isProduction ? 'STRIPE_WEBHOOK_SECRET_PROD' : 'STRIPE_WEBHOOK_SECRET_DEV',
         instructions: isValidFormat ? 
           'Webhook secret appears to be correctly formatted' : 
           'Webhook secret should start with "whsec_". Please check your Stripe dashboard for the correct webhook secret.'
@@ -3899,10 +3903,11 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
   app.get("/api/debug/webhook-config", async (req: Request, res: Response) => {
     try {
       res.json({
-        webhook_secret_configured: !!process.env.STRIPE_WEBHOOK_SECRET,
-        webhook_secret_length: process.env.STRIPE_WEBHOOK_SECRET?.length || 0,
-        stripe_secret_configured: !!process.env.STRIPE_SECRET_KEY,
+        webhook_secret_configured: !!config.stripeWebhookSecret,
+        webhook_secret_length: config.stripeWebhookSecret?.length || 0,
+        stripe_secret_configured: !!config.stripeSecretKey,
         stripe_publishable_configured: !!process.env.STRIPE_PUBLISHABLE_KEY,
+        environment: config.nodeEnv,
         base_url: config.baseUrl
       });
     } catch (error) {
