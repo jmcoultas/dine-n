@@ -103,6 +103,8 @@ export default function IngredientRecipes() {
     dietary: [],
     allergies: []
   });
+  const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
+  const [generatingRecipeTitle, setGeneratingRecipeTitle] = useState<string | null>(null);
 
   // Initialize ingredients from localStorage when user loads
   useEffect(() => {
@@ -308,95 +310,110 @@ export default function IngredientRecipes() {
       }
     }
 
-    // Check if user has saved preferences
-    if (userPreferences && (userPreferences.dietary?.length > 0 || userPreferences.allergies?.length > 0)) {
-      // Use saved preferences directly, similar to weekly meal planner
-      console.log('Using saved user preferences for dietary restrictions:', userPreferences.dietary);
-      console.log('Using saved user preferences for allergies:', userPreferences.allergies);
-      
-      setTempPreferences({
-        dietary: userPreferences.dietary || [],
-        allergies: userPreferences.allergies || []
-      });
-      
-      // Generate suggestions directly without showing modal
-      await handleGenerateWithPreferences({
-        dietary: userPreferences.dietary || [],
-        allergies: userPreferences.allergies || []
-      });
-    } else {
-      // No saved preferences, show the modal to set them
-      setTempPreferences({
-        dietary: [],
-        allergies: []
-      });
-      setShowPreferences(true);
+    // Set loading state immediately
+    setIsGeneratingIdeas(true);
+
+    try {
+      // Check if user has saved preferences
+      if (userPreferences && (userPreferences.dietary?.length > 0 || userPreferences.allergies?.length > 0)) {
+        // Use saved preferences directly, similar to weekly meal planner
+        console.log('Using saved user preferences for dietary restrictions:', userPreferences.dietary);
+        console.log('Using saved user preferences for allergies:', userPreferences.allergies);
+        
+        setTempPreferences({
+          dietary: userPreferences.dietary || [],
+          allergies: userPreferences.allergies || []
+        });
+        
+        // Generate suggestions directly without showing modal
+        await handleGenerateWithPreferences({
+          dietary: userPreferences.dietary || [],
+          allergies: userPreferences.allergies || []
+        });
+      } else {
+        // No saved preferences, show the modal to set them
+        setTempPreferences({
+          dietary: [],
+          allergies: []
+        });
+        setShowPreferences(true);
+        // Note: loading state will be cleared when modal is submitted or closed
+      }
+    } catch (error) {
+      console.error('Error in handleGenerateSuggestions:', error);
+      setIsGeneratingIdeas(false);
     }
   };
 
   const handleGenerateWithPreferences = async (preferences: { dietary: string[]; allergies: string[] }) => {
-    // Save the provided preferences
-    setTempPreferences(preferences);
-    setShowPreferences(false);
-    
-    // Ensure allergies from user profile are included, even if not selected in the modal
-    const combinedAllergies = [...preferences.allergies];
-    
-    // Add any allergies from the user profile that aren't already in the preferences
-    if (userPreferences?.allergies && userPreferences.allergies.length > 0) {
-      console.log('Checking for additional allergies from user profile:', userPreferences.allergies);
+    try {
+      // Save the provided preferences
+      setTempPreferences(preferences);
+      setShowPreferences(false);
       
-      // Add any missing allergies from user profile
-      userPreferences.allergies.forEach(allergy => {
-        if (!combinedAllergies.includes(allergy)) {
-          console.log(`Adding allergy from user profile: ${allergy}`);
-          combinedAllergies.push(allergy);
-        }
-      });
-    }
-    
-    // Update tempPreferences with the combined allergies
-    setTempPreferences(prev => ({
-      ...prev,
-      allergies: combinedAllergies
-    }));
-    
-    console.log('Final allergies used for recipe generation:', combinedAllergies);
-    
-    // Save the dietary and allergy preferences to user account
-    if (user) {
-      try {
-        // Filter to only include valid values from the schema enums
-        const dietaryOptions = PreferenceSchema.shape.dietary.element.enum;
-        const allergiesOptions = PreferenceSchema.shape.allergies.element.enum;
+      // Ensure allergies from user profile are included, even if not selected in the modal
+      const combinedAllergies = [...preferences.allergies];
+      
+      // Add any allergies from the user profile that aren't already in the preferences
+      if (userPreferences?.allergies && userPreferences.allergies.length > 0) {
+        console.log('Checking for additional allergies from user profile:', userPreferences.allergies);
         
-        const validatedDietary = preferences.dietary.filter(item => 
-          Object.values(dietaryOptions).includes(item as any)
-        );
-        
-        const validatedAllergies = combinedAllergies.filter(item => 
-          Object.values(allergiesOptions).includes(item as any)
-        );
-        
-        await savePreferencesToAccount({
-          dietary: validatedDietary as any,
-          allergies: validatedAllergies as any
+        // Add any missing allergies from user profile
+        userPreferences.allergies.forEach(allergy => {
+          if (!combinedAllergies.includes(allergy)) {
+            console.log(`Adding allergy from user profile: ${allergy}`);
+            combinedAllergies.push(allergy);
+          }
         });
-      } catch (error) {
-        console.error('Error validating preferences:', error);
-        // Continue with generation even if preference saving fails
       }
+      
+      // Update tempPreferences with the combined allergies
+      setTempPreferences(prev => ({
+        ...prev,
+        allergies: combinedAllergies
+      }));
+      
+      console.log('Final allergies used for recipe generation:', combinedAllergies);
+      
+      // Save the dietary and allergy preferences to user account
+      if (user) {
+        try {
+          // Filter to only include valid values from the schema enums
+          const dietaryOptions = PreferenceSchema.shape.dietary.element.enum;
+          const allergiesOptions = PreferenceSchema.shape.allergies.element.enum;
+          
+          const validatedDietary = preferences.dietary.filter(item => 
+            Object.values(dietaryOptions).includes(item as any)
+          );
+          
+          const validatedAllergies = combinedAllergies.filter(item => 
+            Object.values(allergiesOptions).includes(item as any)
+          );
+          
+          await savePreferencesToAccount({
+            dietary: validatedDietary as any,
+            allergies: validatedAllergies as any
+          });
+        } catch (error) {
+          console.error('Error validating preferences:', error);
+          // Continue with generation even if preference saving fails
+        }
+      }
+      
+      setSuggestions([]);
+      if (user) {
+        const storageKey = `${STORAGE_KEY}-${user.id}`;
+        localStorage.removeItem(storageKey);
+      }
+      queryClient.setQueryData(['ingredient-recipe', user?.id], null);
+      
+      // Generate suggestions with the updated preferences including all allergens
+      await generateSuggestionsMutation.mutateAsync();
+    } catch (error) {
+      console.error('Error in handleGenerateWithPreferences:', error);
+      setIsGeneratingIdeas(false);
+      throw error;
     }
-    
-    setSuggestions([]);
-    if (user) {
-      const storageKey = `${STORAGE_KEY}-${user.id}`;
-      localStorage.removeItem(storageKey);
-    }
-    queryClient.setQueryData(['ingredient-recipe', user?.id], null);
-    
-    // Generate suggestions with the updated preferences including all allergens
-    await generateSuggestionsMutation.mutateAsync();
   };
 
   const generateSuggestionsMutation = useMutation({
@@ -458,6 +475,7 @@ export default function IngredientRecipes() {
     onSuccess: (data) => {
       console.log('Setting suggestions state with:', data);
       setSuggestions(data);
+      setIsGeneratingIdeas(false);
       
       // Store in local storage
       if (user) {
@@ -488,6 +506,7 @@ export default function IngredientRecipes() {
     },
     onError: (error: Error) => {
       console.error('Error in generateSuggestionsMutation:', error);
+      setIsGeneratingIdeas(false);
       toast({
         title: "Error",
         description: error.message,
@@ -536,12 +555,15 @@ export default function IngredientRecipes() {
         queryClient.setQueryData(['ingredient-recipe', user?.id], recipe);
         console.log('Recipe saved to query cache');
         queryClient.invalidateQueries({ queryKey: ['user'] });
+        setGeneratingRecipeTitle(null);
       } catch (error) {
         console.error('Error saving recipe:', error);
+        setGeneratingRecipeTitle(null);
       }
     },
     onError: (error: Error) => {
       console.error('Recipe generation error:', error);
+      setGeneratingRecipeTitle(null);
       if (error.message === "FREE_PLAN_LIMIT_REACHED") {
         setFeatureContext("recipe generation");
         setShowSubscriptionModal(true);
@@ -576,6 +598,9 @@ export default function IngredientRecipes() {
       setShowSubscriptionModal(true);
       return;
     }
+    
+    // Set loading state for this specific recipe
+    setGeneratingRecipeTitle(title);
     
     try {
       // Clear any existing recipe first
@@ -637,6 +662,14 @@ export default function IngredientRecipes() {
     }
   };
 
+  const handlePreferencesModalChange = (open: boolean) => {
+    setShowPreferences(open);
+    // If modal is being closed and we're still in loading state, clear it
+    if (!open && isGeneratingIdeas) {
+      setIsGeneratingIdeas(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="text-center mb-8">
@@ -670,7 +703,7 @@ export default function IngredientRecipes() {
       />
       <RecipePreferencesModal
         open={showPreferences}
-        onOpenChange={setShowPreferences}
+        onOpenChange={handlePreferencesModalChange}
         userPreferences={userPreferences}
         onGenerate={handleGenerateWithPreferences}
         isGenerating={generateSuggestionsMutation.isPending}
@@ -765,38 +798,53 @@ export default function IngredientRecipes() {
 
                 {/* Recipe suggestion cards */}
                 <div className="grid gap-4 md:grid-cols-3">
-                  {suggestions.map((title, index) => (
-                    <Card
-                      key={index}
-                      data-suggestion-card={`suggestion-${index}`}
-                      className={cn(
-                        "cursor-pointer transition-all border-2 hover:shadow-md",
-                        generateRecipeMutation.isPending ? "opacity-50 pointer-events-none" : "",
-                        user?.subscription_tier !== "premium" && remainingGenerations <= 0
-                          ? "opacity-50 pointer-events-none"
-                          : "hover:border-primary/50 hover:bg-secondary/10"
-                      )}
-                      onClick={() => handleSelectRecipe(title)}
-                    >
-                      <CardContent className="p-6">
-                        <h3 className="font-medium text-lg mb-2">{title}</h3>
-                        <div className="flex justify-between items-center mt-4">
-                          <p className="text-sm text-muted-foreground">
-                            Click to generate full recipe
-                          </p>
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            className="h-5 w-5 text-primary" 
-                            fill="none" 
-                            viewBox="0 0 24 24" 
-                            stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {suggestions.map((title, index) => {
+                    const isGeneratingThisRecipe = generatingRecipeTitle === title;
+                    return (
+                      <Card
+                        key={index}
+                        data-suggestion-card={`suggestion-${index}`}
+                        className={cn(
+                          "cursor-pointer transition-all border-2 hover:shadow-md",
+                          generateRecipeMutation.isPending || isGeneratingThisRecipe ? "opacity-50 pointer-events-none" : "",
+                          user?.subscription_tier !== "premium" && remainingGenerations <= 0
+                            ? "opacity-50 pointer-events-none"
+                            : "hover:border-primary/50 hover:bg-secondary/10"
+                        )}
+                        onClick={() => handleSelectRecipe(title)}
+                      >
+                        <CardContent className="p-6">
+                          <h3 className="font-medium text-lg mb-2">{title}</h3>
+                          <div className="flex justify-between items-center mt-4">
+                            {isGeneratingThisRecipe ? (
+                              <>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Generating recipe...
+                                </div>
+                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm text-muted-foreground">
+                                  Click to generate full recipe
+                                </p>
+                                <svg 
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  className="h-5 w-5 text-primary" 
+                                  fill="none" 
+                                  viewBox="0 0 24 24" 
+                                  stroke="currentColor"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -1024,10 +1072,10 @@ export default function IngredientRecipes() {
             <div className="flex gap-2">
               <Button
                 onClick={handleGenerateSuggestions}
-                disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
+                disabled={ingredients.length === 0 || isGeneratingIdeas || generateSuggestionsMutation.isPending}
                 className="flex-1"
               >
-                {generateSuggestionsMutation.isPending ? (
+                {(isGeneratingIdeas || generateSuggestionsMutation.isPending) ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Generating Ideas...
@@ -1042,7 +1090,7 @@ export default function IngredientRecipes() {
                 <Button
                   variant="outline"
                   onClick={() => setShowPreferences(true)}
-                  disabled={ingredients.length === 0 || generateSuggestionsMutation.isPending}
+                  disabled={ingredients.length === 0 || isGeneratingIdeas || generateSuggestionsMutation.isPending}
                   className="shrink-0"
                   title="Override your saved preferences for this generation"
                 >

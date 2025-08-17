@@ -61,7 +61,7 @@ DATABASE_URL_PROD=your_prod_database_url
 
 Your existing environment variables will continue to work as fallbacks:
 - `OPENAI_API_KEY`
-- `INSTACART_TEST_KEY` 
+- `INSTACART_TEST_KEY` (⚠️ **Important**: This will only work if `INSTACART_API_KEY_DEV`/`INSTACART_API_KEY_PROD` are not set)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PRICE_ID`
 - `STRIPE_PRODUCT_ID`
@@ -69,10 +69,13 @@ Your existing environment variables will continue to work as fallbacks:
 - `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 
-You can gradually migrate by:
-1. Adding the new `_DEV` and `_PROD` versions
-2. Testing that everything works
-3. Optionally removing the old variables once you're confident
+**⚠️ Critical for Instacart**: The system now prioritizes environment-specific keys over `INSTACART_TEST_KEY`. In production, you **must** set `INSTACART_API_KEY_PROD` with a production-approved API key.
+
+Migration steps:
+1. **Immediately**: Set `INSTACART_API_KEY_PROD` in your production environment secrets
+2. Add other `_DEV` and `_PROD` versions as needed
+3. Test that everything works
+4. Optionally remove the old variables once you're confident
 
 ## How the Environment Detection Works
 
@@ -119,4 +122,26 @@ If a `_DEV` or `_PROD` variable is missing, the system will automatically fall b
 ### Environment Detection Issues
 Verify that `NODE_ENV` is being set correctly:
 - Development: `NODE_ENV` should be undefined or not equal to 'production'
-- Production: `NODE_ENV` should be 'production' 
+- Production: `NODE_ENV` should be 'production'
+
+### Instacart API "Not Authorized" Error
+If you're getting authorization errors with Instacart in production:
+
+1. **Check Environment Variable Priority**: The system now uses this order:
+   - Production: `INSTACART_API_KEY_PROD` → `INSTACART_TEST_KEY` (fallback)
+   - Development: `INSTACART_API_KEY_DEV` → `INSTACART_TEST_KEY` (fallback)
+
+2. **Verify Production API Key**: Ensure your `INSTACART_API_KEY_PROD` is:
+   - Set in your production environment secrets
+   - Approved by Instacart for the production endpoint (`https://connect.instacart.com`)
+   - Not a development/test key
+
+3. **Check Server Logs**: Look for these log messages on startup:
+   ```
+   Environment variable selection: INSTACART_API_KEY_DEV/INSTACART_API_KEY_PROD -> using INSTACART_API_KEY_PROD (production: true)
+   ```
+
+4. **Test Configuration**: Use the test script to verify your setup:
+   ```bash
+   node test_environment_config.js
+   ``` 

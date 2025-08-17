@@ -66,14 +66,15 @@ class InstacartService {
     console.log('InstacartService constructor - NODE_ENV:', process.env.NODE_ENV);
     
     if (!this.apiKey) {
-      console.error('INSTACART_TEST_KEY environment variable is missing');
-      console.error('Available environment variables:', Object.keys(process.env).filter(key => key.includes('INSTACART')));
+      const expectedKey = config.isProduction ? 'INSTACART_API_KEY_PROD' : 'INSTACART_API_KEY_DEV';
+      console.error(`Missing Instacart API key. Expected environment variable: ${expectedKey}`);
+      console.error('Available INSTACART environment variables:', Object.keys(process.env).filter(key => key.includes('INSTACART')));
       
       // For development, we'll allow the service to be created but methods will fail gracefully
-      if (process.env.NODE_ENV !== 'production') {
+      if (!config.isProduction) {
         console.warn('Running in development mode without Instacart API key - API calls will fail');
       } else {
-        throw new Error('INSTACART_TEST_KEY environment variable is required');
+        throw new Error(`Missing required environment variable: ${expectedKey}`);
       }
     }
   }

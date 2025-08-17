@@ -30,15 +30,23 @@ interface EnvironmentConfig {
 }
 
 function getEnvironmentVariable(devKey: string, prodKey: string): string {
-  const isProduction = process.env.NODE_ENV === 'production';
+  // Use the same production detection logic as the main config
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === 'true';
   const key = isProduction ? prodKey : devKey;
   const value = process.env[key];
+  
+  // Log which key is being used for debugging
+  console.log(`Environment variable selection: ${devKey}/${prodKey} -> using ${key} (production: ${isProduction})`);
   
   if (!value) {
     console.warn(`Missing environment variable: ${key}`);
     // Fallback to the current single key if dev/prod specific keys don't exist
     const fallbackKey = devKey.replace('_DEV', '').replace('_TEST', '');
-    return process.env[fallbackKey] || '';
+    const fallbackValue = process.env[fallbackKey];
+    if (fallbackValue) {
+      console.log(`Using fallback key: ${fallbackKey}`);
+    }
+    return fallbackValue || '';
   }
   
   return value;
@@ -55,7 +63,7 @@ export const config: EnvironmentConfig = {
   
   // API Keys - automatically select dev or prod versions
   openaiApiKey: getEnvironmentVariable('OPENAI_API_KEY_DEV', 'OPENAI_API_KEY_PROD'),
-  instacartApiKey: process.env.INSTACART_TEST_KEY || getEnvironmentVariable('INSTACART_API_KEY_DEV', 'INSTACART_API_KEY_PROD'),
+  instacartApiKey: getEnvironmentVariable('INSTACART_API_KEY_DEV', 'INSTACART_API_KEY_PROD') || process.env.INSTACART_TEST_KEY || '',
   stripeSecretKey: getEnvironmentVariable('STRIPE_SECRET_KEY_DEV', 'STRIPE_SECRET_KEY_PROD'),
   stripePriceId: getEnvironmentVariable('STRIPE_PRICE_ID_DEV', 'STRIPE_PRICE_ID_PROD'),
   stripeProductId: getEnvironmentVariable('STRIPE_PRODUCT_ID_DEV', 'STRIPE_PRODUCT_ID_PROD'),
