@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 import { TermsAndConditions } from '@/components/TermsAndConditions';
 import { PrivacyPolicy } from '@/components/PrivacyPolicy';
+import { ClarityService } from "./lib/clarity";
 
 import Home from "./pages/Home";
 import Recipes from "./pages/Recipes";
@@ -148,6 +149,11 @@ function Router() {
   const [isLoadingComplete, setIsLoadingComplete] = useState(false);
   const [, setLocation] = useLocation();
   
+  // Initialize Microsoft Clarity when the app starts
+  useEffect(() => {
+    ClarityService.init();
+  }, []);
+  
   // Check for the registration completed flag and handle post-registration state
   useEffect(() => {
     if (localStorage.getItem('registrationCompleted') === 'true') {
@@ -186,6 +192,20 @@ function Router() {
         is_partial_registration: user.is_partial_registration,
         currentPath: window.location.pathname 
       });
+      
+      // Identify user in Clarity for analytics
+      ClarityService.identify(
+        user.id.toString(),
+        undefined, // sessionId (auto-generated)
+        undefined, // pageId (auto-generated)
+        user.email || `User ${user.id}` // friendlyName
+      );
+      
+      // Set user tags for better analytics segmentation
+      ClarityService.setTag('user_type', user.is_partial_registration ? 'partial' : 'complete');
+      if (user.email) {
+        ClarityService.setTag('has_email', 'true');
+      }
       
       if (user.is_partial_registration === true && window.location.pathname !== '/onboarding') {
         console.log("User has partial registration flag, redirecting to onboarding");

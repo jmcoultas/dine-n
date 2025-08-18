@@ -8,7 +8,8 @@ import { InstacartCTA } from "@/components/InstacartCTA";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/components/ui/use-toast";
 import { createInstacartRecipePage } from "@/lib/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ClarityService } from "@/lib/clarity";
 
 interface RecipeIngredient {
   name: string;
@@ -112,6 +113,18 @@ export default function RecipeView() {
     enabled: numericId !== null // Only run query if we have a valid numeric ID
   });
 
+  // Track recipe view in Clarity
+  useEffect(() => {
+    if (recipe && numericId) {
+      ClarityService.event('recipe_viewed');
+      ClarityService.setTag('recipe_id', numericId.toString());
+      ClarityService.setTag('recipe_title', recipe.name);
+      if (recipe.tags && recipe.tags.length > 0) {
+        ClarityService.setTag('recipe_category', recipe.tags[0]);
+      }
+    }
+  }, [recipe, numericId]);
+
   const handleShopWithInstacart = async () => {
     if (!recipe?.id) {
       toast({
@@ -130,6 +143,10 @@ export default function RecipeView() {
     
     setIsCreatingInstacartPage(true);
     try {
+      // Track Instacart integration usage
+      ClarityService.event('instacart_recipe_created');
+      ClarityService.setTag('instacart_recipe_id', recipe.id.toString());
+      
       const result = await createInstacartRecipePage(recipe.id);
       
       // Open Instacart recipe page in a new tab

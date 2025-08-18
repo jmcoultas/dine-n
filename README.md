@@ -128,6 +128,141 @@ Dine-N is a full-stack AI-powered meal planning application that transforms the 
 
 ---
 
+## 🎨 Design System & Brand
+
+### **Brand Identity**
+
+Dine-N features a warm, professional design that reflects the joy and comfort of home cooking. Our design system emphasizes accessibility, usability, and visual harmony across all platforms.
+
+#### **Primary Brand Colors**
+- **Primary Orange**: `hsl(24, 80%, 50%)` - A warm, inviting orange that represents the warmth of home cooking
+- **Professional Variant**: Clean, modern aesthetic suitable for both casual and professional use
+
+#### **Theme System**
+
+**Light Theme**
+- Background: `hsl(0, 0%, 100%)` - Pure white for clean, bright interface
+- Foreground: `hsl(222.2, 84%, 4.9%)` - Deep navy for excellent readability
+- Muted: `hsl(210, 40%, 96.1%)` - Subtle gray for secondary content
+- Accent: `hsl(210, 40%, 96.1%)` - Consistent with muted for cohesive design
+
+**Dark Theme**
+- Background: `hsl(222.2, 84%, 4.9%)` - Rich dark navy for comfortable night viewing
+- Foreground: `hsl(210, 40%, 98%)` - Near white for optimal contrast
+- Muted: `hsl(217.2, 32.6%, 17.5%)` - Darker gray for subtle elements
+- Accent: `hsl(217.2, 32.6%, 17.5%)` - Consistent accent color
+
+#### **Meal Type Color System**
+Our recipe and meal planning interfaces use contextual colors to enhance user experience:
+
+- **🌅 Breakfast**: Orange/Amber gradient (`from-orange-50 to-amber-50`)
+- **🌞 Lunch**: Green/Emerald gradient (`from-green-50 to-emerald-50`)
+- **🌙 Dinner**: Blue/Indigo gradient (`from-blue-50 to-indigo-50`)
+- **🍎 Snacks**: Purple/Pink gradient (`from-purple-50 to-pink-50`)
+- **🍰 Desserts**: Pink/Rose gradient (`from-pink-50 to-rose-50`)
+
+#### **Dietary Restriction Colors**
+Visual indicators for dietary preferences and restrictions:
+
+- **Vegetarian**: `bg-green-500` - Fresh green
+- **Vegan**: `bg-emerald-500` - Rich emerald
+- **Gluten-Free**: `bg-yellow-500` - Bright yellow
+- **Dairy-Free**: `bg-blue-500` - Cool blue
+- **Keto**: `bg-purple-500` - Royal purple
+- **Paleo**: `bg-orange-500` - Natural orange
+- **Low-Carb**: `bg-red-500` - Vibrant red
+
+#### **Partner Integration Colors**
+- **Instacart Integration**:
+  - Dark Green: `#003D29` - Brand-consistent dark green
+  - Light Cream: `#FAF1E5` - Warm, inviting background
+  - Stroke Light: `#EFE9E1` - Subtle border color
+  - Orange: `#FF7009` - Action color
+  - Green: `#0AAD0A` - Success/confirmation color
+
+### **Typography & Spacing**
+
+#### **Font System**
+- **Primary Font**: System font stack with custom sans-serif fallbacks
+- **Font Loading**: CSS variable `var(--font-sans)` for consistent typography
+- **Responsive Typography**: Tailwind's responsive type scale
+
+#### **Border Radius System**
+- **Large**: `var(--radius)` - 12px (0.75rem) for cards and major components
+- **Medium**: `calc(var(--radius) - 2px)` - 10px for buttons and form elements
+- **Small**: `calc(var(--radius) - 4px)` - 8px for small UI elements
+
+### **Animation & Motion**
+
+#### **Custom Animations**
+- **Fade In**: Smooth 0.5s fade with subtle upward movement
+- **Slide Animations**: 
+  - Left: 0.6s ease-out with 0.2s delay
+  - Up: 0.6s ease-out with 0.4s delay  
+  - Right: 0.6s ease-out with 0.6s delay
+- **Progressive Loading**: Staggered animations for engaging user experience
+
+#### **Interactive States**
+- Hover effects with smooth transitions
+- Focus states for accessibility compliance
+- Loading states with custom animations (including Snake game loader)
+
+### **Component Design Patterns**
+
+#### **Card System**
+- Consistent card styling with `hsl(var(--card))` background
+- Subtle shadows and borders for depth
+- Responsive padding and margins
+
+#### **Button Variants**
+- Primary: Brand orange with white text
+- Secondary: Muted background with dark text
+- Destructive: Red for dangerous actions
+- Ghost: Transparent with hover states
+
+#### **Form Elements**
+- Consistent input styling with `hsl(var(--input))` background
+- Focus rings using `hsl(var(--ring))` color
+- Error states with destructive color scheme
+
+### **Accessibility Features**
+
+#### **Color Contrast**
+- WCAG AA compliant color combinations
+- High contrast ratios between text and backgrounds
+- Alternative text for all images and icons
+
+#### **Dark Mode Support**
+- System preference detection
+- Manual toggle capability
+- Consistent experience across themes
+- Reduced eye strain in low-light conditions
+
+#### **Responsive Design**
+- Mobile-first approach
+- Touch-friendly interface elements
+- Progressive Web App capabilities
+- Cross-platform consistency
+
+### **Design Tools & Implementation**
+
+#### **CSS Framework**
+- **Tailwind CSS**: Utility-first CSS framework
+- **CSS Custom Properties**: Theme-aware color system
+- **HSL Color Space**: Consistent color manipulation
+
+#### **Component Library**
+- **Radix UI**: Accessible component primitives
+- **shadcn/ui**: Pre-styled component system
+- **Custom Components**: Recipe cards, meal planners, grocery lists
+
+#### **Development Workflow**
+- **Storybook**: Component documentation and testing
+- **Theme Configuration**: JSON-based theme management
+- **Hot Reload**: Real-time design iteration
+
+---
+
 ## 🚀 Getting Started
 
 ### **Prerequisites**
