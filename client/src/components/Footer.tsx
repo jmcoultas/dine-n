@@ -1,8 +1,13 @@
 import { Link } from "wouter";
-import { ChefHat, Twitter, Instagram, Facebook, Github } from "lucide-react";
+import { ChefHat, Twitter, Instagram, Facebook, Github, Cookie } from "lucide-react";
 import { logoUrl } from "@/lib/constants";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CookieSettings } from "./CookieSettings";
 
 export default function Footer() {
+  const [showCookieSettings, setShowCookieSettings] = useState(false);
+
   return (
     <footer className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mt-auto">
       <div className="container px-4 py-8">
@@ -32,6 +37,13 @@ export default function Footer() {
             <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Privacy Policy
             </Link>
+            <button 
+              onClick={() => setShowCookieSettings(true)}
+              className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+            >
+              <Cookie className="h-3 w-3" />
+              Cookie Settings
+            </button>
           </div>
 
           {/* Social Links */}
@@ -85,6 +97,16 @@ export default function Footer() {
           </p>
         </div>
       </div>
+
+      {/* Cookie Settings Dialog */}
+      <Dialog open={showCookieSettings} onOpenChange={setShowCookieSettings}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Cookie Preferences</DialogTitle>
+          </DialogHeader>
+          <CookieSettings onClose={() => setShowCookieSettings(false)} />
+        </DialogContent>
+      </Dialog>
     </footer>
   );
 } 

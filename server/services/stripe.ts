@@ -643,14 +643,24 @@ export const stripeService = {
                         eventAge: Date.now() - (eventCreated * 1000)
                       });
                       
-                      // Only allow if the subscription is genuinely in an incomplete state
-                      // and this is a very recent event (within 5 minutes)
                       const eventAge = Date.now() - (eventCreated * 1000);
                       const isRecentEvent = eventAge < 5 * 60 * 1000; // 5 minutes
                       const isIncompleteStatus = ['incomplete', 'incomplete_expired'].includes(subscription.status);
                       
-                      if (eventType === 'customer.subscription.created' && isIncompleteStatus && !isRecentEvent) {
-                        console.log('🚫 Blocking late incomplete subscription.created event');
+                      // CRITICAL FIX: Block ALL incomplete subscription.created events when user is already active
+                      // This prevents race conditions where checkout.session.completed already activated the user
+                      if (eventType === 'customer.subscription.created' && isIncompleteStatus) {
+                        console.log('🚫 Blocking incomplete subscription.created event - user already active from checkout', {
+                          subscriptionStatus: subscription.status,
+                          eventAge: Math.round(eventAge / 1000) + 's',
+                          reason: 'race_condition_prevention'
+                        });
+                        return false;
+                      }
+                      
+                      // For other downgrades from active to inactive, only allow if very recent and legitimate
+                      if (!isRecentEvent) {
+                        console.log('🚫 Blocking old downgrade event');
                         return false;
                       }
                     }
@@ -679,6 +689,35 @@ export const stripeService = {
                   subscription_tier: newStatus === 'active' ? 'premium' as const : 'free' as const,
                   subscription_end_date: safeTimestampToDate(subscription.current_period_end, `subscription ${subscription.id} update`)
                 };
+
+                // Double-check current status before update to prevent race conditions
+                const [currentUser] = await tx
+                  .select()
+                  .from(users)
+                  .where(eq(users.id, customer.id))
+                  .limit(1);
+
+                if (currentUser && currentUser.subscription_status === 'active' && newStatus === 'inactive') {
+                  console.log('🛡️ Final race condition check: User is still active, re-evaluating update decision', {
+                    userId: customer.id,
+                    currentStatus: currentUser.subscription_status,
+                    attemptedNewStatus: newStatus,
+                    eventType,
+                    subscriptionStatus: subscription.status
+                  });
+                  
+                  // If it's an incomplete subscription creation, absolutely block it
+                  if (eventType === 'customer.subscription.created' && ['incomplete', 'incomplete_expired'].includes(subscription.status)) {
+                    console.log('🚫 Final block: Preventing incomplete subscription from overriding active status');
+                    return { 
+                      success: true, 
+                      skipped: true,
+                      reason: 'final_race_condition_check',
+                      user: currentUser,
+                      metadata: subscription.metadata
+                    };
+                  }
+                }
 
                 const [updatedUser] = await tx
                   .update(users)

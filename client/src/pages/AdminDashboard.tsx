@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getFeedbackStats, type FeedbackStats, type RecentFeedback } from '@/lib/api';
 import { useUser } from '@/hooks/use-user';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,8 @@ import {
   XCircle,
   Clock,
   Database,
-  Settings
+  Settings,
+  Crown
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 
@@ -105,6 +107,11 @@ export default function AdminDashboard() {
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [feedbackData, setFeedbackData] = useState<{
+    stats: FeedbackStats;
+    recent_feedback: RecentFeedback[];
+    generated_at: string;
+  } | null>(null);
 
   // Check admin status on component mount
   useEffect(() => {
@@ -123,6 +130,7 @@ export default function AdminDashboard() {
         
         if (data.isAdmin) {
           loadDashboardData();
+          loadFeedbackData();
         }
       } else {
         setIsAdmin(false);
@@ -152,6 +160,20 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: "Failed to load dashboard data",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const loadFeedbackData = async () => {
+    try {
+      const data = await getFeedbackStats();
+      setFeedbackData(data);
+    } catch (error) {
+      console.error('Error loading feedback data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load feedback statistics",
         variant: "destructive"
       });
     }
@@ -281,6 +303,41 @@ export default function AdminDashboard() {
     }
   };
 
+  const togglePremiumStatus = async (userId: number) => {
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/toggle-premium`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: "Success",
+          description: result.message,
+          variant: "default"
+        });
+        
+        // Refresh user details and dashboard data
+        await getUserDetails(userId);
+        await loadDashboardData();
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to toggle premium status');
+      }
+    } catch (error) {
+      console.error('Error toggling premium status:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to toggle premium status",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -344,6 +401,7 @@ export default function AdminDashboard() {
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="search">User Search</TabsTrigger>
+            <TabsTrigger value="feedback">Feedback</TabsTrigger>
             <TabsTrigger value="issues">Known Issues</TabsTrigger>
           </TabsList>
 
@@ -417,7 +475,8 @@ export default function AdminDashboard() {
                             <div>
                               <p className="font-medium">{user.email}</p>
                               <p className="text-sm text-muted-foreground">
-                                ID: {user.id} • {new Date(user.created_at).toLocaleDateString()}
+                                ID: {user.id} • {new Date(user.created_at).toLocaleDateString()} • {user.subscription_tier}
+                                {user.subscription_tier === 'premium' && <Crown className="inline h-3 w-3 ml-1 text-amber-600" />}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -505,6 +564,7 @@ export default function AdminDashboard() {
                           <p className="text-sm text-muted-foreground">
                             {user.name} • ID: {user.id} • {user.subscription_tier}
                             {user.is_admin && <Badge className="ml-2">Admin</Badge>}
+                            {user.subscription_tier === 'premium' && <Badge className="ml-2 bg-amber-100 text-amber-800"><Crown className="h-3 w-3 mr-1" />Premium</Badge>}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -545,7 +605,9 @@ export default function AdminDashboard() {
                         <p><strong>Email:</strong> {selectedUser.user.email}</p>
                         <p><strong>Name:</strong> {selectedUser.user.name || 'Not set'}</p>
                         <p><strong>Created:</strong> {new Date(selectedUser.user.created_at).toLocaleString()}</p>
-                        <p><strong>Subscription:</strong> {selectedUser.user.subscription_tier}</p>
+                        <p><strong>Subscription:</strong> {selectedUser.user.subscription_tier} 
+                          {selectedUser.user.subscription_tier === 'premium' && <Crown className="inline h-4 w-4 ml-1 text-amber-600" />}
+                        </p>
                         <p><strong>Admin:</strong> {selectedUser.user.is_admin ? 'Yes' : 'No'}</p>
                       </div>
                     </div>
@@ -661,6 +723,149 @@ export default function AdminDashboard() {
                         {selectedUser.user.is_admin ? 'Remove Admin' : 'Make Admin'}
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant={selectedUser.user.subscription_tier === 'premium' ? "destructive" : "default"}
+                      onClick={() => togglePremiumStatus(selectedUser.user.id)}
+                      disabled={actionLoading}
+                    >
+                      <Crown className="h-4 w-4 mr-2" />
+                      {selectedUser.user.subscription_tier === 'premium' ? 'Remove Premium' : 'Grant Premium'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="feedback" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Meal Plan Feedback</h2>
+                <p className="text-muted-foreground">User satisfaction metrics and feedback</p>
+              </div>
+              <Button onClick={loadFeedbackData} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
+
+            {feedbackData && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Feedback</CardTitle>
+                      <Database className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{feedbackData.stats.total_feedback}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {feedbackData.stats.feedback_last_7_days} in last 7 days
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Satisfaction Rate</CardTitle>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{feedbackData.stats.satisfaction_rate}%</div>
+                      <p className="text-xs text-muted-foreground">
+                        Love it + It's OK responses
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Love It</CardTitle>
+                      <span className="text-2xl">😍</span>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">{feedbackData.stats.love_it_count}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {feedbackData.stats.total_feedback > 0 ? 
+                          ((feedbackData.stats.love_it_count / feedbackData.stats.total_feedback) * 100).toFixed(1)
+                          : 0}% of total
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Not Great</CardTitle>
+                      <span className="text-2xl">😢</span>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-red-600">{feedbackData.stats.not_great_count}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {feedbackData.stats.total_feedback > 0 ? 
+                          ((feedbackData.stats.not_great_count / feedbackData.stats.total_feedback) * 100).toFixed(1)
+                          : 0}% of total
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Feedback</CardTitle>
+                    <CardDescription>Latest user feedback on meal plans</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {feedbackData.recent_feedback.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-8">No feedback received yet</p>
+                      ) : (
+                        feedbackData.recent_feedback.map((feedback) => (
+                          <div key={feedback.id} className="flex items-start space-x-4 p-4 border rounded-lg">
+                            <div className="text-2xl">
+                              {feedback.rating === 'love_it' ? '😍' : 
+                               feedback.rating === 'its_ok' ? '😐' : '😢'}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant={
+                                    feedback.rating === 'love_it' ? 'default' :
+                                    feedback.rating === 'its_ok' ? 'secondary' : 'destructive'
+                                  }>
+                                    {feedback.rating === 'love_it' ? 'Love it' :
+                                     feedback.rating === 'its_ok' ? "It's OK" : 'Not great'}
+                                  </Badge>
+                                  <span className="text-sm text-muted-foreground">
+                                    {feedback.user_email}
+                                  </span>
+                                </div>
+                                <span className="text-sm text-muted-foreground">
+                                  {new Date(feedback.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                              {feedback.feedback_text && (
+                                <p className="mt-2 text-sm text-gray-600">{feedback.feedback_text}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Meal Plan ID: {feedback.meal_plan_id}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {!feedbackData && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading feedback statistics...</p>
                   </div>
                 </CardContent>
               </Card>

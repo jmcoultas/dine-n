@@ -13,7 +13,7 @@ import MissingRecipeCard from "@/components/MissingRecipeCard";
 import GroceryList from "@/components/GroceryList";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { MealPlanLoadingState } from "@/components/MealPlanLoadingState";
-import { createMealPlan, createGroceryList, generateMealPlan, getTemporaryRecipes, getCurrentMealPlan } from "@/lib/api";
+import { createMealPlan, createGroceryList, generateMealPlan, getTemporaryRecipes, getCurrentMealPlan, submitMealPlanFeedback, shouldShowSurvey, checkMealPlanFeedback } from "@/lib/api";
 import { downloadCalendarEvent } from "@/lib/calendar";
 import type { Recipe, ChefPreferences, CreateMealPlanInput } from "@/lib/types";
 import type { Preferences, MealPlan } from "@db/schema";
@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import MealPlanFeedbackSurvey from "@/components/MealPlanFeedbackSurvey";
 
 type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -204,6 +205,63 @@ export default function MealPlan() {
     meatTypes: []
   });
   const [missingMeals, setMissingMeals] = useState<Array<{ day: number; meal: string }>>([]);
+  const [showFeedbackSurvey, setShowFeedbackSurvey] = useState(false);
+  const [surveyMealPlanId, setSurveyMealPlanId] = useState<number | null>(null);
+
+  // Debug logging for survey state
+  console.log('🔍 MealPlan Debug - Survey state:', { showFeedbackSurvey, surveyMealPlanId });
+
+  // Check if survey should be shown when meal plan data loads
+  const [surveyChecked, setSurveyChecked] = useState(false);
+  
+  useEffect(() => {
+    const checkSurveyEligibility = async () => {
+      if (!currentMealPlan?.id || currentMealPlan.is_expired) {
+        console.log('🔍 Survey Debug - No current meal plan or expired, skipping survey');
+        return;
+      }
+
+      // Check if meal plan was created recently (within last 24 hours)
+      const mealPlanAge = Date.now() - new Date(currentMealPlan.created_at).getTime();
+      const isRecent = mealPlanAge < 24 * 60 * 60 * 1000; // 24 hours
+
+      if (!isRecent) {
+        console.log('🔍 Survey Debug - Meal plan too old, skipping survey');
+        return;
+      }
+
+      try {
+        console.log('🔍 Survey Debug - Starting survey check for meal plan ID:', currentMealPlan.id);
+        
+        console.log('🔍 Survey Debug - Checking if should show survey...');
+        const shouldShow = await shouldShowSurvey();
+        console.log('🔍 Survey Debug - Should show survey:', shouldShow);
+        
+        console.log('🔍 Survey Debug - Checking if feedback already exists...');
+        const hasFeedback = await checkMealPlanFeedback(currentMealPlan.id);
+        console.log('🔍 Survey Debug - Has feedback:', hasFeedback);
+        
+        // Only show if user hasn't given feedback in 7 days and hasn't given feedback for this meal plan
+        if (shouldShow && !hasFeedback) {
+          console.log('✅ Survey Debug - Showing survey for meal plan:', currentMealPlan.id);
+          // Wait 3 seconds to let user see their meal plan first
+          setTimeout(() => {
+            setSurveyMealPlanId(currentMealPlan.id);
+            setShowFeedbackSurvey(true);
+          }, 3000);
+        } else {
+          console.log('❌ Survey Debug - Not showing survey. shouldShow:', shouldShow, 'hasFeedback:', hasFeedback);
+        }
+      } catch (error) {
+        console.error('❌ Survey Debug - Error checking survey eligibility:', error);
+      }
+    };
+
+    if (currentMealPlan && !surveyChecked && !showFeedbackSurvey && !surveyMealPlanId) {
+      setSurveyChecked(true);
+      checkSurveyEligibility();
+    }
+  }, [currentMealPlan, surveyChecked, showFeedbackSurvey, surveyMealPlanId]);
 
   // Load preferences from user account when user data is loaded
   useEffect(() => {
@@ -332,9 +390,8 @@ export default function MealPlan() {
       };
 
       console.log('Creating meal plan with input:', JSON.stringify(mealPlanInput, null, 2));
-
+      
       const createdMealPlan = await createMealPlan(mealPlanInput);
-      console.log('Meal plan created:', JSON.stringify(createdMealPlan, null, 2));
       
       // Refresh the meal plan data
       await queryClient.invalidateQueries({ queryKey: ['current-meal-plan'] });
@@ -344,6 +401,8 @@ export default function MealPlan() {
         title: "Success",
         description: `Meal plan generated successfully. Valid for ${requestedDays} days.`
       });
+
+
 
     } catch (error) {
       console.error('Error in meal plan generation:', error);
@@ -358,6 +417,26 @@ export default function MealPlan() {
       // Always clear loading state when done
       setIsGenerating(false);
     }
+  };
+
+  // Handle feedback survey submission
+  const handleFeedbackSubmit = async (rating: string) => {
+    if (!surveyMealPlanId) return;
+    
+    try {
+      await submitMealPlanFeedback(surveyMealPlanId, rating);
+      setShowFeedbackSurvey(false);
+      setSurveyMealPlanId(null);
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      throw error; // Re-throw so the component can show an error toast
+    }
+  };
+
+  // Handle feedback survey close
+  const handleFeedbackClose = () => {
+    setShowFeedbackSurvey(false);
+    setSurveyMealPlanId(null);
   };
 
   // Function to regenerate a missing recipe
@@ -871,6 +950,16 @@ export default function MealPlan() {
       )}
       
       <FloatingCalendarButton />
+      
+      {/* Meal Plan Feedback Survey */}
+      {surveyMealPlanId && (
+        <MealPlanFeedbackSurvey
+          mealPlanId={surveyMealPlanId}
+          isVisible={showFeedbackSurvey}
+          onClose={handleFeedbackClose}
+          onSubmit={handleFeedbackSubmit}
+        />
+      )}
     </div>
   );
 }

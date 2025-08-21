@@ -149,13 +149,23 @@ export default function RecipeView() {
       
       const result = await createInstacartRecipePage(recipe.id);
       
-      // Open Instacart recipe page in a new tab
-      window.open(result.instacart_url, '_blank');
+      // Try to open in new tab (works on most browsers/devices)
+      const newWindow = window.open(result.instacart_url, '_blank');
       
+      // Always show toast with clickable link as fallback
       toast({
-        title: "Success!",
-        description: `Created Instacart recipe page for ${result.recipe_name} with ${result.ingredient_count} ingredients`,
+        title: "Instacart Recipe Ready!",
+        description: `Recipe page created with ${result.ingredient_count} ingredients. Tap anywhere to open Instacart.`,
+        variant: "default",
+        onClick: () => {
+          console.log('🔗 TOAST CLICKED: Opening Instacart URL');
+          window.open(result.instacart_url, '_blank');
+        }
       });
+      
+      // If window didn't open, the user can click the URL in the toast
+      console.log('Instacart URL created:', result.instacart_url);
+      
     } catch (error) {
       console.error('Error creating Instacart recipe page:', {
         error,

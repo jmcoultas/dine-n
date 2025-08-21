@@ -3,7 +3,7 @@ import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "driz
 import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
 import { instacartService, getInstacartService } from "./lib/instacart";
 import { config } from "./config/environment";
-import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { requireAdmin, checkAdminStatus } from "./middleware/admin";
@@ -3258,6 +3258,141 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     }
   });
 
+  // Meal Plan Feedback Routes
+  
+  // Submit feedback for a meal plan
+  app.post('/api/meal-plan-feedback', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const { meal_plan_id, rating, feedback_text } = req.body;
+
+      // Validate input
+      if (!meal_plan_id || !rating) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: meal_plan_id and rating"
+        });
+      }
+
+      // Validate rating value
+      if (!['love_it', 'its_ok', 'not_great'].includes(rating)) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Invalid rating value. Must be 'love_it', 'its_ok', or 'not_great'"
+        });
+      }
+
+      // Verify the meal plan belongs to the user
+      const [mealPlan] = await db
+        .select()
+        .from(mealPlans)
+        .where(and(eq(mealPlans.id, meal_plan_id), eq(mealPlans.user_id, user.id)))
+        .limit(1);
+
+      if (!mealPlan) {
+        return res.status(404).json({
+          error: "Not Found",
+          message: "Meal plan not found or does not belong to user"
+        });
+      }
+
+      // Check if user has already provided feedback for this meal plan
+      const [existingFeedback] = await db
+        .select()
+        .from(mealPlanFeedback)
+        .where(and(eq(mealPlanFeedback.meal_plan_id, meal_plan_id), eq(mealPlanFeedback.user_id, user.id)))
+        .limit(1);
+
+      if (existingFeedback) {
+        return res.status(409).json({
+          error: "Conflict",
+          message: "Feedback already submitted for this meal plan"
+        });
+      }
+
+      // Insert feedback
+      const [feedback] = await db
+        .insert(mealPlanFeedback)
+        .values({
+          user_id: user.id,
+          meal_plan_id,
+          rating: rating as "love_it" | "its_ok" | "not_great",
+          feedback_text: feedback_text || null,
+        })
+        .returning();
+
+      console.log(`User ${user.id} submitted feedback for meal plan ${meal_plan_id}: ${rating}`);
+
+      res.json({
+        success: true,
+        feedback
+      });
+
+    } catch (error) {
+      console.error('Error submitting meal plan feedback:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to submit feedback"
+      });
+    }
+  });
+
+  // Check if user has already submitted feedback for a meal plan (to avoid survey fatigue)
+  app.get('/api/meal-plan-feedback/check/:meal_plan_id', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const { meal_plan_id } = req.params;
+
+      const [existingFeedback] = await db
+        .select()
+        .from(mealPlanFeedback)
+        .where(and(eq(mealPlanFeedback.meal_plan_id, parseInt(meal_plan_id)), eq(mealPlanFeedback.user_id, user.id)))
+        .limit(1);
+
+      res.json({
+        has_feedback: !!existingFeedback
+      });
+
+    } catch (error) {
+      console.error('Error checking meal plan feedback:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to check feedback status"
+      });
+    }
+  });
+
+  // Check if user should see survey (frequency limit - once per 7 days)
+  app.get('/api/meal-plan-feedback/should-show-survey', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+
+      // Check if user has submitted feedback in the last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const [recentFeedback] = await db
+        .select()
+        .from(mealPlanFeedback)
+        .where(and(
+          eq(mealPlanFeedback.user_id, user.id),
+          gt(mealPlanFeedback.created_at, sevenDaysAgo)
+        ))
+        .limit(1);
+
+      res.json({
+        should_show: !recentFeedback
+      });
+
+    } catch (error) {
+      console.error('Error checking survey frequency:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to check survey frequency"
+      });
+    }
+  });
+
   // Admin Routes - User Management and Troubleshooting
   
   // Get current user's admin status
@@ -3334,6 +3469,57 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     } catch (error) {
       console.error('Error fetching admin dashboard data:', error);
       res.status(500).json({ error: 'Failed to fetch dashboard data' });
+    }
+  });
+
+  // Admin - Get meal plan feedback statistics
+  app.get('/api/admin/feedback-stats', requireAdmin, async (req, res) => {
+    try {
+      // Get overall feedback statistics
+      const feedbackStats = await db
+        .select({
+          total_feedback: sql<number>`count(*)`,
+          love_it_count: sql<number>`count(*) filter (where rating = 'love_it')`,
+          its_ok_count: sql<number>`count(*) filter (where rating = 'its_ok')`,
+          not_great_count: sql<number>`count(*) filter (where rating = 'not_great')`,
+          feedback_last_7_days: sql<number>`count(*) filter (where created_at > now() - interval '7 days')`,
+          feedback_last_30_days: sql<number>`count(*) filter (where created_at > now() - interval '30 days')`
+        })
+        .from(mealPlanFeedback);
+
+      // Get recent feedback with user details
+      const recentFeedback = await db
+        .select({
+          id: mealPlanFeedback.id,
+          rating: mealPlanFeedback.rating,
+          feedback_text: mealPlanFeedback.feedback_text,
+          created_at: mealPlanFeedback.created_at,
+          user_email: users.email,
+          user_id: users.id,
+          meal_plan_id: mealPlanFeedback.meal_plan_id
+        })
+        .from(mealPlanFeedback)
+        .innerJoin(users, eq(mealPlanFeedback.user_id, users.id))
+        .orderBy(desc(mealPlanFeedback.created_at))
+        .limit(50);
+
+      // Calculate satisfaction rate
+      const stats = feedbackStats[0];
+      const satisfactionRate = stats.total_feedback > 0 
+        ? ((stats.love_it_count + stats.its_ok_count) / stats.total_feedback * 100).toFixed(1)
+        : 0;
+
+      res.json({
+        stats: {
+          ...stats,
+          satisfaction_rate: parseFloat(satisfactionRate as string)
+        },
+        recent_feedback: recentFeedback,
+        generated_at: new Date()
+      });
+    } catch (error) {
+      console.error('Error fetching feedback stats:', error);
+      res.status(500).json({ error: 'Failed to fetch feedback statistics' });
     }
   });
 
@@ -3638,6 +3824,57 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     } catch (error) {
       console.error('Error toggling admin status:', error);
       res.status(500).json({ error: 'Failed to toggle admin status' });
+    }
+  });
+
+  // Admin - Toggle premium status
+  app.post('/api/admin/users/:userId/toggle-premium', requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      const [user] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          subscription_tier: users.subscription_tier,
+          subscription_status: users.subscription_status
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const isPremium = user.subscription_tier === 'premium';
+      const newTier = isPremium ? 'free' : 'premium';
+      const newStatus = isPremium ? 'inactive' : 'active';
+      
+      await db
+        .update(users)
+        .set({ 
+          subscription_tier: newTier,
+          subscription_status: newStatus,
+          subscription_end_date: isPremium ? null : null // Keep null for admin-granted premium
+        })
+        .where(eq(users.id, userId));
+
+      console.log(`Admin ${req.user?.email} ${isPremium ? 'removed' : 'granted'} premium access to user ${user.email} (ID: ${userId})`);
+      
+      res.json({
+        success: true,
+        message: `User ${isPremium ? 'removed from' : 'granted'} premium access`,
+        new_tier: newTier,
+        new_status: newStatus
+      });
+    } catch (error) {
+      console.error('Error toggling premium status:', error);
+      res.status(500).json({ error: 'Failed to toggle premium status' });
     }
   });
 

@@ -119,9 +119,71 @@ export function PrivacyPolicy() {
                   </div>
                 </section>
 
+                {/* Microsoft Clarity Analytics */}
+                <section>
+                  <h2 className="text-xl font-semibold mb-4">6. Microsoft Clarity Analytics</h2>
+                  <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                    <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">📊 User Experience Analytics</h3>
+                    <p className="text-blue-700 dark:text-blue-300">
+                      We use Microsoft Clarity to better understand how you interact with our website and improve your experience.
+                    </p>
+                  </div>
+                  
+                  <p className="mb-4">
+                    We partner with Microsoft Clarity and Microsoft Advertising to capture how you use and interact with our website through behavioral metrics, heatmaps, and session replay to improve and market our products/services. Website usage data is captured using first and third-party cookies and other tracking technologies to determine the popularity of products/services and online activity. Additionally, we use this information for site optimization, fraud/security purposes, and advertising.
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-semibold mb-2">What Microsoft Clarity Collects:</h3>
+                      <ul className="list-disc pl-6 space-y-1">
+                        <li>Mouse movements, clicks, and scrolling behavior</li>
+                        <li>Page views and navigation patterns</li>
+                        <li>Form interactions (without capturing sensitive data)</li>
+                        <li>Device and browser information</li>
+                        <li>Session recordings and heatmaps</li>
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-semibold mb-2">How This Helps Us:</h3>
+                      <ul className="list-disc pl-6 space-y-1">
+                        <li>Identify usability issues and improve user experience</li>
+                        <li>Understand which features are most valuable to users</li>
+                        <li>Optimize page layouts and navigation</li>
+                        <li>Detect and prevent fraud or security issues</li>
+                      </ul>
+                    </div>
+                    
+                    <p className="mt-4">
+                      <strong>Microsoft Privacy:</strong> For more information about how Microsoft collects and uses your data, visit the{' '}
+                      <a 
+                        href="https://privacy.microsoft.com/privacystatement" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Microsoft Privacy Statement
+                      </a>.
+                    </p>
+                    
+                    <p>
+                      <strong>Opt-Out:</strong> You can opt out of Microsoft Clarity tracking by visiting{' '}
+                      <a 
+                        href="https://clarity.microsoft.com/terms" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Microsoft Clarity's opt-out page
+                      </a>.
+                    </p>
+                  </div>
+                </section>
+
                 {/* Data Security */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">6. Data Security</h2>
+                  <h2 className="text-xl font-semibold mb-4">7. Data Security</h2>
                   <div className="space-y-4">
                     <p>We implement appropriate technical and organizational measures to protect your personal information:</p>
                     <ul className="list-disc pl-6 space-y-2">
@@ -138,7 +200,7 @@ export function PrivacyPolicy() {
 
                 {/* Data Retention */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">7. Data Retention</h2>
+                  <h2 className="text-xl font-semibold mb-4">8. Data Retention</h2>
                   <div className="space-y-4">
                     <p>We retain your personal information for as long as necessary to:</p>
                     <ul className="list-disc pl-6 space-y-1">
@@ -155,7 +217,7 @@ export function PrivacyPolicy() {
 
                 {/* Your Rights */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">8. Your Rights</h2>
+                  <h2 className="text-xl font-semibold mb-4">9. Your Rights</h2>
                   <div className="space-y-4">
                     <p>You have the following rights regarding your personal information:</p>
                     <ul className="list-disc pl-6 space-y-2">
@@ -174,7 +236,7 @@ export function PrivacyPolicy() {
 
                 {/* Cookies and Similar Technologies */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">9. Cookies and Similar Technologies</h2>
+                  <h2 className="text-xl font-semibold mb-4">10. Cookies and Similar Technologies</h2>
                   <div className="space-y-4">
                     <p>We use cookies and similar technologies to:</p>
                     <ul className="list-disc pl-6 space-y-1">
@@ -191,7 +253,7 @@ export function PrivacyPolicy() {
 
                 {/* Children's Privacy */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">10. Children's Privacy</h2>
+                  <h2 className="text-xl font-semibold mb-4">11. Children's Privacy</h2>
                   <p className="mb-4">
                     Our Service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
                   </p>
@@ -202,7 +264,7 @@ export function PrivacyPolicy() {
 
                 {/* International Data Transfers */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">11. International Data Transfers</h2>
+                  <h2 className="text-xl font-semibold mb-4">12. International Data Transfers</h2>
                   <p className="mb-4">
                     Your information may be transferred to and processed in countries other than your own. We ensure that such transfers are conducted in accordance with applicable data protection laws and that appropriate safeguards are in place.
                   </p>
@@ -210,7 +272,7 @@ export function PrivacyPolicy() {
 
                 {/* Changes to This Policy */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">12. Changes to This Privacy Policy</h2>
+                  <h2 className="text-xl font-semibold mb-4">13. Changes to This Privacy Policy</h2>
                   <p className="mb-4">
                     We may update this Privacy Policy from time to time. We will notify you of any material changes by email or through our Service at least 30 days before the changes take effect.
                   </p>
@@ -221,7 +283,7 @@ export function PrivacyPolicy() {
 
                 {/* Contact Information */}
                 <section>
-                  <h2 className="text-xl font-semibold mb-4">13. Contact Us</h2>
+                  <h2 className="text-xl font-semibold mb-4">14. Contact Us</h2>
                   <p className="mb-4">
                     If you have any questions about this Privacy Policy or our data practices, please contact us:
                   </p>

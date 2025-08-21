@@ -10,6 +10,7 @@ import { useUser } from "@/hooks/use-user";
 import { TermsAndConditions } from '@/components/TermsAndConditions';
 import { PrivacyPolicy } from '@/components/PrivacyPolicy';
 import { ClarityService } from "./lib/clarity";
+import { CookieConsent } from "@/components/CookieConsent";
 
 import Home from "./pages/Home";
 import Recipes from "./pages/Recipes";
@@ -303,6 +304,7 @@ function Router() {
         </Route>
       </Switch>
       <Toaster />
+      <CookieConsent />
     </div>
   );
 }

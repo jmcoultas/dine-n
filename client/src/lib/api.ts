@@ -407,3 +407,91 @@ export async function getCurrentMealPlan(): Promise<MealPlan | null> {
     return null;
   }
 }
+
+// Meal Plan Feedback API functions
+
+export async function submitMealPlanFeedback(
+  mealPlanId: number, 
+  rating: string, 
+  feedbackText?: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/meal-plan-feedback`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      meal_plan_id: mealPlanId,
+      rating,
+      feedback_text: feedbackText,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to submit feedback");
+  }
+}
+
+export async function checkMealPlanFeedback(mealPlanId: number): Promise<boolean> {
+  const response = await fetch(`${API_BASE}/meal-plan-feedback/check/${mealPlanId}`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to check feedback status");
+  }
+
+  const data = await response.json();
+  return data.has_feedback;
+}
+
+export async function shouldShowSurvey(): Promise<boolean> {
+  const response = await fetch(`${API_BASE}/meal-plan-feedback/should-show-survey`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to check survey frequency");
+  }
+
+  const data = await response.json();
+  return data.should_show;
+}
+
+export interface FeedbackStats {
+  total_feedback: number;
+  love_it_count: number;
+  its_ok_count: number;
+  not_great_count: number;
+  feedback_last_7_days: number;
+  feedback_last_30_days: number;
+  satisfaction_rate: number;
+}
+
+export interface RecentFeedback {
+  id: number;
+  rating: string;
+  feedback_text: string | null;
+  created_at: string;
+  user_email: string;
+  user_id: number;
+  meal_plan_id: number;
+}
+
+export async function getFeedbackStats(): Promise<{
+  stats: FeedbackStats;
+  recent_feedback: RecentFeedback[];
+  generated_at: string;
+}> {
+  const response = await fetch(`${API_BASE}/admin/feedback-stats`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch feedback statistics");
+  }
+
+  return response.json();
+}

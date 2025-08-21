@@ -142,6 +142,15 @@ export const groceryLists = pgTable("grocery_lists", {
   created: timestamp("created").notNull(),
 });
 
+export const mealPlanFeedback = pgTable("meal_plan_feedback", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  meal_plan_id: integer("meal_plan_id").notNull().references(() => mealPlans.id),
+  rating: text("rating").notNull().$type<"love_it" | "its_ok" | "not_great">(),
+  feedback_text: text("feedback_text"),
+  created_at: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
+});
+
 // Create validation schemas for inserting/selecting data
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -153,6 +162,8 @@ export const insertUserRecipeSchema = createInsertSchema(userRecipes);
 export const selectUserRecipeSchema = createSelectSchema(userRecipes);
 export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
+export const insertMealPlanFeedbackSchema = createInsertSchema(mealPlanFeedback);
+export const selectMealPlanFeedbackSchema = createSelectSchema(mealPlanFeedback);
 
 export const insertTemporaryRecipeSchema = z.object({
   user_id: z.number(),
@@ -186,6 +197,7 @@ export type Recipe = z.infer<typeof selectRecipeSchema>;
 export type UserRecipe = z.infer<typeof selectUserRecipeSchema>;
 export type MealPlan = z.infer<typeof selectMealPlanSchema>;
 export type GroceryList = z.infer<typeof selectGroceryListSchema>;
+export type MealPlanFeedback = z.infer<typeof selectMealPlanFeedbackSchema>;
 export type Preferences = z.infer<typeof PreferenceSchema>;
 export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;
 export type SubscriptionTier = z.infer<typeof SubscriptionTierEnum>;

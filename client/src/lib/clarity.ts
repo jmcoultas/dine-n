@@ -5,6 +5,7 @@ const CLARITY_PROJECT_ID = import.meta.env.VITE_CLARITY_PROJECT_ID || '';
 
 export class ClarityService {
   private static isInitialized = false;
+  private static hasConsent = false;
 
   /**
    * Initialize Microsoft Clarity with the project ID
@@ -18,10 +19,19 @@ export class ClarityService {
       return;
     }
 
+    // Check for stored consent before initializing
+    const storedConsent = localStorage.getItem('clarity-consent');
+    // Default to true if no previous decision has been made (first time users)
+    this.hasConsent = storedConsent === null ? true : storedConsent === 'true';
+
     try {
       clarity.init(CLARITY_PROJECT_ID);
       this.isInitialized = true;
-      console.log('Microsoft Clarity initialized successfully');
+      
+      // Set initial consent state
+      clarity.consent(this.hasConsent);
+      
+      console.log('Microsoft Clarity initialized successfully', { hasConsent: this.hasConsent });
     } catch (error) {
       console.error('Failed to initialize Microsoft Clarity:', error);
     }
@@ -40,8 +50,8 @@ export class ClarityService {
     pageId?: string,
     friendlyName?: string
   ) {
-    if (!this.isInitialized) {
-      console.warn('Clarity not initialized. Call ClarityService.init() first.');
+    if (!this.isInitialized || !this.hasConsent) {
+      console.warn('Clarity not initialized or consent not given. Skipping identify.');
       return;
     }
 
@@ -58,8 +68,8 @@ export class ClarityService {
    * @param value - Tag value
    */
   static setTag(key: string, value: string) {
-    if (!this.isInitialized) {
-      console.warn('Clarity not initialized. Call ClarityService.init() first.');
+    if (!this.isInitialized || !this.hasConsent) {
+      console.warn('Clarity not initialized or consent not given. Skipping setTag.');
       return;
     }
 
@@ -75,8 +85,8 @@ export class ClarityService {
    * @param eventName - Name of the custom event
    */
   static event(eventName: string) {
-    if (!this.isInitialized) {
-      console.warn('Clarity not initialized. Call ClarityService.init() first.');
+    if (!this.isInitialized || !this.hasConsent) {
+      console.warn('Clarity not initialized or consent not given. Skipping event tracking.');
       return;
     }
 
@@ -92,6 +102,8 @@ export class ClarityService {
    * @param hasConsent - Whether user has given consent
    */
   static consent(hasConsent: boolean) {
+    this.hasConsent = hasConsent;
+    
     if (!this.isInitialized) {
       console.warn('Clarity not initialized. Call ClarityService.init() first.');
       return;
@@ -99,6 +111,7 @@ export class ClarityService {
 
     try {
       clarity.consent(hasConsent);
+      console.log('Clarity consent updated:', { hasConsent });
     } catch (error) {
       console.error('Failed to set Clarity consent:', error);
     }
@@ -109,8 +122,8 @@ export class ClarityService {
    * @param reason - Reason for upgrading the session
    */
   static upgrade(reason: string) {
-    if (!this.isInitialized) {
-      console.warn('Clarity not initialized. Call ClarityService.init() first.');
+    if (!this.isInitialized || !this.hasConsent) {
+      console.warn('Clarity not initialized or consent not given. Skipping session upgrade.');
       return;
     }
 
