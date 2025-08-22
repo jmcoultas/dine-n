@@ -6,7 +6,7 @@ import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { RecipeSchema } from "@/components/RecipeSchema";
 import { InstacartCTA } from "@/components/InstacartCTA";
 import { useTheme } from "@/hooks/use-theme";
-import { useToast } from "@/components/ui/use-toast";
+import { InstacartRedirectModal } from "@/components/InstacartRedirectModal";
 import { createInstacartRecipePage } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { ClarityService } from "@/lib/clarity";
@@ -34,8 +34,13 @@ export interface RecipeData extends Omit<Recipe, 'ingredients' | 'instructions' 
 export default function RecipeView() {
   const params = useParams<{ id: string }>();
   const [isCreatingInstacartPage, setIsCreatingInstacartPage] = useState(false);
+  const [showInstacartModal, setShowInstacartModal] = useState(false);
+  const [instacartData, setInstacartData] = useState<{
+    url: string;
+    recipeName: string;
+    ingredientCount: number;
+  } | null>(null);
   const { theme } = useTheme();
-  const { toast } = useToast();
   
   // Helper function to resolve the actual theme
   const getResolvedTheme = () => {
@@ -127,18 +132,13 @@ export default function RecipeView() {
 
   const handleShopWithInstacart = async () => {
     if (!recipe?.id) {
-      toast({
-        title: "Error",
-        description: "Recipe ID not found",
-        variant: "destructive",
-      });
+      alert("Recipe ID not found");
       return;
     }
     
-    console.log('Attempting to create Instacart page for recipe:', {
+    console.log('🚀 RECIPE VIEW: Starting Instacart integration for recipe:', {
       recipeId: recipe.id,
-      recipeName: recipe.name,
-      hasIngredients: recipe.ingredients && recipe.ingredients.length > 0
+      recipeName: recipe.name
     });
     
     setIsCreatingInstacartPage(true);
@@ -147,32 +147,22 @@ export default function RecipeView() {
       ClarityService.event('instacart_recipe_created');
       ClarityService.setTag('instacart_recipe_id', recipe.id.toString());
       
+      console.log('📡 API CALL: Calling createInstacartRecipePage...');
       const result = await createInstacartRecipePage(recipe.id);
+      console.log('✅ API SUCCESS: Got result:', result);
       
-      // Try to open in new tab (works on most browsers/devices)
-      const newWindow = window.open(result.instacart_url, '_blank');
-      
-      // Always show toast with clickable link as fallback
-      toast({
-        title: "Instacart Recipe Ready!",
-        description: `Recipe page created with ${result.ingredient_count} ingredients. Tap anywhere to open Instacart.`,
-        variant: "default",
-        onClick: () => {
-          console.log('🔗 TOAST CLICKED: Opening Instacart URL');
-          window.open(result.instacart_url, '_blank');
-        }
+      // Set the data and show the modal
+      setInstacartData({
+        url: result.instacart_url,
+        recipeName: result.recipe_name,
+        ingredientCount: result.ingredient_count
       });
+      setShowInstacartModal(true);
       
-      // If window didn't open, the user can click the URL in the toast
-      console.log('Instacart URL created:', result.instacart_url);
+      console.log('🔗 MODAL: Showing Instacart redirect modal');
       
     } catch (error) {
-      console.error('Error creating Instacart recipe page:', {
-        error,
-        recipeId: recipe.id,
-        recipeName: recipe.name,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('❌ ERROR: Creating Instacart recipe page:', error);
       
       let errorMessage = "Failed to create Instacart recipe page";
       if (error instanceof Error) {
@@ -185,11 +175,7 @@ export default function RecipeView() {
         }
       }
       
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      alert(errorMessage);
     } finally {
       setIsCreatingInstacartPage(false);
     }
@@ -351,6 +337,19 @@ export default function RecipeView() {
             ))}
           </div>
         </div>
+      )}
+
+      {instacartData && (
+        <InstacartRedirectModal
+          isOpen={showInstacartModal}
+          onClose={() => {
+            setShowInstacartModal(false);
+            setInstacartData(null);
+          }}
+          instacartUrl={instacartData.url}
+          recipeName={instacartData.recipeName}
+          ingredientCount={instacartData.ingredientCount}
+        />
       )}
     </div>
   );

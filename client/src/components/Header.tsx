@@ -5,7 +5,7 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
-import { Utensils, User, BookOpen, UtensilsCrossed, Calendar, Shield, ChefHat } from "lucide-react";
+import { Utensils, User, BookOpen, UtensilsCrossed, Calendar, Shield, ChefHat, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
 import { useQuery } from "@tanstack/react-query";
@@ -73,6 +73,16 @@ export default function Header() {
                   <UtensilsCrossed className="h-6 w-6 transition-transform duration-200 hover:-translate-x-1" />
                   <span className="absolute left-[46px] whitespace-nowrap opacity-0 transition-all duration-200 hover:opacity-100 pointer-events-none [div:hover>&]:opacity-100">
                     PantryPal
+                  </span>
+                </div>
+              </Link>
+            </NavigationMenuItem>
+            <NavigationMenuItem>
+              <Link href="/pantry" className="block">
+                <div className="relative flex items-center px-3 py-2 w-[42px] hover:w-[130px] hover:bg-accent rounded-md transition-all duration-200">
+                  <Package className="h-6 w-6 transition-transform duration-200 hover:-translate-x-1" />
+                  <span className="absolute left-[46px] whitespace-nowrap opacity-0 transition-all duration-200 hover:opacity-100 pointer-events-none [div:hover>&]:opacity-100">
+                    MyPantry
                   </span>
                 </div>
               </Link>

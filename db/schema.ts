@@ -41,6 +41,21 @@ export const CuisineTypeEnum = z.enum(["Italian", "Mexican", "Chinese", "Japanes
 export const DietaryTypeEnum = z.enum(["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb", "Other"]);
 export const DifficultyEnum = z.enum(["Easy", "Moderate", "Advanced"]);
 
+// Define pantry-related schemas
+export const PantryCategoryEnum = z.enum(["produce", "dairy", "meat", "pantry", "frozen", "condiments", "spices", "beverages", "other"]);
+export const QuantityStatusEnum = z.enum(["full", "half", "running_low", "empty"]);
+
+export const PantryItemSchema = z.object({
+  name: z.string(),
+  category: PantryCategoryEnum.optional(),
+  quantity: z.number().optional(),
+  unit: z.string().optional(),
+  quantityStatus: QuantityStatusEnum.default("full"),
+  estimatedShelfLifeDays: z.number().optional(),
+  userNotes: z.string().optional(),
+  isStaple: z.boolean().default(false),
+});
+
 // Define all tables
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -151,6 +166,47 @@ export const mealPlanFeedback = pgTable("meal_plan_feedback", {
   created_at: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 });
 
+// MyPantry tables
+export const pantryItems = pgTable("pantry_items", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  category: text("category").$type<z.infer<typeof PantryCategoryEnum>>(),
+  quantity: integer("quantity"),
+  unit: text("unit"),
+  quantity_status: text("quantity_status").$type<z.infer<typeof QuantityStatusEnum>>().default("full"),
+  added_date: timestamp("added_date").defaultNow().notNull(),
+  last_used_date: timestamp("last_used_date"),
+  estimated_shelf_life_days: integer("estimated_shelf_life_days"),
+  user_notes: text("user_notes"),
+  barcode: text("barcode"),
+  image_url: text("image_url"),
+  is_staple: boolean("is_staple").default(false),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const ingredientDefaults = pgTable("ingredient_defaults", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull().unique(),
+  category: text("category").$type<z.infer<typeof PantryCategoryEnum>>().notNull(),
+  typical_shelf_life_days: integer("typical_shelf_life_days"),
+  common_units: jsonb("common_units").$type<string[]>(),
+  aliases: jsonb("aliases").$type<string[]>(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const pantryUsageLog = pgTable("pantry_usage_log", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  pantry_item_id: integer("pantry_item_id").notNull().references(() => pantryItems.id),
+  action: text("action").notNull(), // 'added', 'used', 'updated', 'removed'
+  quantity_used: integer("quantity_used"),
+  recipe_id: integer("recipe_id").references(() => temporaryRecipes.id),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Create validation schemas for inserting/selecting data
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -164,6 +220,14 @@ export const insertGroceryListSchema = createInsertSchema(groceryLists);
 export const selectGroceryListSchema = createSelectSchema(groceryLists);
 export const insertMealPlanFeedbackSchema = createInsertSchema(mealPlanFeedback);
 export const selectMealPlanFeedbackSchema = createSelectSchema(mealPlanFeedback);
+
+// Pantry schemas
+export const insertPantryItemSchema = createInsertSchema(pantryItems);
+export const selectPantryItemSchema = createSelectSchema(pantryItems);
+export const insertIngredientDefaultSchema = createInsertSchema(ingredientDefaults);
+export const selectIngredientDefaultSchema = createSelectSchema(ingredientDefaults);
+export const insertPantryUsageLogSchema = createInsertSchema(pantryUsageLog);
+export const selectPantryUsageLogSchema = createSelectSchema(pantryUsageLog);
 
 export const insertTemporaryRecipeSchema = z.object({
   user_id: z.number(),
@@ -202,3 +266,10 @@ export type Preferences = z.infer<typeof PreferenceSchema>;
 export type TemporaryRecipe = z.infer<typeof selectTemporaryRecipeSchema>;
 export type SubscriptionTier = z.infer<typeof SubscriptionTierEnum>;
 export type SubscriptionStatus = z.infer<typeof SubscriptionStatusEnum>;
+
+// Pantry types
+export type PantryItem = z.infer<typeof selectPantryItemSchema>;
+export type IngredientDefault = z.infer<typeof selectIngredientDefaultSchema>;
+export type PantryUsageLog = z.infer<typeof selectPantryUsageLogSchema>;
+export type PantryCategory = z.infer<typeof PantryCategoryEnum>;
+export type QuantityStatus = z.infer<typeof QuantityStatusEnum>;

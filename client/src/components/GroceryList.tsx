@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Download, Search, Leaf } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/components/ui/use-toast";
+import { InstacartRedirectModal } from "@/components/InstacartRedirectModal";
 import { createInstacartShoppingList } from "@/lib/api";
 import { InstacartCTA } from "@/components/InstacartCTA";
 import { useTheme } from "@/hooks/use-theme";
@@ -36,6 +36,12 @@ export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [organicItems, setOrganicItems] = useState<Set<string>>(new Set());
   const [isCreatingInstacartList, setIsCreatingInstacartList] = useState(false);
+  const [showInstacartModal, setShowInstacartModal] = useState(false);
+  const [instacartData, setInstacartData] = useState<{
+    url: string;
+    recipeName: string;
+    ingredientCount: number;
+  } | null>(null);
   const { theme } = useTheme();
   
   // Helper function to resolve the actual theme
@@ -45,7 +51,7 @@ export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
     }
     return theme;
   };
-  const { toast } = useToast();
+
   
   // Define recipeName here
   const recipeName = items.length > 0 ? items[0].name : "Grocery List";
@@ -156,43 +162,34 @@ export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
 
   const handleShopWithInstacart = async () => {
     if (!mealPlanId) {
-      toast({
-        title: "Error",
-        description: "No meal plan available for shopping",
-        variant: "destructive",
-      });
+      alert("No meal plan available for shopping");
       return;
     }
 
+    console.log('🚀 GROCERY LIST: Starting Instacart integration for meal plan:', {
+      mealPlanId,
+      itemCount: items.length
+    });
+
     setIsCreatingInstacartList(true);
     try {
+      console.log('📡 API CALL: Calling createInstacartShoppingList...');
       const result = await createInstacartShoppingList(mealPlanId, "My Meal Plan Shopping List");
+      console.log('✅ API SUCCESS: Got result:', result);
       
-      // Try to open in new tab (works on most browsers/devices)
-      const newWindow = window.open(result.instacart_url, '_blank');
-      
-      // Always show toast with clickable link as fallback
-      toast({
-        title: "Instacart Shopping List Ready!",
-        description: `Shopping list created with ${result.ingredient_count} ingredients. Tap anywhere to open Instacart.`,
-        variant: "default",
-        onClick: () => {
-          console.log('🔗 TOAST CLICKED: Opening Instacart URL');
-          window.open(result.instacart_url, '_blank');
-        }
+      // Set the data and show the modal
+      setInstacartData({
+        url: result.instacart_url,
+        recipeName: "My Meal Plan Shopping List",
+        ingredientCount: result.ingredient_count
       });
+      setShowInstacartModal(true);
       
-      // If window didn't open, the user can click the URL in the toast
-      console.log('Instacart URL created:', result.instacart_url);
+      console.log('🔗 MODAL: Showing Instacart redirect modal');
       
     } catch (error) {
-      console.error('Error creating Instacart shopping list:', error);
-      
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create Instacart shopping list",
-        variant: "destructive",
-      });
+      console.error('❌ ERROR: Creating Instacart shopping list:', error);
+      alert(error instanceof Error ? error.message : "Failed to create Instacart shopping list");
     } finally {
       setIsCreatingInstacartList(false);
     }
@@ -274,6 +271,20 @@ export default function GroceryList({ items, mealPlanId }: GroceryListProps) {
           </TableBody>
         </Table>
       </ScrollArea>
+
+      {instacartData && (
+        <InstacartRedirectModal
+          isOpen={showInstacartModal}
+          onClose={() => {
+            setShowInstacartModal(false);
+            setInstacartData(null);
+          }}
+          instacartUrl={instacartData.url}
+          recipeName={instacartData.recipeName}
+          ingredientCount={instacartData.ingredientCount}
+          isShoppingList={true}
+        />
+      )}
     </div>
   );
 }

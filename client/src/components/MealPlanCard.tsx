@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ChefHat, Heart, Wand2, Calendar, X } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { InstacartRedirectModal } from "@/components/InstacartRedirectModal";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { getIngredientSubstitutions, createInstacartRecipePage } from "@/lib/api";
@@ -64,7 +64,7 @@ function IngredientSubstitution({
   const [reasoning, setReasoning] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
+
 
   const fetchSubstitutions = async () => {
     try {
@@ -78,11 +78,7 @@ function IngredientSubstitution({
       setReasoning(result.reasoning);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get substitutions");
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to get substitutions",
-        variant: "destructive",
-      });
+      alert(err instanceof Error ? err.message : "Failed to get substitutions");
     } finally {
       setIsLoading(false);
     }
@@ -94,10 +90,7 @@ function IngredientSubstitution({
 
   const handleSwap = (newIngredient: string) => {
     onSwap(ingredient, newIngredient);
-    toast({
-      title: "Ingredient Swapped",
-      description: `Replaced ${amount} ${unit} ${ingredient} with ${amount} ${unit} ${newIngredient}`,
-    });
+    alert(`Replaced ${amount} ${unit} ${ingredient} with ${amount} ${unit} ${newIngredient}`);
     onClose();
   };
 
@@ -156,6 +149,12 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   const [isFavorited, setIsFavorited] = useState(recipe.favorited ?? false);
   const [localIngredients, setLocalIngredients] = useState(recipe.ingredients ?? []);
   const [isCreatingInstacartPage, setIsCreatingInstacartPage] = useState(false);
+  const [showInstacartModal, setShowInstacartModal] = useState(false);
+  const [instacartData, setInstacartData] = useState<{
+    url: string;
+    recipeName: string;
+    ingredientCount: number;
+  } | null>(null);
   const { theme } = useTheme();
   
   // Helper function to resolve the actual theme
@@ -165,7 +164,7 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     }
     return theme;
   };
-  const { toast } = useToast();
+
   const { data: user } = useUser();
   const { subscription } = useSubscription();
   const queryClient = useQueryClient();
@@ -199,10 +198,9 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
   };
 
   const handleShopWithInstacart = async () => {
-    console.log('🚀 MEAL PLAN CARD [' + new Date().toISOString() + ']: Starting Instacart integration for recipe:', {
+    console.log('🚀 MEAL PLAN CARD: Starting Instacart integration for recipe:', {
       recipeId: recipe.id,
-      recipeName: recipe.name,
-      version: 'NEW_VERSION_WITH_URL_IN_TOAST'
+      recipeName: recipe.name
     });
     
     setIsCreatingInstacartPage(true);
@@ -211,33 +209,20 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
       const result = await createInstacartRecipePage(recipe.id);
       console.log('✅ API SUCCESS: Got result:', result);
       
-      // Try to open in new tab (works on most browsers/devices)
-      console.log('🔗 OPENING WINDOW: Attempting window.open with:', result.instacart_url);
-      const newWindow = window.open(result.instacart_url, '_blank');
-      console.log('🪟 WINDOW RESULT:', newWindow ? 'Window opened' : 'Window blocked/failed');
-      
-      // Always show toast with clickable link as fallback
-      console.log('🍞 SHOWING TOAST: About to show toast with URL');
-      toast({
-        title: "Instacart Recipe Ready!",
-        description: `Recipe page created with ${result.ingredient_count} ingredients. Tap anywhere to open Instacart.`,
-        variant: "default",
-        onClick: () => {
-          console.log('🔗 TOAST CLICKED: Opening Instacart URL');
-          window.open(result.instacart_url, '_blank');
-        }
+      // Set the data and show the modal
+      setInstacartData({
+        url: result.instacart_url,
+        recipeName: result.recipe_name,
+        ingredientCount: result.ingredient_count
       });
-      console.log('🍞 TOAST CALLED: Toast function has been called');
+      setShowInstacartModal(true);
       
-      console.log('✅ COMPLETE: Instacart URL created:', result.instacart_url);
+      console.log('🔗 MODAL: Showing Instacart redirect modal');
       
     } catch (error) {
-      console.error('Error creating Instacart recipe page:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create Instacart recipe page",
-        variant: "destructive",
-      });
+      console.error('❌ ERROR: Creating Instacart recipe page:', error);
+      // You could show an error modal here instead of toast if preferred
+      alert(error instanceof Error ? error.message : "Failed to create Instacart recipe page");
     } finally {
       setIsCreatingInstacartPage(false);
     }
@@ -284,19 +269,10 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
     onSuccess: () => {
       setIsFavorited(!isFavorited);
       queryClient.invalidateQueries({ queryKey: ['recipes', 'favorites'] });
-      toast({
-        title: isFavorited ? "Recipe removed from favorites" : "Recipe added to favorites",
-        description: isFavorited ? 
-          "The recipe has been removed from your collection" : 
-          "The recipe has been added to your collection",
-      });
+      // Success feedback could be added here if needed
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      alert(error.message);
     },
   });
 
@@ -600,6 +576,19 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
           open={showSubscriptionModal}
           onOpenChange={setShowSubscriptionModal}
           feature={featureContext}
+        />
+      )}
+
+      {instacartData && (
+        <InstacartRedirectModal
+          isOpen={showInstacartModal}
+          onClose={() => {
+            setShowInstacartModal(false);
+            setInstacartData(null);
+          }}
+          instacartUrl={instacartData.url}
+          recipeName={instacartData.recipeName}
+          ingredientCount={instacartData.ingredientCount}
         />
       )}
     </>

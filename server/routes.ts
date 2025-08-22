@@ -3,7 +3,7 @@ import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "driz
 import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
 import { instacartService, getInstacartService } from "./lib/instacart";
 import { config } from "./config/environment";
-import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, type Recipe, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, pantryItems, ingredientDefaults, pantryUsageLog, type Recipe, type PantryItem, type IngredientDefault, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema, insertPantryItemSchema, selectPantryItemSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { requireAdmin, checkAdminStatus } from "./middleware/admin";
@@ -4230,6 +4230,456 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     } catch (error) {
       console.error('Error checking Instacart config:', error);
       res.status(500).json({ error: 'Failed to check Instacart configuration' });
+    }
+  });
+
+  // ============================================================================
+  // MYPANTRY API ENDPOINTS
+  // ============================================================================
+
+  // GET /api/pantry - Get user's pantry items
+  app.get("/api/pantry", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const { category, status, sort = 'added_date' } = req.query;
+
+      let query = db.select().from(pantryItems).where(eq(pantryItems.user_id, user.id));
+
+      // Apply filters
+      const conditions = [eq(pantryItems.user_id, user.id)];
+      if (category && category !== 'all') {
+        conditions.push(sql`${pantryItems.category} = ${category}`);
+      }
+      if (status && status !== 'all') {
+        conditions.push(sql`${pantryItems.quantity_status} = ${status}`);
+      }
+
+      const items = await db.select().from(pantryItems)
+        .where(and(...conditions))
+        .orderBy(
+          sort === 'name' ? pantryItems.name :
+          sort === 'category' ? pantryItems.category :
+          desc(pantryItems.added_date)
+        );
+
+      // Get unique categories for filter options
+      const allItems = await db.select({ category: pantryItems.category })
+        .from(pantryItems)
+        .where(eq(pantryItems.user_id, user.id));
+      
+      const categories = Array.from(new Set(allItems.map(item => item.category).filter(Boolean)));
+
+      res.json({
+        items,
+        categories,
+        totalItems: items.length
+      });
+    } catch (error) {
+      console.error('Error fetching pantry items:', error);
+      res.status(500).json({ error: 'Failed to fetch pantry items' });
+    }
+  });
+
+  // POST /api/pantry - Add new pantry item
+  app.post("/api/pantry", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const { name, category, quantity, unit, estimatedShelfLifeDays, notes, isStaple } = req.body;
+
+      // Check if user is on free tier and has reached limit
+      const currentCount = await db.select({ count: sql<number>`count(*)` })
+        .from(pantryItems)
+        .where(eq(pantryItems.user_id, user.id));
+
+      const itemCount = Number(currentCount[0]?.count || 0);
+      if (user.subscription_tier === 'free' && itemCount >= 50) {
+        return res.status(403).json({ 
+          error: 'Free tier limited to 50 pantry items. Upgrade to Premium for unlimited items.' 
+        });
+      }
+
+      const newItem = await db.insert(pantryItems).values({
+        user_id: user.id,
+        name: name.trim(),
+        category: category || 'other',
+        quantity: quantity || null,
+        unit: unit || null,
+        estimated_shelf_life_days: estimatedShelfLifeDays || null,
+        user_notes: notes || null,
+        is_staple: isStaple || false,
+      }).returning();
+
+      // Log the addition
+      await db.insert(pantryUsageLog).values({
+        user_id: user.id,
+        pantry_item_id: newItem[0].id,
+        action: 'added',
+        notes: `Added ${name} to pantry`
+      });
+
+      res.json(newItem[0]);
+    } catch (error) {
+      console.error('Error adding pantry item:', error);
+      res.status(500).json({ error: 'Failed to add pantry item' });
+    }
+  });
+
+  // PUT /api/pantry/:id - Update pantry item
+  app.put("/api/pantry/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const itemId = parseInt(req.params.id);
+      const { quantity, quantityStatus, notes, lastUsedDate } = req.body;
+
+      // Verify item belongs to user
+      const existingItem = await db.select().from(pantryItems)
+        .where(and(eq(pantryItems.id, itemId), eq(pantryItems.user_id, user.id)))
+        .limit(1);
+
+      if (!existingItem.length) {
+        return res.status(404).json({ error: 'Pantry item not found' });
+      }
+
+      const updateData: any = {
+        updated_at: new Date(),
+      };
+
+      if (quantity !== undefined) updateData.quantity = quantity;
+      if (quantityStatus) updateData.quantity_status = quantityStatus;
+      if (notes !== undefined) updateData.user_notes = notes;
+      if (lastUsedDate) updateData.last_used_date = new Date(lastUsedDate);
+
+      const updatedItem = await db.update(pantryItems)
+        .set(updateData)
+        .where(eq(pantryItems.id, itemId))
+        .returning();
+
+      // Log the update
+      await db.insert(pantryUsageLog).values({
+        user_id: user.id,
+        pantry_item_id: itemId,
+        action: 'updated',
+        notes: `Updated ${existingItem[0].name}`
+      });
+
+      res.json(updatedItem[0]);
+    } catch (error) {
+      console.error('Error updating pantry item:', error);
+      res.status(500).json({ error: 'Failed to update pantry item' });
+    }
+  });
+
+  // DELETE /api/pantry/:id - Remove pantry item
+  app.delete("/api/pantry/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const itemId = parseInt(req.params.id);
+
+      // Verify item belongs to user
+      const existingItem = await db.select().from(pantryItems)
+        .where(and(eq(pantryItems.id, itemId), eq(pantryItems.user_id, user.id)))
+        .limit(1);
+
+      if (!existingItem.length) {
+        return res.status(404).json({ error: 'Pantry item not found' });
+      }
+
+      // Use a transaction to ensure data consistency
+      await db.transaction(async (tx) => {
+        // First, delete all usage log entries for this item
+        // This removes the foreign key constraint issue
+        await tx.delete(pantryUsageLog)
+          .where(eq(pantryUsageLog.pantry_item_id, itemId));
+
+        // Then delete the pantry item
+        await tx.delete(pantryItems).where(eq(pantryItems.id, itemId));
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing pantry item:', error);
+      res.status(500).json({ error: 'Failed to remove pantry item' });
+    }
+  });
+
+  // POST /api/pantry/:id/use - Mark item as used
+  app.post("/api/pantry/:id/use", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const itemId = parseInt(req.params.id);
+      const { quantityUsed, recipeId, notes } = req.body;
+
+      // Verify item belongs to user
+      const existingItem = await db.select().from(pantryItems)
+        .where(and(eq(pantryItems.id, itemId), eq(pantryItems.user_id, user.id)))
+        .limit(1);
+
+      if (!existingItem.length) {
+        return res.status(404).json({ error: 'Pantry item not found' });
+      }
+
+      // Update last used date
+      await db.update(pantryItems)
+        .set({ 
+          last_used_date: new Date(),
+          updated_at: new Date()
+        })
+        .where(eq(pantryItems.id, itemId));
+
+      // Log the usage
+      await db.insert(pantryUsageLog).values({
+        user_id: user.id,
+        pantry_item_id: itemId,
+        action: 'used',
+        quantity_used: quantityUsed || null,
+        recipe_id: recipeId || null,
+        notes: notes || `Used ${existingItem[0].name}`
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error marking item as used:', error);
+      res.status(500).json({ error: 'Failed to mark item as used' });
+    }
+  });
+
+  // GET /api/pantry/suggestions - Get recipe suggestions based on pantry
+  app.get("/api/pantry/suggestions", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const { prioritize, meal_type, limit = 5 } = req.query;
+
+      // Get user's pantry items
+      const userPantryItems = await db.select().from(pantryItems)
+        .where(eq(pantryItems.user_id, user.id));
+
+      if (!userPantryItems.length) {
+        return res.json({
+          recipes: [],
+          usableIngredients: [],
+          missingIngredients: [],
+          priorityItems: []
+        });
+      }
+
+      // Get items that should be prioritized (older items or running low)
+      const priorityItems = userPantryItems.filter(item => {
+        if (prioritize === 'expiring') {
+          const daysOld = Math.floor((Date.now() - new Date(item.added_date).getTime()) / (1000 * 60 * 60 * 24));
+          return daysOld >= 7 || item.quantity_status === 'running_low';
+        }
+        return item.quantity_status === 'running_low';
+      });
+
+      // Create ingredient list for AI
+      const availableIngredients = userPantryItems.map(item => item.name);
+      const priorityIngredientNames = priorityItems.map(item => item.name);
+
+      // Generate AI recipe suggestions
+      const prompt = `Based on these available ingredients: ${availableIngredients.join(', ')}
+      ${priorityIngredientNames.length > 0 ? `Please prioritize using these ingredients: ${priorityIngredientNames.join(', ')}` : ''}
+      ${meal_type ? `Meal type: ${meal_type}` : ''}
+      
+      Generate ${limit} recipe suggestions that use as many of these ingredients as possible. 
+      Focus on practical, home-cooking recipes.`;
+
+      try {
+        const aiResponse = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 1000,
+        });
+
+        // For now, return a structured response
+        // In a full implementation, you'd parse the AI response into proper recipe objects
+        res.json({
+          recipes: [], // Would contain parsed recipe objects
+          usableIngredients: availableIngredients,
+          missingIngredients: [],
+          priorityItems: priorityItems,
+          aiSuggestion: aiResponse.choices[0]?.message?.content || ''
+        });
+      } catch (aiError) {
+        console.error('AI suggestion error:', aiError);
+        res.json({
+          recipes: [],
+          usableIngredients: availableIngredients,
+          missingIngredients: [],
+          priorityItems: priorityItems,
+          aiSuggestion: 'AI suggestions temporarily unavailable'
+        });
+      }
+    } catch (error) {
+      console.error('Error getting pantry suggestions:', error);
+      res.status(500).json({ error: 'Failed to get pantry suggestions' });
+    }
+  });
+
+  // GET /api/pantry/autocomplete - Ingredient name autocomplete
+  app.get("/api/pantry/autocomplete", async (req: Request, res: Response) => {
+    try {
+      const { q } = req.query;
+      
+      if (!q || typeof q !== 'string' || q.length < 2) {
+        return res.json({ suggestions: [] });
+      }
+
+      const searchTerm = q.toLowerCase();
+      
+      // Search ingredient defaults
+      const suggestions = await db.select().from(ingredientDefaults)
+        .where(
+          or(
+            sql`lower(${ingredientDefaults.name}) LIKE ${`%${searchTerm}%`}`,
+            sql`${ingredientDefaults.aliases} @> ${JSON.stringify([searchTerm])}`
+          )
+        )
+        .limit(10);
+
+      const formattedSuggestions = suggestions.map(item => ({
+        name: item.name,
+        category: item.category,
+        commonUnits: item.common_units || [],
+        typicalShelfLife: item.typical_shelf_life_days
+      }));
+
+      res.json({ suggestions: formattedSuggestions });
+    } catch (error) {
+      console.error('Error getting autocomplete suggestions:', error);
+      res.status(500).json({ error: 'Failed to get suggestions' });
+    }
+  });
+
+  // POST /api/pantry/bulk - Add multiple items
+  app.post("/api/pantry/bulk", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const { items, source } = req.body;
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'Items array is required' });
+      }
+
+      // Check subscription limits for bulk operations (premium feature)
+      if (user.subscription_tier === 'free' && source === 'receipt') {
+        return res.status(403).json({ 
+          error: 'Receipt upload is a Premium feature. Upgrade to access bulk import.' 
+        });
+      }
+
+      // Check total item limit
+      const currentCount = await db.select({ count: sql<number>`count(*)` })
+        .from(pantryItems)
+        .where(eq(pantryItems.user_id, user.id));
+
+      const itemCount = Number(currentCount[0]?.count || 0);
+      const newItemCount = itemCount + items.length;
+
+      if (user.subscription_tier === 'free' && newItemCount > 50) {
+        return res.status(403).json({ 
+          error: `Adding ${items.length} items would exceed the 50-item limit for free accounts. Upgrade to Premium for unlimited items.` 
+        });
+      }
+
+      const addedItems = [];
+      for (const item of items) {
+        const newItem = await db.insert(pantryItems).values({
+          user_id: user.id,
+          name: item.name.trim(),
+          category: item.category || 'other',
+          quantity: item.quantity || null,
+          unit: item.unit || null,
+          estimated_shelf_life_days: item.estimatedShelfLifeDays || null,
+          user_notes: item.notes || null,
+          is_staple: item.isStaple || false,
+        }).returning();
+
+        addedItems.push(newItem[0]);
+
+        // Log the addition
+        await db.insert(pantryUsageLog).values({
+          user_id: user.id,
+          pantry_item_id: newItem[0].id,
+          action: 'added',
+          notes: `Bulk added ${item.name} via ${source || 'manual'}`
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        addedItems,
+        count: addedItems.length 
+      });
+    } catch (error) {
+      console.error('Error bulk adding pantry items:', error);
+      res.status(500).json({ error: 'Failed to bulk add pantry items' });
+    }
+  });
+
+  // GET /api/pantry/analytics - Usage analytics (Premium feature)
+  app.get("/api/pantry/analytics", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+
+      // Check if user has premium subscription
+      if (user.subscription_tier !== 'premium') {
+        return res.status(403).json({ 
+          error: 'Analytics is a Premium feature. Upgrade to access detailed insights.' 
+        });
+      }
+
+      // Get total items
+      const totalItems = await db.select({ count: sql<number>`count(*)` })
+        .from(pantryItems)
+        .where(eq(pantryItems.user_id, user.id));
+
+      // Get categories breakdown
+      const categoriesData = await db.select({ 
+        category: pantryItems.category,
+        count: sql<number>`count(*)` 
+      })
+        .from(pantryItems)
+        .where(eq(pantryItems.user_id, user.id))
+        .groupBy(pantryItems.category);
+
+      // Get items to use soon (7+ days old or running low)
+      const useSoonItems = await db.select().from(pantryItems)
+        .where(and(
+          eq(pantryItems.user_id, user.id),
+          or(
+            lt(pantryItems.added_date, sql`NOW() - INTERVAL '7 days'`),
+            eq(pantryItems.quantity_status, 'running_low')
+          )
+        ));
+
+      // Get usage stats for this month
+      const thisMonth = new Date();
+      thisMonth.setDate(1);
+      thisMonth.setHours(0, 0, 0, 0);
+
+      const monthlyUsage = await db.select({ count: sql<number>`count(*)` })
+        .from(pantryUsageLog)
+        .where(and(
+          eq(pantryUsageLog.user_id, user.id),
+          eq(pantryUsageLog.action, 'used'),
+          gt(pantryUsageLog.created_at, thisMonth)
+        ));
+
+      res.json({
+        totalItems: Number(totalItems[0]?.count || 0),
+        categoriesBreakdown: categoriesData.map(c => ({
+          category: c.category || 'other',
+          count: Number(c.count)
+        })),
+        useSoonItems,
+        wasteReduction: {
+          itemsUsedThisMonth: Number(monthlyUsage[0]?.count || 0),
+          estimatedWastePrevented: `$${(Number(monthlyUsage[0]?.count || 0) * 3.50).toFixed(2)}`
+        }
+      });
+    } catch (error) {
+      console.error('Error getting pantry analytics:', error);
+      res.status(500).json({ error: 'Failed to get pantry analytics' });
     }
   });
 }

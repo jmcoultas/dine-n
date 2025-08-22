@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { InstacartCTA } from "@/components/InstacartCTA";
 import { useTheme } from "@/hooks/use-theme";
-import { useToast } from "@/components/ui/use-toast";
+import { InstacartRedirectModal } from "@/components/InstacartRedirectModal";
 import { createInstacartRecipePage } from "@/lib/api";
 
 interface RecipeNutrition {
@@ -66,7 +66,12 @@ export default function Recipes() {
   const { data: user } = useUser();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
-  const { toast } = useToast();
+  const [showInstacartModal, setShowInstacartModal] = useState(false);
+  const [instacartData, setInstacartData] = useState<{
+    url: string;
+    recipeName: string;
+    ingredientCount: number;
+  } | null>(null);
   
   // Helper function to resolve the actual theme
   const getResolvedTheme = () => {
@@ -310,20 +315,13 @@ export default function Recipes() {
 
   const handleShopWithInstacart = async () => {
     if (!selectedRecipe?.id) {
-      toast({
-        title: "Error",
-        description: "Recipe ID not found",
-        variant: "destructive",
-      });
+      alert("Recipe ID not found");
       return;
     }
     
-    console.log('🚀 STARTING [' + new Date().toISOString() + ']: Attempting to create Instacart page for recipe:', {
+    console.log('🚀 RECIPES: Starting Instacart integration for recipe:', {
       recipeId: selectedRecipe.id,
-      recipeName: selectedRecipe.name,
-      hasIngredients: selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0,
-      timestamp: new Date().toISOString(),
-      version: 'NEW_VERSION_WITH_URL_IN_TOAST'
+      recipeName: selectedRecipe.name
     });
     
     setIsCreatingInstacartPage(true);
@@ -332,34 +330,18 @@ export default function Recipes() {
       const result = await createInstacartRecipePage(selectedRecipe.id);
       console.log('✅ API SUCCESS: Got result:', result);
       
-      // Try to open in new tab (works on most browsers/devices)
-      console.log('🔗 OPENING WINDOW: Attempting window.open with:', result.instacart_url);
-      const newWindow = window.open(result.instacart_url, '_blank');
-      console.log('🪟 WINDOW RESULT:', newWindow ? 'Window opened' : 'Window blocked/failed');
-      
-      // Always show toast with clickable link as fallback
-      console.log('🍞 SHOWING TOAST: About to show toast with URL');
-      toast({
-        title: "Instacart Recipe Ready!",
-        description: `Recipe page created with ${result.ingredient_count} ingredients. Tap anywhere to open Instacart.`,
-        variant: "default",
-        onClick: () => {
-          console.log('🔗 TOAST CLICKED: Opening Instacart URL');
-          window.open(result.instacart_url, '_blank');
-        }
+      // Set the data and show the modal
+      setInstacartData({
+        url: result.instacart_url,
+        recipeName: result.recipe_name,
+        ingredientCount: result.ingredient_count
       });
-      console.log('🍞 TOAST CALLED: Toast function has been called');
+      setShowInstacartModal(true);
       
-      // If window didn't open, the user can click the URL in the toast
-      console.log('✅ COMPLETE: Instacart URL created:', result.instacart_url);
+      console.log('🔗 MODAL: Showing Instacart redirect modal');
       
     } catch (error) {
-      console.error('Error creating Instacart recipe page:', {
-        error,
-        recipeId: selectedRecipe.id,
-        recipeName: selectedRecipe.name,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('❌ ERROR: Creating Instacart recipe page:', error);
       
       let errorMessage = "Failed to create Instacart recipe page";
       if (error instanceof Error) {
@@ -372,11 +354,7 @@ export default function Recipes() {
         }
       }
       
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      alert(errorMessage);
     } finally {
       setIsCreatingInstacartPage(false);
     }
@@ -651,6 +629,19 @@ export default function Recipes() {
           </DialogContent>
         )}
       </Dialog>
+
+      {instacartData && (
+        <InstacartRedirectModal
+          isOpen={showInstacartModal}
+          onClose={() => {
+            setShowInstacartModal(false);
+            setInstacartData(null);
+          }}
+          instacartUrl={instacartData.url}
+          recipeName={instacartData.recipeName}
+          ingredientCount={instacartData.ingredientCount}
+        />
+      )}
     </div>
   );
 }

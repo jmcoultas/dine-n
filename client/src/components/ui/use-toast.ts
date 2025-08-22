@@ -6,31 +6,36 @@ export function useToast() {
       title,
       description,
       variant = "default",
-      action,
-      onClick
+      onClick,
+      className
     }: {
       title?: string;
       description?: string;
-      variant?: "default" | "destructive";
-      action?: any;
+      variant?: "default" | "destructive" | "instacart";
       onClick?: () => void;
+      className?: string;
     }) => {
-      const options: any = {
-        description
+      const baseOptions = {
+        description,
+        onClick,
+        className
       };
 
-      // Add action or onClick if provided
-      if (action) {
-        options.action = action;
-      }
-      if (onClick) {
-        options.onClick = onClick;
-      }
-
       if (variant === "destructive") {
-        sonnerToast.error(title, options);
+        sonnerToast.error(title, baseOptions);
+      } else if (variant === "instacart") {
+        sonnerToast.success(title, {
+          ...baseOptions,
+          className: `${className || ''} !bg-instacart-dark-green !text-instacart-light-cream !border-instacart-green cursor-pointer hover:!bg-instacart-green transition-colors duration-200`,
+          style: {
+            backgroundColor: '#003D29',
+            color: '#FAF1E5',
+            border: '1px solid #0AAD0A',
+            cursor: 'pointer'
+          }
+        });
       } else {
-        sonnerToast(title, options);
+        sonnerToast(title, baseOptions);
       }
     }
   };

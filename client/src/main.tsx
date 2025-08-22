@@ -19,6 +19,7 @@ import WeeklyPlanner from "./pages/WeeklyPlanner";
 import AuthPage from "./pages/AuthPage";
 import UserProfile from "./pages/UserProfile";
 import IngredientRecipes from "./pages/IngredientRecipes";
+import MyPantry from "./pages/MyPantry";
 import Welcome from "./pages/Welcome";
 import Onboarding from "./pages/Onboarding";
 import Header from "./components/Header";
@@ -288,6 +289,10 @@ function Router() {
                 <Route 
                   path="/ingredient-recipes" 
                   component={() => <ProtectedRoute component={IngredientRecipes} />} 
+                />
+                <Route 
+                  path="/pantry" 
+                  component={() => <ProtectedRoute component={MyPantry} />} 
                 />
                 <Route 
                   path="/profile" 
