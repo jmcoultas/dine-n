@@ -447,7 +447,8 @@ export const stripeService = {
                         .set({
                           subscription_status: 'active' as const,
                           subscription_tier: 'premium' as const,
-                          subscription_end_date: subscriptionEndDate,
+                          subscription_renewal_date: subscriptionEndDate, // This is actually the renewal date
+                          subscription_end_date: null, // Clear end date for active subscriptions
                           stripe_customer_id: customerId,
                           stripe_subscription_id: subscriptionId || null
                         })
@@ -519,7 +520,8 @@ export const stripeService = {
                   .set({
                     subscription_status: 'active' as const,
                     subscription_tier: 'premium' as const,
-                    subscription_end_date: subscriptionEndDate,
+                    subscription_renewal_date: subscriptionEndDate, // This is actually the renewal date
+                    subscription_end_date: null, // Clear end date for active subscriptions
                     stripe_subscription_id: subscriptionId || null
                   })
                   .where(eq(users.id, customer.id))
@@ -683,11 +685,21 @@ export const stripeService = {
                   };
                 }
 
+                const currentPeriodEnd = safeTimestampToDate(subscription.current_period_end, `subscription ${subscription.id} update`);
+                
                 const updateData = {
                   stripe_subscription_id: subscription.id,
                   subscription_status: newStatus,
                   subscription_tier: newStatus === 'active' ? 'premium' as const : 'free' as const,
-                  subscription_end_date: safeTimestampToDate(subscription.current_period_end, `subscription ${subscription.id} update`)
+                  // For active subscriptions, current_period_end is the renewal date
+                  // For cancelled subscriptions, current_period_end is when access ends
+                  ...(newStatus === 'active' ? {
+                    subscription_renewal_date: currentPeriodEnd,
+                    subscription_end_date: null
+                  } : {
+                    subscription_end_date: currentPeriodEnd,
+                    subscription_renewal_date: null
+                  })
                 };
 
                 // Double-check current status before update to prevent race conditions
@@ -799,7 +811,8 @@ export const stripeService = {
                   .set({
                     subscription_status: 'cancelled' as const,
                     subscription_tier: 'free' as const,
-                    subscription_end_date: subscriptionEndDate
+                    subscription_end_date: subscriptionEndDate, // This is correct - when subscription actually ends
+                    subscription_renewal_date: null // Clear renewal date for cancelled subscriptions
                   })
                   .where(eq(users.id, customer.id))
                   .returning();

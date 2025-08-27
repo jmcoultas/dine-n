@@ -382,7 +382,8 @@ export function registerRoutes(app: express.Express) {
         .select({
           subscription_status: users.subscription_status,
           subscription_tier: users.subscription_tier,
-          subscription_end_date: users.subscription_end_date
+          subscription_end_date: users.subscription_end_date,
+          subscription_renewal_date: users.subscription_renewal_date
         })
         .from(users)
         .where(eq(users.id, user.id))
@@ -402,6 +403,7 @@ export function registerRoutes(app: express.Express) {
         isActive: hasPremiumAccess,
         tier: freshUser.subscription_tier,
         endDate: freshUser.subscription_end_date,
+        renewalDate: freshUser.subscription_renewal_date,
         status: freshUser.subscription_status,
         isCancelled: freshUser.subscription_status === 'cancelled'
       };
@@ -2127,7 +2129,7 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/generate-recipe-suggestions", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
-      const { ingredients, dietary, allergies } = req.body;
+      const { ingredients, dietary, allergies, pantryOnlyMode } = req.body;
 
       // Validate input
       if (!Array.isArray(ingredients) || ingredients.length === 0) {
@@ -2150,7 +2152,8 @@ export function registerRoutes(app: express.Express) {
       const suggestions = await generateRecipeSuggestionsFromIngredients({
         ingredients,
         dietary: Array.isArray(dietary) ? dietary : undefined,
-        allergies: Array.isArray(allergies) ? allergies : undefined
+        allergies: Array.isArray(allergies) ? allergies : undefined,
+        pantryOnlyMode: Boolean(pantryOnlyMode)
       });
 
       res.json({ suggestions });
@@ -2167,7 +2170,7 @@ export function registerRoutes(app: express.Express) {
   app.post("/api/generate-recipe", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
-      const { title, allergies } = req.body;
+      const { title, allergies, ingredients, pantryOnlyMode } = req.body;
 
       if (!title) {
         return res.status(400).json({
@@ -2196,7 +2199,14 @@ export function registerRoutes(app: express.Express) {
       }
 
       // Generate the recipe using the title-specific function
-      const recipeData = await generateRecipeFromTitleAI(title, Array.isArray(allergies) ? allergies : []);
+      const recipeData = await generateRecipeFromTitleAI(
+        title, 
+        Array.isArray(allergies) ? allergies : [],
+        {
+          ingredients: Array.isArray(ingredients) ? ingredients : undefined,
+          pantryOnlyMode: Boolean(pantryOnlyMode)
+        }
+      );
 
       // Save as a temporary recipe
       const expirationDate = new Date();
@@ -3951,7 +3961,8 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
           stripe_subscription_id: users.stripe_subscription_id,
           subscription_status: users.subscription_status,
           subscription_tier: users.subscription_tier,
-          subscription_end_date: users.subscription_end_date
+          subscription_end_date: users.subscription_end_date,
+          subscription_renewal_date: users.subscription_renewal_date
         })
         .from(users)
         .where(eq(users.id, user.id))
@@ -4402,12 +4413,12 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     }
   });
 
-  // POST /api/pantry/:id/use - Mark item as used
+  // POST /api/pantry/:id/use - Mark item as used (with partial usage support)
   app.post("/api/pantry/:id/use", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user as any;
       const itemId = parseInt(req.params.id);
-      const { quantityUsed, recipeId, notes } = req.body;
+      const { quantityUsed, recipeId, notes, useAll = false } = req.body;
 
       // Verify item belongs to user
       const existingItem = await db.select().from(pantryItems)
@@ -4418,13 +4429,49 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         return res.status(404).json({ error: 'Pantry item not found' });
       }
 
-      // Update last used date
-      await db.update(pantryItems)
+      const item = existingItem[0];
+      const currentQuantity = item.quantity || 0;
+
+      // Calculate new quantity and status
+      let newQuantity: number;
+      let newQuantityStatus: string;
+
+      if (useAll || quantityUsed >= currentQuantity) {
+        // Using all of the item
+        newQuantity = 0;
+        newQuantityStatus = 'empty';
+      } else if (quantityUsed && quantityUsed > 0) {
+        // Partial usage
+        newQuantity = currentQuantity - quantityUsed;
+        
+        // Calculate percentage remaining to determine status
+        const percentageRemaining = (newQuantity / currentQuantity) * 100;
+        
+        if (percentageRemaining <= 0) {
+          newQuantityStatus = 'empty';
+        } else if (percentageRemaining <= 25) {
+          newQuantityStatus = 'running_low';
+        } else if (percentageRemaining <= 50) {
+          newQuantityStatus = 'half';
+        } else {
+          newQuantityStatus = 'full';
+        }
+      } else {
+        // No quantity specified, just mark as used without changing quantity
+        newQuantity = currentQuantity;
+        newQuantityStatus = item.quantity_status || 'full';
+      }
+
+      // Update the pantry item
+      const updatedItem = await db.update(pantryItems)
         .set({ 
+          quantity: newQuantity,
+          quantity_status: newQuantityStatus as any,
           last_used_date: new Date(),
           updated_at: new Date()
         })
-        .where(eq(pantryItems.id, itemId));
+        .where(eq(pantryItems.id, itemId))
+        .returning();
 
       // Log the usage
       await db.insert(pantryUsageLog).values({
@@ -4433,10 +4480,18 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         action: 'used',
         quantity_used: quantityUsed || null,
         recipe_id: recipeId || null,
-        notes: notes || `Used ${existingItem[0].name}`
+        notes: notes || (quantityUsed ? 
+          `Used ${quantityUsed} ${item.unit || 'units'} of ${item.name}` : 
+          `Used ${item.name}`)
       });
 
-      res.json({ success: true });
+      res.json({ 
+        success: true, 
+        updatedItem: updatedItem[0],
+        previousQuantity: currentQuantity,
+        newQuantity: newQuantity,
+        quantityUsed: quantityUsed || 0
+      });
     } catch (error) {
       console.error('Error marking item as used:', error);
       res.status(500).json({ error: 'Failed to mark item as used' });
@@ -4613,6 +4668,30 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     } catch (error) {
       console.error('Error bulk adding pantry items:', error);
       res.status(500).json({ error: 'Failed to bulk add pantry items' });
+    }
+  });
+
+  // GET /api/recipes/recent - Get user's recent recipes for dropdowns
+  app.get("/api/recipes/recent", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+      const { limit = 10 } = req.query;
+
+      // Get user's recent temporary recipes (most commonly used)
+      const recentRecipes = await db.select({
+        id: temporaryRecipes.id,
+        name: temporaryRecipes.name,
+        created_at: temporaryRecipes.created_at
+      })
+        .from(temporaryRecipes)
+        .where(eq(temporaryRecipes.user_id, user.id))
+        .orderBy(desc(temporaryRecipes.created_at))
+        .limit(parseInt(limit as string));
+
+      res.json({ recipes: recentRecipes });
+    } catch (error) {
+      console.error('Error fetching recent recipes:', error);
+      res.status(500).json({ error: 'Failed to fetch recent recipes' });
     }
   });
 

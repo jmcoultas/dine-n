@@ -58,7 +58,7 @@ export default function FavoritesSection({ onAddToMealPlan, selectedArchivedReci
       }
       return response.json();
     },
-    enabled: !!user && subscription?.tier === 'premium',
+    enabled: !!user,
   });
 
   const isRecipeSelected = (recipe: Recipe) => {
@@ -71,8 +71,8 @@ export default function FavoritesSection({ onAddToMealPlan, selectedArchivedReci
     onAddToMealPlan(recipe, mealType);
   };
 
-  // Don't show if user doesn't have premium subscription
-  if (!user || subscription?.tier !== 'premium') {
+  // Don't show if user is not logged in
+  if (!user) {
     return null;
   }
 

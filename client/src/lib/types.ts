@@ -155,6 +155,21 @@ export const UpdatePantryItemRequestSchema = z.object({
   lastUsedDate: z.string().optional(), // ISO date string
 });
 
+export const UsePantryItemRequestSchema = z.object({
+  quantityUsed: z.number().positive().optional(),
+  recipeId: z.number().optional(),
+  notes: z.string().optional(),
+  useAll: z.boolean().default(false),
+});
+
+export const UsePantryItemResponseSchema = z.object({
+  success: z.boolean(),
+  updatedItem: PantryItemSchema,
+  previousQuantity: z.number(),
+  newQuantity: z.number(),
+  quantityUsed: z.number(),
+});
+
 export const PantryResponseSchema = z.object({
   items: z.array(PantryItemSchema),
   categories: z.array(z.string()),
@@ -199,6 +214,8 @@ export type IngredientDefault = z.infer<typeof IngredientDefaultSchema>;
 export type PantryUsageLog = z.infer<typeof PantryUsageLogSchema>;
 export type AddPantryItemRequest = z.infer<typeof AddPantryItemRequestSchema>;
 export type UpdatePantryItemRequest = z.infer<typeof UpdatePantryItemRequestSchema>;
+export type UsePantryItemRequest = z.infer<typeof UsePantryItemRequestSchema>;
+export type UsePantryItemResponse = z.infer<typeof UsePantryItemResponseSchema>;
 export type PantryResponse = z.infer<typeof PantryResponseSchema>;
 export type PantrySuggestionsResponse = z.infer<typeof PantrySuggestionsResponseSchema>;
 export type AutocompleteResponse = z.infer<typeof AutocompleteResponseSchema>;

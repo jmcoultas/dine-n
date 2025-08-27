@@ -13,10 +13,12 @@ import { AddToHomeScreen } from "@/components/AddToHomeScreen";
 import { generateRecipeFromTitle } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import { RecipeSchema } from "@/lib/types";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PreferenceSchema, type Preferences } from "@db/schema";
 import RecipePreferencesModal from "@/components/RecipePreferencesModal";
+import PantryImportModal from "@/components/PantryImportModal";
+import UsageTrackingModal from "@/components/UsageTrackingModal";
 import { z } from "zod";
 
 const STORAGE_KEY = 'ingredient-recipe';
@@ -105,6 +107,9 @@ export default function IngredientRecipes() {
   });
   const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
   const [generatingRecipeTitle, setGeneratingRecipeTitle] = useState<string | null>(null);
+  const [showPantryImport, setShowPantryImport] = useState(false);
+  const [pantryOnlyMode, setPantryOnlyMode] = useState(false);
+  const [showUsageTracking, setShowUsageTracking] = useState(false);
 
   // Initialize ingredients from localStorage when user loads
   useEffect(() => {
@@ -293,6 +298,70 @@ export default function IngredientRecipes() {
     setIngredients(ingredients.filter((_, i) => i !== index));
   };
 
+  const handlePantryImport = (selectedItems: string[]) => {
+    // Check ingredient limits based on subscription tier
+    const totalIngredients = ingredients.length + selectedItems.length;
+    
+    if (user?.subscription_tier !== "premium" && totalIngredients > FREE_INGREDIENT_LIMIT) {
+      const availableSlots = FREE_INGREDIENT_LIMIT - ingredients.length;
+      if (availableSlots <= 0) {
+        setFeatureContext("importing pantry ingredients");
+        setShowSubscriptionModal(true);
+        return;
+      }
+      
+      // Take only what fits
+      const itemsToAdd = selectedItems.slice(0, availableSlots);
+      const newIngredients = [...ingredients, ...itemsToAdd];
+      setIngredients(newIngredients);
+      
+      toast({
+        title: "Partial Import",
+        description: `Added ${itemsToAdd.length} ingredients. Upgrade to Premium to add more.`,
+        variant: "default",
+      });
+      return;
+    }
+    
+    if (user?.subscription_tier === "premium" && totalIngredients > PREMIUM_INGREDIENT_LIMIT) {
+      const availableSlots = PREMIUM_INGREDIENT_LIMIT - ingredients.length;
+      const itemsToAdd = selectedItems.slice(0, availableSlots);
+      const newIngredients = [...ingredients, ...itemsToAdd];
+      setIngredients(newIngredients);
+      
+      toast({
+        title: "Import Limit Reached",
+        description: `Added ${itemsToAdd.length} ingredients. Premium limit is ${PREMIUM_INGREDIENT_LIMIT} ingredients.`,
+        variant: "default",
+      });
+      return;
+    }
+    
+    // Add all selected items
+    const newIngredients = [...ingredients, ...selectedItems];
+    setIngredients(newIngredients);
+    
+    toast({
+      title: "Pantry Items Imported",
+      description: `Added ${selectedItems.length} ingredient${selectedItems.length !== 1 ? 's' : ''} from your pantry.`,
+    });
+  };
+
+  const handleTogglePantryMode = () => {
+    setPantryOnlyMode(!pantryOnlyMode);
+    if (!pantryOnlyMode) {
+      toast({
+        title: "Pantry-Only Mode",
+        description: "Recipe suggestions will only use ingredients from your pantry.",
+      });
+    } else {
+      toast({
+        title: "Mixed Mode",
+        description: "Recipe suggestions can include additional ingredients.",
+      });
+    }
+  };
+
   const handleGenerateSuggestions = async () => {
     if (ingredients.length === 0) {
       toast({
@@ -430,7 +499,8 @@ export default function IngredientRecipes() {
         body: JSON.stringify({ 
           ingredients,
           dietary: tempPreferences.dietary,
-          allergies: tempPreferences.allergies
+          allergies: tempPreferences.allergies,
+          pantryOnlyMode
         }),
       });
 
@@ -536,8 +606,13 @@ export default function IngredientRecipes() {
       
       console.log('Generating recipe for title:', title);
       console.log('Using allergies from user preferences:', allergies);
+      console.log('Using pantry-only mode:', pantryOnlyMode);
+      console.log('Available ingredients:', ingredients);
       
-      const recipe = await generateRecipeFromTitle(title, allergies);
+      const recipe = await generateRecipeFromTitle(title, allergies, {
+        ingredients: pantryOnlyMode ? ingredients : undefined,
+        pantryOnlyMode
+      });
       console.log('Recipe before validation:', JSON.stringify(recipe, null, 2));
       const parsedRecipe = PantryPalRecipeSchema.parse(recipe);
       console.log('Recipe after validation:', JSON.stringify(parsedRecipe, null, 2));
@@ -1037,6 +1112,23 @@ export default function IngredientRecipes() {
                         </div>
                       </div>
                     )}
+
+                    {/* Usage Tracking Button - Only show if ingredients came from pantry */}
+                    {ingredients.length > 0 && (
+                      <div className="pt-4 border-t">
+                        <Button
+                          onClick={() => setShowUsageTracking(true)}
+                          className="w-full flex items-center gap-2"
+                          variant="outline"
+                        >
+                          <Package className="h-4 w-4" />
+                          Mark Ingredients as Used in Pantry
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center mt-2">
+                          Track ingredient usage to keep your pantry up to date
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -1047,19 +1139,46 @@ export default function IngredientRecipes() {
         {/* Input Section - Non-sticky, near bottom */}
         <div className="w-full max-w-2xl mx-auto mt-8 mb-16 bg-background p-4 rounded-lg border">
           <div className="space-y-4">
+            {/* Pantry Import and Mode Toggle */}
+            <div className="flex flex-wrap items-center gap-2 pb-2 border-b">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPantryImport(true)}
+                className="flex items-center gap-2"
+              >
+                <Package className="h-4 w-4" />
+                Import from Pantry
+              </Button>
+              
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-sm text-muted-foreground">Mode:</span>
+                <Button
+                  variant={pantryOnlyMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleTogglePantryMode}
+                  className="text-xs"
+                >
+                  {pantryOnlyMode ? "Pantry Only" : "Mixed"}
+                </Button>
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddIngredient()}
-                placeholder="Enter an ingredient"
+                placeholder={pantryOnlyMode ? "Add ingredients from pantry above" : "Enter an ingredient"}
                 className="flex-1"
                 inputMode="text"
                 style={{ fontSize: '16px' }}
+                disabled={pantryOnlyMode}
               />
               <Button 
                 onClick={handleAddIngredient}
                 disabled={
+                  pantryOnlyMode ||
                   !inputValue.trim() || 
                   (user?.subscription_tier === "premium" && ingredients.length >= PREMIUM_INGREDIENT_LIMIT) ||
                   (user?.subscription_tier !== "premium" && ingredients.length >= FREE_INGREDIENT_LIMIT)
@@ -1104,6 +1223,41 @@ export default function IngredientRecipes() {
           </div>
         </div>
       </div>
+
+      {/* Pantry Import Modal */}
+      <PantryImportModal
+        open={showPantryImport}
+        onOpenChange={setShowPantryImport}
+        onImport={handlePantryImport}
+        currentIngredients={ingredients}
+      />
+
+      {/* Usage Tracking Modal */}
+      <UsageTrackingModal
+        open={showUsageTracking}
+        onOpenChange={setShowUsageTracking}
+        ingredients={ingredients}
+        recipeName={selectedRecipe?.name}
+      />
+
+      {/* Preferences Modal */}
+      <RecipePreferencesModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+        userPreferences={userPreferences}
+        onGenerate={(preferences) => {
+          setTempPreferences(preferences);
+          setShowPreferences(false);
+        }}
+        isGenerating={isGeneratingIdeas || generateSuggestionsMutation.isPending}
+      />
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        feature={featureContext}
+      />
     </div>
   );
 } 

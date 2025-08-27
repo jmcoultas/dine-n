@@ -24,6 +24,17 @@
     <!-- Preload the logo to avoid multiple requests -->
     <link rel="preload" href="/transparent-logo.png" as="image" type="image/png" />
     <title>Dine-N</title>
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R2YBBLHVF7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-R2YBBLHVF7');
+    </script>
+    
     <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.62/build/spline-viewer.js"></script>
     <style>
       /* Custom styling for iOS PWA */

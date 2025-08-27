@@ -11,11 +11,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Filter, Calendar, Trash2, Edit3, Package, ChefHat } from 'lucide-react';
+import { UsageModal } from '@/components/pantry/UsageModal';
 import type { 
   PantryItem, 
   PantryResponse, 
   AddPantryItemRequest, 
   UpdatePantryItemRequest,
+  UsePantryItemRequest,
   PantryCategory,
   QuantityStatus,
   AutocompleteResponse 
@@ -205,7 +207,7 @@ interface PantryItemCardProps {
   item: PantryItem;
   onUpdate: (id: number, data: UpdatePantryItemRequest) => void;
   onDelete: (id: number) => void;
-  onUse: (id: number) => void;
+  onUse: (id: number, data: UsePantryItemRequest) => void;
 }
 
 function PantryItemCard({ item, onUpdate, onDelete, onUse }: PantryItemCardProps) {
@@ -349,7 +351,7 @@ function PantryItemCard({ item, onUpdate, onDelete, onUse }: PantryItemCardProps
               <Button 
                 size="sm" 
                 variant="outline" 
-                onClick={() => onUse(item.id)}
+                onClick={() => onUse(item.id, { useAll: false })}
                 className="flex-1"
               >
                 <ChefHat className="h-3 w-3 mr-1" />
@@ -368,6 +370,8 @@ export default function MyPantry() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<PantryItem | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -458,18 +462,35 @@ export default function MyPantry() {
 
   // Use item mutation
   const useItemMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id, data }: { id: number; data: UsePantryItemRequest }) => {
       const response = await fetch(`/api/pantry/${id}/use`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(data),
       });
       if (!response.ok) throw new Error('Failed to mark item as used');
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['pantry'] });
-      toast({ title: 'Success', description: 'Item marked as used!' });
+      
+      const { quantityUsed, newQuantity, previousQuantity } = result;
+      
+      if (quantityUsed > 0) {
+        if (newQuantity === 0) {
+          toast({ 
+            title: 'Item Used Up', 
+            description: `Used all remaining ${previousQuantity} units. Item is now empty.` 
+          });
+        } else {
+          toast({ 
+            title: 'Usage Recorded', 
+            description: `Used ${quantityUsed} units. ${newQuantity} remaining.` 
+          });
+        }
+      } else {
+        toast({ title: 'Success', description: 'Item marked as used!' });
+      }
     },
     onError: () => {
       toast({ 
@@ -480,13 +501,41 @@ export default function MyPantry() {
     },
   });
 
+  const handleUseItem = (id: number, data: UsePantryItemRequest) => {
+    // If it's a simple usage without specific amounts, show the modal
+    if (!data.quantityUsed && !data.useAll) {
+      const item = pantryData?.items.find(item => item.id === id);
+      if (item) {
+        setSelectedItem(item);
+        setShowUsageModal(true);
+      }
+    } else {
+      // Direct usage with specified data
+      useItemMutation.mutate({ id, data });
+    }
+  };
+
   const filteredItems = pantryData?.items.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
   const useSoonItems = filteredItems.filter(item => {
+    // Always include items that are running low
+    if (item.quantity_status === 'running_low') {
+      return true;
+    }
+    
     const daysOld = Math.floor((Date.now() - new Date(item.added_date).getTime()) / (1000 * 60 * 60 * 24));
-    return daysOld >= 7 || item.quantity_status === 'running_low';
+    
+    // If item has estimated shelf life, use that for smart expiration detection
+    if (item.estimated_shelf_life_days && item.estimated_shelf_life_days > 0) {
+      // Show in "Use Soon" when item has used 70% of its shelf life
+      const shelfLifeUsedPercentage = daysOld / item.estimated_shelf_life_days;
+      return shelfLifeUsedPercentage >= 0.7;
+    }
+    
+    // Fallback to 7-day rule for items without shelf life data
+    return daysOld >= 7;
   });
 
   return (
@@ -608,7 +657,7 @@ export default function MyPantry() {
                 item={item}
                 onUpdate={(id, data) => updateItemMutation.mutate({ id, data })}
                 onDelete={(id) => deleteItemMutation.mutate(id)}
-                onUse={(id) => useItemMutation.mutate(id)}
+                onUse={handleUseItem}
               />
             ))}
           </div>
@@ -655,7 +704,7 @@ export default function MyPantry() {
                 item={item}
                 onUpdate={(id, data) => updateItemMutation.mutate({ id, data })}
                 onDelete={(id) => deleteItemMutation.mutate(id)}
-                onUse={(id) => useItemMutation.mutate(id)}
+                onUse={handleUseItem}
               />
             ))}
           </div>
@@ -667,6 +716,18 @@ export default function MyPantry() {
         open={showAddModal}
         onOpenChange={setShowAddModal}
         onAdd={(item) => addItemMutation.mutate(item)}
+      />
+
+      {/* Usage Modal */}
+      <UsageModal
+        open={showUsageModal}
+        onOpenChange={setShowUsageModal}
+        item={selectedItem}
+        onUse={(data) => {
+          if (selectedItem) {
+            useItemMutation.mutate({ id: selectedItem.id, data });
+          }
+        }}
       />
     </div>
   );

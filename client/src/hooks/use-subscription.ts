@@ -10,6 +10,7 @@ interface SubscriptionStatus {
   isActive: boolean;
   tier: 'free' | 'premium';
   endDate?: Date;
+  renewalDate?: Date;
   status: 'active' | 'inactive' | 'cancelled';
   isCancelled: boolean;
 }

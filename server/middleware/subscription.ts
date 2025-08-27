@@ -21,6 +21,7 @@ export async function requireActiveSubscription(
         subscription_status: users.subscription_status,
         subscription_tier: users.subscription_tier,
         subscription_end_date: users.subscription_end_date,
+        subscription_renewal_date: users.subscription_renewal_date,
       })
       .from(users)
       .where(eq(users.id, req.user.id))

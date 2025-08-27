@@ -304,7 +304,11 @@ export async function getIngredientSubstitutions(
 
 export async function generateRecipeFromTitle(
   title: string,
-  allergies: string[] = []
+  allergies: string[] = [],
+  options?: {
+    ingredients?: string[];
+    pantryOnlyMode?: boolean;
+  }
 ): Promise<Recipe> {
   console.log('API: Generating recipe for title:', title, 'with allergies:', allergies);
   
@@ -315,7 +319,12 @@ export async function generateRecipeFromTitle(
         "Content-Type": "application/json",
       },
       credentials: "include",
-      body: JSON.stringify({ title, allergies }),
+      body: JSON.stringify({ 
+        title, 
+        allergies,
+        ...(options?.ingredients && { ingredients: options.ingredients }),
+        ...(options?.pantryOnlyMode !== undefined && { pantryOnlyMode: options.pantryOnlyMode })
+      }),
     });
 
     if (!response.ok) {

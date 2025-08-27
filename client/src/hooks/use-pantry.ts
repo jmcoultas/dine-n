@@ -4,6 +4,8 @@ import type {
   PantryResponse, 
   AddPantryItemRequest, 
   UpdatePantryItemRequest,
+  UsePantryItemRequest,
+  UsePantryItemResponse,
   PantrySuggestionsResponse,
   AutocompleteResponse,
   PantryAnalyticsResponse
@@ -113,18 +115,35 @@ export function useUsePantryItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id, data }: { id: number; data: UsePantryItemRequest }) => {
       const response = await fetch(`/api/pantry/${id}/use`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(data),
       });
       if (!response.ok) throw new Error('Failed to mark item as used');
-      return response.json();
+      return response.json() as Promise<UsePantryItemResponse>;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['pantry'] });
-      toast({ title: 'Success', description: 'Item marked as used!' });
+      
+      const { quantityUsed, newQuantity, previousQuantity } = result;
+      
+      if (quantityUsed > 0) {
+        if (newQuantity === 0) {
+          toast({ 
+            title: 'Item Used Up', 
+            description: `Used all remaining ${previousQuantity} units. Item is now empty.` 
+          });
+        } else {
+          toast({ 
+            title: 'Usage Recorded', 
+            description: `Used ${quantityUsed} units. ${newQuantity} remaining.` 
+          });
+        }
+      } else {
+        toast({ title: 'Success', description: 'Item marked as used!' });
+      }
     },
     onError: () => {
       toast({ 

@@ -12,6 +12,7 @@ export const UserSchema = z.object({
   subscription_status: SubscriptionStatusEnum.default('inactive'),
   subscription_tier: SubscriptionTierEnum.default('free'),
   subscription_end_date: z.date().nullable(),
+  subscription_renewal_date: z.date().nullable(),
   meal_plans_generated: z.number().default(0),
   firebase_uid: z.string().nullable(),
   ingredient_recipes_generated: z.number().default(0),

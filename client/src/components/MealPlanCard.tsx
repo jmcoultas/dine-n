@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { ChefHat, Heart, Wand2, Calendar, X } from "lucide-react";
+import { ChefHat, Heart, Wand2, Calendar, X, BookOpen } from "lucide-react";
 import { useState, useEffect } from "react";
 import { InstacartRedirectModal } from "@/components/InstacartRedirectModal";
 import { useUser } from "@/hooks/use-user";
@@ -503,6 +503,29 @@ export default function MealPlanCard({ recipe, day, meal, onRemove }: MealPlanCa
                   onClick={handleShopWithInstacart}
                   disabled={isCreatingInstacartPage}
                 />
+              </div>
+            </div>
+
+            {/* Cook Mode CTA */}
+            <div className="bg-gradient-to-r from-orange-50/50 to-orange-100/30 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold mb-1">Start Cooking</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Open cook-friendly view with step-by-step instructions
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 bg-orange-100 hover:bg-orange-200 border-orange-200 text-orange-800 hover:text-orange-900"
+                  onClick={() => {
+                    window.open(`/recipe/${recipe.id}`, '_blank');
+                  }}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Cook Mode
+                </Button>
               </div>
             </div>
 

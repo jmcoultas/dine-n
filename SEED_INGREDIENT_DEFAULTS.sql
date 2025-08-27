@@ -1,0 +1,126 @@
+-- Seed data for ingredient_defaults table
+-- This populates common ingredients with typical shelf lives, categories, and aliases
+
+INSERT INTO "ingredient_defaults" ("name", "category", "typical_shelf_life_days", "common_units", "aliases") VALUES
+
+-- PRODUCE
+('Avocados', 'produce', 5, '["pieces", "lbs"]', '["avocado", "avos"]'),
+('Lettuce', 'produce', 7, '["heads", "bags", "oz"]', '["romaine", "iceberg lettuce", "butter lettuce"]'),
+('Bell Peppers', 'produce', 10, '["pieces", "lbs"]', '["bell pepper", "red pepper", "green pepper", "yellow pepper"]'),
+('Apples', 'produce', 14, '["pieces", "lbs", "bags"]', '["apple", "red apples", "green apples", "gala apples"]'),
+('Oranges', 'produce', 14, '["pieces", "lbs", "bags"]', '["orange", "navel oranges", "valencia oranges"]'),
+('Lemons', 'produce', 21, '["pieces", "lbs"]', '["lemon"]'),
+('Limes', 'produce', 14, '["pieces", "lbs"]', '["lime"]'),
+('Spinach', 'produce', 5, '["bags", "bunches", "oz"]', '["baby spinach", "fresh spinach"]'),
+('Kale', 'produce', 7, '["bunches", "bags", "oz"]', '["baby kale", "curly kale"]'),
+('Broccoli', 'produce', 7, '["heads", "crowns", "lbs"]', '["broccoli crown", "broccoli florets"]'),
+('Cauliflower', 'produce', 7, '["heads", "lbs"]', '["cauliflower head"]'),
+('Carrots', 'produce', 21, '["lbs", "bags", "bunches"]', '["carrot", "baby carrots"]'),
+('Celery', 'produce', 14, '["bunches", "stalks"]', '["celery stalks"]'),
+('Cucumbers', 'produce', 7, '["pieces", "lbs"]', '["cucumber", "english cucumber"]'),
+('Zucchini', 'produce', 7, '["pieces", "lbs"]', '["zucchini squash"]'),
+('Yellow Squash', 'produce', 7, '["pieces", "lbs"]', '["summer squash"]'),
+('Mushrooms', 'produce', 7, '["lbs", "containers", "oz"]', '["button mushrooms", "cremini", "portobello"]'),
+('Sweet Potatoes', 'produce', 30, '["lbs", "pieces"]', '["sweet potato", "yams"]'),
+('Potatoes', 'produce', 30, '["lbs", "bags", "pieces"]', '["potato", "russet potatoes", "red potatoes", "yukon gold"]'),
+('Red Onions', 'produce', 30, '["lbs", "pieces"]', '["red onion"]'),
+('Yellow Onions', 'produce', 30, '["lbs", "pieces", "bags"]', '["yellow onion", "onions"]'),
+('Green Onions', 'produce', 7, '["bunches"]', '["scallions", "spring onions"]'),
+('Garlic', 'produce', 21, '["bulbs", "pieces"]', '["garlic bulb", "garlic head"]'),
+('Fresh Ginger', 'produce', 21, '["pieces", "oz"]', '["ginger root"]'),
+('Parsley', 'produce', 7, '["bunches"]', '["fresh parsley", "flat leaf parsley"]'),
+('Cilantro', 'produce', 7, '["bunches"]', '["fresh cilantro", "coriander leaves"]'),
+('Basil', 'produce', 7, '["packages", "bunches"]', '["fresh basil"]'),
+('Mint', 'produce', 7, '["packages", "bunches"]', '["fresh mint"]'),
+('Strawberries', 'produce', 5, '["containers", "lbs"]', '["strawberry"]'),
+('Blueberries', 'produce', 10, '["containers", "pints"]', '["blueberry"]'),
+('Grapes', 'produce', 7, '["lbs", "bags"]', '["red grapes", "green grapes"]'),
+('Bananas', 'produce', 5, '["bunches", "lbs", "pieces"]', '["banana"]'),
+
+-- MEAT
+('Chicken Breast', 'meat', 3, '["lbs", "pieces"]', '["chicken breasts", "boneless chicken breast"]'),
+('Chicken Thighs', 'meat', 3, '["lbs", "pieces"]', '["bone-in thighs", "boneless thighs"]'),
+('Ground Beef', 'meat', 3, '["lbs"]', '["ground chuck", "hamburger meat"]'),
+('Ground Turkey', 'meat', 3, '["lbs"]', '["ground turkey breast"]'),
+('Bacon', 'meat', 7, '["packages", "lbs"]', '["thick cut bacon", "turkey bacon"]'),
+('Ham', 'meat', 7, '["lbs", "slices"]', '["deli ham", "honey ham"]'),
+('Pork Chops', 'meat', 3, '["lbs", "pieces"]', '["bone-in pork chops", "boneless pork chops"]'),
+('Salmon', 'meat', 2, '["lbs", "fillets"]', '["salmon fillet", "atlantic salmon"]'),
+('Shrimp', 'meat', 2, '["lbs"]', '["raw shrimp", "cooked shrimp"]'),
+('Ground Pork', 'meat', 3, '["lbs"]', '["ground pork shoulder"]'),
+('Beef Stew Meat', 'meat', 3, '["lbs"]', '["stew beef", "chuck roast cubes"]'),
+('Italian Sausage', 'meat', 5, '["lbs", "links"]', '["sweet italian sausage", "spicy italian sausage"]'),
+
+-- DAIRY
+('Milk', 'dairy', 7, '["gallons", "half gallons", "quarts"]', '["whole milk", "2% milk", "skim milk"]'),
+('Heavy Cream', 'dairy', 7, '["pints", "cups"]', '["heavy whipping cream", "whipping cream"]'),
+('Butter', 'dairy', 30, '["sticks", "lbs"]', '["unsalted butter", "salted butter"]'),
+('Eggs', 'dairy', 21, '["dozen", "pieces"]', '["large eggs", "extra large eggs"]'),
+('Cheddar Cheese', 'dairy', 30, '["blocks", "slices", "bags"]', '["sharp cheddar", "mild cheddar"]'),
+('Mozzarella Cheese', 'dairy', 21, '["blocks", "bags", "balls"]', '["fresh mozzarella", "part-skim mozzarella"]'),
+('Parmesan Cheese', 'dairy', 60, '["blocks", "containers"]', '["parmigiano reggiano", "grated parmesan"]'),
+('Greek Yogurt', 'dairy', 14, '["containers", "cups"]', '["plain greek yogurt", "vanilla greek yogurt"]'),
+('Cream Cheese', 'dairy', 21, '["blocks", "containers"]', '["philadelphia cream cheese"]'),
+('Sour Cream', 'dairy', 14, '["containers"]', '["light sour cream"]'),
+
+-- PANTRY STAPLES
+('White Rice', 'pantry', 730, '["lbs", "bags"]', '["long grain rice", "jasmine rice"]'),
+('Brown Rice', 'pantry', 365, '["lbs", "bags"]', '["long grain brown rice"]'),
+('Pasta', 'pantry', 730, '["boxes", "lbs"]', '["spaghetti", "penne", "rigatoni", "linguine"]'),
+('Flour', 'pantry', 365, '["lbs", "bags"]', '["all purpose flour", "bread flour"]'),
+('Sugar', 'pantry', 730, '["lbs", "bags"]', '["granulated sugar", "white sugar"]'),
+('Brown Sugar', 'pantry', 730, '["lbs", "boxes"]', '["light brown sugar", "dark brown sugar"]'),
+('Oats', 'pantry', 365, '["containers", "bags"]', '["rolled oats", "old fashioned oats"]'),
+('Quinoa', 'pantry', 730, '["bags", "containers"]', '["tri-color quinoa"]'),
+('Black Beans', 'pantry', 1095, '["cans", "bags"]', '["canned black beans", "dried black beans"]'),
+('Chickpeas', 'pantry', 1095, '["cans", "bags"]', '["garbanzo beans", "canned chickpeas"]'),
+('Diced Tomatoes', 'pantry', 730, '["cans"]', '["canned diced tomatoes", "crushed tomatoes"]'),
+('Tomato Sauce', 'pantry', 730, '["cans", "jars"]', '["marinara sauce", "pasta sauce"]'),
+('Chicken Broth', 'pantry', 730, '["cartons", "cans"]', '["chicken stock", "low sodium chicken broth"]'),
+('Vegetable Broth', 'pantry', 730, '["cartons", "cans"]', '["vegetable stock"]'),
+
+-- CONDIMENTS & SAUCES
+('Olive Oil', 'condiments', 730, '["bottles"]', '["extra virgin olive oil", "EVOO"]'),
+('Vegetable Oil', 'condiments', 730, '["bottles"]', '["canola oil", "cooking oil"]'),
+('Soy Sauce', 'condiments', 1095, '["bottles"]', '["low sodium soy sauce"]'),
+('Hot Sauce', 'condiments', 1095, '["bottles"]', '["sriracha", "tabasco"]'),
+('Ketchup', 'condiments', 365, '["bottles"]', '["heinz ketchup"]'),
+('Mustard', 'condiments', 365, '["bottles", "jars"]', '["dijon mustard", "yellow mustard"]'),
+('Mayonnaise', 'condiments', 60, '["jars"]', '["mayo", "hellmans mayo"]'),
+('Balsamic Vinegar', 'condiments', 1095, '["bottles"]', '["balsamic vinaigrette"]'),
+('Apple Cider Vinegar', 'condiments', 1095, '["bottles"]', '["ACV"]'),
+('Honey', 'condiments', 1095, '["bottles", "jars"]', '["raw honey", "clover honey"]'),
+
+-- SPICES & SEASONINGS
+('Salt', 'spices', 1825, '["containers", "boxes"]', '["table salt", "sea salt", "kosher salt"]'),
+('Black Pepper', 'spices', 1095, '["containers"]', '["ground black pepper", "pepper"]'),
+('Garlic Powder', 'spices', 1095, '["containers"]', '["granulated garlic"]'),
+('Onion Powder', 'spices', 1095, '["containers"]', '["granulated onion"]'),
+('Paprika', 'spices', 1095, '["containers"]', '["sweet paprika", "smoked paprika"]'),
+('Cumin', 'spices', 1095, '["containers"]', '["ground cumin"]'),
+('Chili Powder', 'spices', 1095, '["containers"]', '["mild chili powder"]'),
+('Italian Seasoning', 'spices', 730, '["containers"]', '["dried italian herbs"]'),
+('Oregano', 'spices', 730, '["containers"]', '["dried oregano"]'),
+('Thyme', 'spices', 730, '["containers"]', '["dried thyme"]'),
+('Rosemary', 'spices', 730, '["containers"]', '["dried rosemary"]'),
+('Bay Leaves', 'spices', 730, '["containers"]', '["dried bay leaves"]'),
+('Cinnamon', 'spices', 1095, '["containers"]', '["ground cinnamon"]'),
+('Vanilla Extract', 'spices', 1825, '["bottles"]', '["pure vanilla extract"]'),
+
+-- FROZEN
+('Frozen Broccoli', 'frozen', 365, '["bags"]', '["frozen broccoli florets"]'),
+('Frozen Peas', 'frozen', 365, '["bags"]', '["frozen green peas"]'),
+('Frozen Corn', 'frozen', 365, '["bags"]', '["frozen corn kernels"]'),
+('Frozen Berries', 'frozen', 365, '["bags"]', '["mixed berries", "frozen strawberries"]'),
+('Ice Cream', 'frozen', 60, '["containers", "pints"]', '["vanilla ice cream", "chocolate ice cream"]'),
+
+-- BEVERAGES
+('Orange Juice', 'beverages', 7, '["cartons", "bottles"]', '["fresh orange juice", "pulp free"]'),
+('Coffee', 'beverages', 365, '["bags", "containers"]', '["ground coffee", "coffee beans"]'),
+('Tea', 'beverages', 730, '["boxes", "bags"]', '["black tea", "green tea", "herbal tea"]'),
+('Sparkling Water', 'beverages', 365, '["cans", "bottles", "cases"]', '["seltzer", "club soda"]'),
+('Wine', 'beverages', 1825, '["bottles"]', '["red wine", "white wine"]'),
+('Beer', 'beverages', 180, '["cans", "bottles", "packs"]', '["craft beer", "light beer"]');
+
+-- Update the sequence to continue from the highest ID
+SELECT setval('ingredient_defaults_id_seq', (SELECT MAX(id) FROM ingredient_defaults));

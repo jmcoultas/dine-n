@@ -264,6 +264,7 @@ interface IngredientBasedRecipeParams {
   ingredients: string[];
   dietary?: string[];
   allergies?: string[];
+  pantryOnlyMode?: boolean;
 }
 
 export async function generateRecipeSuggestionsFromIngredients(params: IngredientBasedRecipeParams): Promise<string[]> {
@@ -272,11 +273,21 @@ export async function generateRecipeSuggestionsFromIngredients(params: Ingredien
   }
 
   try {
-    const prompt = `Generate 3 unique recipe titles that can be made primarily using these ingredients: ${params.ingredients.join(", ")}.
+    const ingredientContext = params.pantryOnlyMode 
+      ? `ONLY using these pantry ingredients: ${params.ingredients.join(", ")}`
+      : `primarily using these ingredients: ${params.ingredients.join(", ")}`;
+      
+    const additionalIngredientRule = params.pantryOnlyMode
+      ? "STRICT REQUIREMENT: You may ONLY use the ingredients listed above. Do not suggest any additional ingredients or seasonings beyond what is provided."
+      : "You may suggest a few additional common ingredients that would complement the provided ones, but keep additional ingredients minimal and common.";
+
+    const prompt = `Generate 3 unique recipe titles that can be made ${ingredientContext}.
 ${params.dietary?.length ? `REQUIREMENT: Must strictly follow these dietary restrictions: ${params.dietary.join(", ")}` : ""}
 ${params.allergies?.length ? `STRICT REQUIREMENT: Must completely avoid these allergens and any ingredients that might contain them. The recipes MUST NOT contain or use ${params.allergies.join(", ")} in any form, even as minor ingredients: ${params.allergies.join(", ")}` : ""}
 
-The recipes should be practical and make sense with the given ingredients. You may suggest a few additional common ingredients that would complement the provided ones, but ensure they don't violate any dietary restrictions or allergen requirements.
+${additionalIngredientRule}
+
+The recipes should be practical and make sense with the given ingredients. Ensure they don't violate any dietary restrictions or allergen requirements.
 
 IMPORTANT: Double check that none of the suggested recipes contain any of the specified allergens or violate dietary restrictions.
 
@@ -285,11 +296,15 @@ Respond with exactly 3 recipe titles in this JSON format:
   "recipes": ["Recipe 1", "Recipe 2", "Recipe 3"]
 }`;
 
+    const systemPrompt = params.pantryOnlyMode
+      ? "You are a professional chef specializing in allergen-free and dietary-restricted cooking using only available pantry ingredients. You are extremely careful about allergen avoidance, dietary requirements, and ingredient limitations. You excel at creating recipes using only the ingredients provided, without any additional ingredients."
+      : "You are a professional chef specializing in allergen-free and dietary-restricted cooking. You are extremely careful about allergen avoidance and dietary requirements. Never suggest recipes that could contain allergens or violate dietary restrictions.";
+
     const completion = await openai.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: "You are a professional chef specializing in allergen-free and dietary-restricted cooking. You are extremely careful about allergen avoidance and dietary requirements. Never suggest recipes that could contain allergens or violate dietary restrictions.",
+          content: systemPrompt,
         },
         {
           role: "user",
@@ -438,14 +453,26 @@ async function generateRecipeImage(recipeName: string, allergies: string[] = [],
   return 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
 }
 
-export async function generateRecipeFromTitleAI(title: string, allergies: string[] = []): Promise<Partial<TemporaryRecipe>> {
+export async function generateRecipeFromTitleAI(
+  title: string, 
+  allergies: string[] = [], 
+  options?: {
+    ingredients?: string[];
+    pantryOnlyMode?: boolean;
+  }
+): Promise<Partial<TemporaryRecipe>> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
 
   try {
+    const pantryConstraint = options?.pantryOnlyMode && options?.ingredients 
+      ? `PANTRY CONSTRAINT - You may ONLY use these available ingredients: ${options.ingredients.join(", ")}. Do not use any ingredients not listed here.`
+      : "";
+
     const prompt = `Generate a detailed recipe for "${title}".
 ${allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${allergies.join(", ")}` : ""}
+${pantryConstraint}
 
 MEASUREMENT REQUIREMENTS:
 - Use ONLY US customary units (cups, tablespoons, teaspoons, ounces, pounds, fluid ounces)
@@ -470,11 +497,15 @@ You must respond with a valid recipe in this exact JSON format:
 The recipe should be practical and detailed. Include all necessary ingredients and clear step-by-step instructions.
 ALL ingredient measurements MUST use US customary units only (no grams, kilograms, milliliters, etc.).`;
 
+    const systemPrompt = options?.pantryOnlyMode
+      ? "You are a professional chef and nutritionist who specializes in creating recipes using only available pantry ingredients. Create detailed, practical recipes with accurate measurements and clear instructions using ONLY the ingredients provided. Always respond with complete, valid JSON containing all required fields. IMPORTANT: Always use US customary units (cups, tablespoons, teaspoons, ounces, pounds) for all ingredient measurements - never use metric units. Never suggest ingredients not in the provided pantry list."
+      : "You are a professional chef and nutritionist. Create detailed, practical recipes with accurate measurements and clear instructions. Always respond with complete, valid JSON containing all required fields. IMPORTANT: Always use US customary units (cups, tablespoons, teaspoons, ounces, pounds) for all ingredient measurements - never use metric units.";
+
     const completion = await openai.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: "You are a professional chef and nutritionist. Create detailed, practical recipes with accurate measurements and clear instructions. Always respond with complete, valid JSON containing all required fields. IMPORTANT: Always use US customary units (cups, tablespoons, teaspoons, ounces, pounds) for all ingredient measurements - never use metric units.",
+          content: systemPrompt,
         },
         {
           role: "user",

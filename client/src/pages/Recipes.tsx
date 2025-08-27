@@ -93,7 +93,7 @@ export default function Recipes() {
       }
       return response.json();
     },
-    enabled: !!user && subscription?.tier === 'premium',
+    enabled: !!user,
   });
 
   // Query for community recipes (most favorited)
@@ -263,10 +263,6 @@ export default function Recipes() {
   };
 
   const handleTabChange = (value: string) => {
-    if (value === "favorites" && subscription?.tier !== "premium") {
-      setShowSubscriptionModal(true);
-      return false; // Prevent tab change
-    }
     return true;
   };
 
@@ -416,13 +412,8 @@ export default function Recipes() {
       >
         <TabsList>
           <TabsTrigger value="community">Community Recipes</TabsTrigger>
-          <TabsTrigger value="favorites" className="flex items-center gap-2">
+          <TabsTrigger value="favorites">
             My Recipes
-            {subscription?.tier !== "premium" && (
-              <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] px-1 py-0 h-4">
-                PRO
-              </Badge>
-            )}
           </TabsTrigger>
         </TabsList>
 
@@ -473,32 +464,16 @@ export default function Recipes() {
         </TabsContent>
 
         <TabsContent value="favorites" className="space-y-6">
-          {subscription?.tier === "premium" ? (
-            <MyRecipes
-              recipes={filteredFavoriteRecipes.map(recipe => ({ ...recipe, favorited: true }))}
-              onRecipeClick={(recipe) => setSelectedRecipe(recipe as Recipe)}
-              onFavoriteToggle={handleFavoriteToggle}
-              isLoading={isLoadingFavorites}
-              showSearch={false}
-              showFilters={true}
-              layout="grid"
-              columns={3}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-[40vh]">
-              <div className="text-center space-y-4">
-                <p className="text-lg text-muted-foreground">
-                  Upgrade to Premium to access My Recipes
-                </p>
-                <Button 
-                  onClick={() => setShowSubscriptionModal(true)}
-                  className="mt-4"
-                >
-                  Upgrade Now
-                </Button>
-              </div>
-            </div>
-          )}
+          <MyRecipes
+            recipes={filteredFavoriteRecipes.map(recipe => ({ ...recipe, favorited: true }))}
+            onRecipeClick={(recipe) => setSelectedRecipe(recipe as Recipe)}
+            onFavoriteToggle={handleFavoriteToggle}
+            isLoading={isLoadingFavorites}
+            showSearch={false}
+            showFilters={true}
+            layout="grid"
+            columns={3}
+          />
         </TabsContent>
       </Tabs>
 
