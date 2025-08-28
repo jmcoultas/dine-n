@@ -13,7 +13,8 @@ import {
   Apple,
   Wand,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Package
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -132,6 +133,14 @@ export default function Welcome() {
                 </div>
                 <h3 className="text-xl font-semibold mb-2">Automated Planning</h3>
                 <p className="text-muted-foreground">Because "dinner plan" shouldn't mean texting "what do you want to eat?" at 5:30 PM every day until someone says "I don't know, whatever."</p>
+              </div>
+              
+              <div className="flex flex-col items-center text-center p-6 bg-card rounded-lg shadow-sm">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Package className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">MyPantry Tracker</h3>
+                <p className="text-muted-foreground">Finally, a digital witness to your grocery shopping impulses. Track what you actually have before buying your fifth jar of paprika "just in case."</p>
               </div>
             </div>
           </div>
@@ -407,7 +416,7 @@ export default function Welcome() {
 
         {/* Solution Cards Section */}
         <div className="container mx-auto px-4 py-16">
-          <div className="grid grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <div className="grid grid-cols-4 gap-6 max-w-7xl mx-auto">
             <div className="flex flex-col items-center text-center p-6 bg-card rounded-lg shadow-sm">
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                 <Sparkles className="h-6 w-6 text-primary" />
@@ -433,6 +442,14 @@ export default function Welcome() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Automated Planning</h3>
               <p className="text-muted-foreground">Because "dinner plan" shouldn't mean texting "what do you want to eat?" at 5:30 PM every day until someone says "I don't know, whatever."</p>
+            </div>
+            
+            <div className="flex flex-col items-center text-center p-6 bg-card rounded-lg shadow-sm">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <Package className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">MyPantry Tracker</h3>
+              <p className="text-muted-foreground">Finally, a digital witness to your grocery shopping impulses. Track what you actually have before buying your fifth jar of paprika "just in case."</p>
             </div>
           </div>
         </div>
@@ -619,6 +636,10 @@ export default function Welcome() {
                   <li className="flex items-center gap-2">
                     <Clock className="h-5 w-5 text-primary" />
                     <span>Automated grocery list generation</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" />
+                    <span>MyPantry inventory tracking (up to 50 items)</span>
                   </li>
                 </ul>
                 <Button asChild variant="outline" size="lg" className="mt-auto">

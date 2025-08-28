@@ -923,6 +923,12 @@ export function setupAuth(app: Express) {
         preferences: user.preferences,
         subscription_tier: user.subscription_tier,
         subscription_status: user.subscription_status,
+        meal_plans_generated: user.meal_plans_generated || 0,
+        ingredient_recipes_generated: user.ingredient_recipes_generated || 0,
+        firebase_uid: user.firebase_uid || null,
+        is_admin: user.is_admin || false,
+        is_partial_registration: user.is_partial_registration ?? false,
+        created_at: user.created_at,
       });
     }
     res.status(401).send("Not logged in");

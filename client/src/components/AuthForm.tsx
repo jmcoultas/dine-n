@@ -122,25 +122,20 @@ export function AuthForm({ mode, onSubmit, error, email: initialEmail }: AuthFor
       console.log("Is new user:", result.isNewUser);
       console.log("User partial registration flag:", result.user?.is_partial_registration);
       
+      // Set the user data in the cache first
+      console.log("🔄 Setting user data in React Query cache:", result.user);
       queryClient.setQueryData<AuthUser | null>(['user'], result.user || null);
+      
+      // Force a refetch to ensure fresh data from server (this will trigger Router useEffect)
+      console.log("🔄 Invalidating user queries to trigger refetch");
       queryClient.invalidateQueries({ queryKey: ['user'] });
       
-      // If this is a new user, redirect them to onboarding
-      if (result.isNewUser) {
-        console.log("🔄 New user detected via Google sign-in, redirecting to onboarding");
-        
-        // Use the same mechanism as CompleteSignup for consistent behavior
-        if (window.history && window.history.pushState) {
-          window.history.pushState({}, document.title, '/onboarding');
-        }
-        
-        // Redirect to onboarding using the router
-        setTimeout(() => {
-          setLocation('/onboarding');
-        }, 100);
-      } else {
-        console.log("✅ Existing user signed in via Google, not redirecting to onboarding");
-      }
+      console.log("✅ Google sign-in successful, letting main Router handle onboarding redirect based on is_partial_registration flag");
+      console.log("User data after auth:", {
+        isNewUser: result.isNewUser,
+        is_partial_registration: result.user?.is_partial_registration,
+        userId: result.user?.id
+      });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to sign in with Google');
     } finally {

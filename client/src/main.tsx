@@ -187,8 +187,16 @@ function Router() {
 
   // Check if user needs onboarding (has is_partial_registration flag)
   useEffect(() => {
+    console.log("Router useEffect triggered:", {
+      isLoading,
+      hasUser: !!user,
+      userId: user?.id,
+      is_partial_registration: user?.is_partial_registration,
+      currentPath: window.location.pathname
+    });
+    
     if (!isLoading && user) {
-      console.log("User data loaded:", { 
+      console.log("✅ User data loaded in Router:", { 
         id: user.id, 
         email: user.email, 
         is_partial_registration: user.is_partial_registration,
@@ -210,11 +218,16 @@ function Router() {
       }
       
       if (user.is_partial_registration === true && window.location.pathname !== '/onboarding') {
-        console.log("User has partial registration flag, redirecting to onboarding");
+        console.log("🔄 User has partial registration flag, redirecting to onboarding");
+        console.log("Current path:", window.location.pathname);
+        console.log("User partial registration:", user.is_partial_registration);
         // Use a small delay to ensure the component has fully mounted
         setTimeout(() => {
+          console.log("🚀 Executing onboarding redirect");
           setLocation('/onboarding');
         }, 50);
+      } else if (user.is_partial_registration === false) {
+        console.log("✅ User has completed registration, no onboarding needed");
       }
     }
   }, [user, isLoading, setLocation]);

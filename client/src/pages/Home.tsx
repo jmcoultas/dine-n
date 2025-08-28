@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useUser } from "@/hooks/use-user";
-import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock } from "lucide-react";
+import { ChefHat, UtensilsCrossed, BookOpen, Search, Heart, Clock, Package } from "lucide-react";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import Footer from "@/components/Footer";
 
@@ -95,7 +95,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 mb-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border border-primary/10">
               <Search className="w-10 h-10 text-primary mb-4" />
               <h3 className="text-xl font-semibold mb-2">Smart Search</h3>
@@ -117,6 +117,14 @@ export default function Home() {
               <h3 className="text-xl font-semibold mb-2">Quick Access</h3>
               <p className="text-muted-foreground">
                 View cooking times, servings, and nutrition info at a glance
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border border-primary/10">
+              <Package className="w-10 h-10 text-primary mb-4" />
+              <h3 className="text-xl font-semibold mb-2">MyPantry</h3>
+              <p className="text-muted-foreground">
+                Track your pantry inventory and get recipe suggestions based on what you have
               </p>
             </div>
           </div>

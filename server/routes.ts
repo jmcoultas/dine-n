@@ -1960,6 +1960,7 @@ export function registerRoutes(app: express.Express) {
       
       if (!user) {
         // Create new user if they don't exist
+        console.log(`Creating new Google user for ${email.toLowerCase()}, Firebase isNewUser: ${firebaseIsNewUser}`);
         const [newUser] = await db
           .insert(users)
           .values({
@@ -1972,18 +1973,23 @@ export function registerRoutes(app: express.Express) {
             meal_plans_generated: 0,
             ingredient_recipes_generated: 0,
             created_at: new Date(),
-            // Use Firebase's isNewUser detection to set partial registration flag
-            is_partial_registration: firebaseIsNewUser || false,
+            // Always set partial registration for new Google users to ensure they go through onboarding
+            is_partial_registration: true,
           })
           .returning();
         user = newUser;
-        isNewUser = firebaseIsNewUser || false;
+        isNewUser = true; // Always true for newly created users
+        console.log(`Created new user with ID ${newUser.id}, is_partial_registration: true, isNewUser: true`);
       } else {
         // User exists in our database, but check if they need onboarding
         // If Firebase says it's a new user but we have a record, they might have
         // signed up via email and are now using Google for the first time
+        console.log(`Existing user found for ${email.toLowerCase()}, Firebase isNewUser: ${firebaseIsNewUser}, user.is_partial_registration: ${user.is_partial_registration}`);
         if (firebaseIsNewUser && user.is_partial_registration) {
           isNewUser = true;
+          console.log(`Setting isNewUser=true for existing partial user`);
+        } else {
+          console.log(`Not setting isNewUser for existing user`);
         }
       }
       

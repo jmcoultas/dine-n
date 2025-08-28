@@ -5,7 +5,8 @@ import {
   ChefHat, 
   UtensilsCrossed, 
   BookOpen, 
-  Clock 
+  Clock,
+  Package
 } from "lucide-react";
 
 interface PricingCardProps {
@@ -52,6 +53,10 @@ export function PricingCard({
           <li className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
             <span>Automated grocery list generation</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            <span>MyPantry inventory tracking (up to 50 items)</span>
           </li>
         </ul>
         {showGetStarted && (
