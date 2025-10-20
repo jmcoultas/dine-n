@@ -1,3 +1,7 @@
+// Load environment variables from .env file
+import dotenv from 'dotenv';
+dotenv.config();
+
 interface EnvironmentConfig {
   nodeEnv: string;
   isProduction: boolean;

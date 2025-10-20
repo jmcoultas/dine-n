@@ -61,6 +61,7 @@
     "cmdk": "^1.0.0",
     "cron": "^3.5.0",
     "date-fns": "^3.6.0",
+    "dotenv": "^17.2.3",
     "drizzle-orm": "^0.36.4",
     "drizzle-zod": "^0.5.1",
     "embla-carousel-react": "^8.3.0",
