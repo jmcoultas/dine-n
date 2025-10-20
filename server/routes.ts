@@ -45,11 +45,78 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Middleware to check if user is authenticated
-function isAuthenticated(req: Request, res: Response, next: NextFunction) {
+// Middleware to check if user is authenticated (supports both session and Firebase token)
+async function isAuthenticated(req: Request, res: Response, next: NextFunction) {
+  // First check if user is authenticated via session (web app)
   if (req.isAuthenticated()) {
     return next();
   }
+
+  // If not authenticated via session, check for Firebase token (iOS app)
+  const firebaseToken = req.headers['firebase-token'] as string | undefined;
+  if (firebaseToken) {
+    try {
+      // Verify the Firebase token
+      const decodedToken = await auth.verifyIdToken(firebaseToken);
+      const email = decodedToken.email;
+      const uid = decodedToken.uid;
+
+      if (!email) {
+        return res.status(401).json({
+          error: "Invalid token",
+          message: "No email found in Firebase token"
+        });
+      }
+
+      // Look up user in database by Firebase UID or email
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(or(
+          eq(users.firebase_uid, uid),
+          eq(users.email, email.toLowerCase())
+        ))
+        .limit(1);
+
+      if (!user) {
+        return res.status(401).json({
+          error: "User not found",
+          message: "No user found with this Firebase account"
+        });
+      }
+
+      // Update Firebase UID if needed
+      if (!user.firebase_uid || user.firebase_uid !== uid) {
+        await db
+          .update(users)
+          .set({ firebase_uid: uid })
+          .where(eq(users.id, user.id));
+      }
+
+      // Attach user to request object
+      const publicUser: PublicUser = {
+        ...user,
+        subscription_status: user.subscription_status || 'inactive',
+        subscription_tier: user.subscription_tier || 'free',
+        meal_plans_generated: user.meal_plans_generated || 0,
+        ingredient_recipes_generated: user.ingredient_recipes_generated || 0,
+        firebase_uid: uid,
+        is_admin: user.is_admin || false,
+        is_partial_registration: user.is_partial_registration ?? false
+      };
+
+      req.user = publicUser;
+      return next();
+    } catch (error) {
+      console.error('Firebase token verification failed:', error);
+      return res.status(401).json({
+        error: "Invalid token",
+        message: "Firebase token verification failed"
+      });
+    }
+  }
+
+  // No authentication method found
   res.status(401).json({ error: "Not authenticated" });
 }
 
@@ -1907,6 +1974,43 @@ export function registerRoutes(app: express.Express) {
   });
 
   // User Profile Routes
+  // Get current user endpoint for iOS app
+  app.get("/api/user", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      // Fetch fresh user data from database
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.user.id))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Return user data in the format iOS expects
+      const publicUser: PublicUser = {
+        ...user,
+        subscription_status: user.subscription_status || 'inactive',
+        subscription_tier: user.subscription_tier || 'free',
+        meal_plans_generated: user.meal_plans_generated || 0,
+        ingredient_recipes_generated: user.ingredient_recipes_generated || 0,
+        firebase_uid: user.firebase_uid || null,
+        is_admin: user.is_admin || false,
+        is_partial_registration: user.is_partial_registration ?? false
+      };
+
+      res.json(publicUser);
+    } catch (error: any) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ error: "Failed to fetch user data" });
+    }
+  });
+
   app.put("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { preferences } = req.body;
@@ -2017,6 +2121,113 @@ export function registerRoutes(app: express.Express) {
     } catch (error) {
       console.error('Google auth error:', error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // Firebase token authentication endpoint for iOS app
+  app.post('/api/auth/firebase-token', async (req, res) => {
+    try {
+      const { idToken } = req.body;
+
+      if (!idToken) {
+        return res.status(400).json({
+          error: 'Missing idToken',
+          message: 'Firebase ID token is required'
+        });
+      }
+
+      // Verify the Firebase ID token
+      const decodedToken = await auth.verifyIdToken(idToken);
+      const email = decodedToken.email;
+      const uid = decodedToken.uid;
+
+      if (!email) {
+        return res.status(400).json({
+          error: 'No email in token',
+          message: 'No email found in Firebase token'
+        });
+      }
+
+      // Check if user exists in our database
+      let [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1);
+
+      // If user doesn't exist, create them
+      if (!user) {
+        console.log(`Creating new user from Firebase token: ${email.toLowerCase()}`);
+        const tempPasswordHash = await cryptoUtils.hash("FIREBASE_USER_" + Math.random().toString(36).substring(2));
+
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            email: email.toLowerCase(),
+            password_hash: tempPasswordHash,
+            name: decodedToken.name || email.toLowerCase().split('@')[0],
+            firebase_uid: uid,
+            subscription_status: 'inactive' as const,
+            subscription_tier: 'free' as const,
+            meal_plans_generated: 0,
+            ingredient_recipes_generated: 0,
+            created_at: new Date(),
+            is_partial_registration: false,
+          })
+          .returning();
+
+        user = newUser;
+        console.log(`Created new user with ID ${newUser.id}`);
+      } else {
+        // User exists, update Firebase UID if needed
+        if (!user.firebase_uid || user.firebase_uid !== uid) {
+          await db
+            .update(users)
+            .set({ firebase_uid: uid })
+            .where(eq(users.id, user.id));
+          user.firebase_uid = uid;
+        }
+      }
+
+      // Create a custom token for Firebase
+      const firebaseToken = await createFirebaseToken(user.id.toString());
+
+      // Prepare user response
+      const publicUser: PublicUser = {
+        ...user,
+        subscription_status: user.subscription_status || 'inactive',
+        subscription_tier: user.subscription_tier || 'free',
+        meal_plans_generated: user.meal_plans_generated || 0,
+        ingredient_recipes_generated: user.ingredient_recipes_generated || 0,
+        firebase_uid: user.firebase_uid || null,
+        is_admin: user.is_admin || false,
+        is_partial_registration: user.is_partial_registration ?? false,
+        firebaseToken
+      };
+
+      // Log the user in with session
+      req.login(publicUser, (err) => {
+        if (err) {
+          console.error('Error creating session:', err);
+          return res.status(500).json({
+            error: 'Session error',
+            message: 'Error creating user session'
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: 'Authentication successful',
+          user: publicUser
+        });
+      });
+    } catch (error) {
+      console.error('Firebase token authentication error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(401).json({
+        error: 'Authentication failed',
+        message: errorMessage
+      });
     }
   });
 
