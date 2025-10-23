@@ -11,9 +11,8 @@ defaultBucketID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff"
 [deployment]
 deploymentTarget = "cloudrun"
 ignorePorts = false
-# Use npm ci for clean dependency installation during deployment
-# Remove node_modules completely to avoid ENOTEMPTY errors
-build = ["sh", "-c", "rm -rf node_modules package-lock.json && npm install && npm run build"]
+# Run cleanup script to remove shadcn-ui and install fresh dependencies
+build = ["bash", "scripts/cleanup-deploy.sh", "&&", "npm", "run", "build"]
 run = ["sh", "-c", "NODE_ENV=production npm run start"]
 
 [[ports]]
