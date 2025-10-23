@@ -10,6 +10,9 @@ defaultBucketID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff"
 
 [deployment]
 deploymentTarget = "cloudrun"
+ignorePorts = false
+# Use npm ci for clean dependency installation during deployment
+install = ["sh", "-c", "rm -rf node_modules && npm ci"]
 build = ["npm", "run", "build"]
 run = ["sh", "-c", "NODE_ENV=production npm run start"]
 
