@@ -10,7 +10,7 @@ defaultBucketID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff"
 
 [deployment]
 deploymentTarget = "cloudrun"
-build = ["npm", "run", "build"]
+build = ["sh", "-c", "./deploy-build.sh"]
 run = ["sh", "-c", "NODE_ENV=production npm run start"]
 
 [[ports]]
