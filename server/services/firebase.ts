@@ -5,13 +5,33 @@ import { config } from '../config/environment';
 // Initialize Firebase Admin
 // Handle escaped newlines from .env files
 // In .env files, \\n gets interpreted as literal \n string by dotenv
-const privateKey = config.firebasePrivateKey
-  ?.split('\\n').join('\n');  // Replace all \n (literal backslash-n) with actual newlines
+let privateKey = config.firebasePrivateKey;
+
+// Handle different newline encodings
+if (privateKey) {
+  // First try replacing \\n (double backslash)
+  privateKey = privateKey.split('\\\\n').join('\n');
+  // Then try replacing \n (single backslash from env)
+  privateKey = privateKey.split('\\n').join('\n');
+
+  console.log('🔑 Firebase private key processed:', {
+    hasKey: !!privateKey,
+    startsWithBegin: privateKey.startsWith('-----BEGIN'),
+    length: privateKey.length
+  });
+}
 
 let app: App | undefined;
-let auth: Auth;
+let auth: Auth | null = null;
 
 try {
+  console.log('🚀 Initializing Firebase Admin...', {
+    hasProjectId: !!config.firebaseProjectId,
+    hasClientEmail: !!config.firebaseClientEmail,
+    hasPrivateKey: !!privateKey,
+    projectId: config.firebaseProjectId
+  });
+
   app = initializeApp({
     credential: cert({
       projectId: config.firebaseProjectId,
@@ -22,11 +42,10 @@ try {
   auth = getAuth(app);
   console.log('✅ Firebase Admin initialized successfully');
 } catch (error) {
-  console.warn('⚠️  Firebase Admin initialization failed - authentication features will not work');
-  console.warn('Error:', error instanceof Error ? error.message : error);
+  console.error('❌ Firebase Admin initialization failed - authentication features will not work');
+  console.error('Error:', error instanceof Error ? error.message : error);
+  console.error('Stack:', error instanceof Error ? error.stack : 'No stack trace');
   console.warn('Server will start anyway for testing other endpoints');
-  // Create a dummy auth object for development
-  auth = null as any;
 }
 
 export async function createFirebaseToken(userId: string) {

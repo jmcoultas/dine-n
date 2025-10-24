@@ -43,14 +43,22 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false }));
 
-// Development CORS settings
+// CORS settings - allow both web and mobile clients
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
   const clientUrl = process.env.CLIENT_URL || config.clientUrl;
 
-  res.header('Access-Control-Allow-Origin', clientUrl);
+  // Allow requests from web client or iOS app (iOS apps don't send Origin header)
+  if (origin === clientUrl || !origin) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.header('Access-Control-Allow-Origin', '*'); // Allow all origins for mobile apps
+  }
+
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  // IMPORTANT: Include firebase-token in allowed headers for iOS authentication
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, firebase-token');
 
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);

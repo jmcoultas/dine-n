@@ -55,11 +55,24 @@ async function isAuthenticated(req: Request, res: Response, next: NextFunction) 
   // If not authenticated via session, check for Firebase token (iOS app)
   const firebaseToken = req.headers['firebase-token'] as string | undefined;
   if (firebaseToken) {
+    console.log('🔑 Firebase token received from iOS app');
+
+    // Check if Firebase Admin is initialized
+    if (!auth) {
+      console.error('❌ Firebase Admin is not initialized - cannot verify token');
+      return res.status(503).json({
+        error: "Service Unavailable",
+        message: "Firebase authentication is not configured on the server"
+      });
+    }
+
     try {
       // Verify the Firebase token
+      console.log('🔍 Verifying Firebase token...');
       const decodedToken = await auth.verifyIdToken(firebaseToken);
       const email = decodedToken.email;
       const uid = decodedToken.uid;
+      console.log(`✅ Firebase token verified for user: ${email}`);
 
       if (!email) {
         return res.status(401).json({
