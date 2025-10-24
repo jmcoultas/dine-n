@@ -427,7 +427,7 @@ async function generateRecipeImage(recipeName: string, allergies: string[] = [],
         style: "natural"
       });
 
-      if (imageResponse.data[0]?.url) {
+      if (imageResponse.data?.[0]?.url) {
         console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
         return imageResponse.data[0].url;
       }
