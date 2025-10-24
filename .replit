@@ -11,8 +11,10 @@ defaultBucketID = "replit-objstore-61e062ce-7b37-4380-ac44-c49bccd2f1ff"
 [deployment]
 deploymentTarget = "cloudrun"
 ignorePorts = false
+# Disable automatic npm install and use our cleanup script
+installType = "none"
 # Run cleanup script to remove shadcn-ui and install fresh dependencies
-build = ["bash", "scripts/cleanup-deploy.sh", "&&", "npm", "run", "build"]
+build = ["sh", "-c", "bash scripts/cleanup-deploy.sh && npm run build"]
 run = ["sh", "-c", "NODE_ENV=production npm run start"]
 
 [[ports]]

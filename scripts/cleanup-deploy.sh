@@ -3,33 +3,40 @@ set -e
 
 echo "🧹 Cleaning deployment environment..."
 
-# Force remove node_modules with retries
+# Aggressively remove node_modules
+echo "Step 1: Removing node_modules directory..."
+rm -rf node_modules 2>/dev/null || true
+sleep 1
+
+# Verify it's gone and force remove if still there
 if [ -d "node_modules" ]; then
-  echo "Removing node_modules..."
-  rm -rf node_modules || true
-  # Double check it's gone
-  if [ -d "node_modules/shadcn-ui" ]; then
-    echo "Force removing shadcn-ui..."
-    chmod -R 777 node_modules/shadcn-ui || true
-    rm -rf node_modules/shadcn-ui || true
-  fi
-  # Final cleanup
-  rm -rf node_modules || true
+  echo "node_modules still exists, forcing removal..."
+  find node_modules -type f -delete 2>/dev/null || true
+  find node_modules -type d -delete 2>/dev/null || true
+  rm -rf node_modules 2>/dev/null || true
 fi
 
-# Remove package-lock to force fresh install
-if [ -f "package-lock.json" ]; then
-  echo "Removing package-lock.json..."
-  rm -f package-lock.json
+# Remove package-lock.json
+echo "Step 2: Removing package-lock.json..."
+rm -f package-lock.json
+
+# Clear all npm caches
+echo "Step 3: Clearing npm cache..."
+npm cache clean --force 2>/dev/null || true
+rm -rf ~/.npm 2>/dev/null || true
+
+# Verify package.json doesn't have shadcn-ui
+echo "Step 4: Verifying package.json is clean..."
+if grep -q "shadcn-ui" package.json; then
+  echo "❌ ERROR: shadcn-ui still in package.json!"
+  exit 1
+else
+  echo "✅ package.json is clean"
 fi
 
-# Clear npm cache
-echo "Clearing npm cache..."
-npm cache clean --force
-
-echo "✅ Cleanup complete! Installing dependencies..."
-
-# Fresh install
-npm install --no-optional --legacy-peer-deps
+echo "Step 5: Installing dependencies with workaround flags..."
+# Use --prefer-offline=false to avoid cache issues
+# Use --legacy-peer-deps to avoid peer dependency conflicts
+npm install --prefer-offline=false --no-save --legacy-peer-deps
 
 echo "✅ Dependencies installed successfully!"
