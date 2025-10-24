@@ -53,7 +53,7 @@ export function getAuthInstance(): Auth {
   if (!auth) {
     throw new Error('Firebase Admin is not initialized');
   }
-  return auth;
+  return auth as Auth; // Type assertion: we've verified it's not null
 }
 
 export async function createFirebaseToken(userId: string) {
