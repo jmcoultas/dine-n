@@ -31,7 +31,7 @@ if (!stripeKey || typeof stripeKey !== 'string') {
 }
 
 export const stripe = new Stripe(stripeKey, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-02-24.acacia' as any, // TypeScript types lag behind Stripe API releases
 });
 
 // Test function to verify Stripe connection

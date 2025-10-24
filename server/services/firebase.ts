@@ -1,5 +1,5 @@
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { initializeApp, cert, type App } from 'firebase-admin/app';
+import { getAuth, type Auth } from 'firebase-admin/auth';
 import { config } from '../config/environment';
 
 // Initialize Firebase Admin
@@ -8,8 +8,8 @@ import { config } from '../config/environment';
 const privateKey = config.firebasePrivateKey
   ?.split('\\n').join('\n');  // Replace all \n (literal backslash-n) with actual newlines
 
-let app;
-let auth;
+let app: App | undefined;
+let auth: Auth;
 
 try {
   app = initializeApp({
