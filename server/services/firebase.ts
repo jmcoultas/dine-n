@@ -48,12 +48,22 @@ try {
   console.warn('Server will start anyway for testing other endpoints');
 }
 
+// Helper to get auth instance with null check
+export function getAuthInstance(): Auth {
+  if (!auth) {
+    throw new Error('Firebase Admin is not initialized');
+  }
+  return auth;
+}
+
 export async function createFirebaseToken(userId: string) {
-  return auth.createCustomToken(userId);
+  return getAuthInstance().createCustomToken(userId);
 }
 
 export async function verifyFirebaseToken(token: string) {
-  return auth.verifyIdToken(token);
+  return getAuthInstance().verifyIdToken(token);
 }
 
-export default auth; 
+// Export both auth (for backwards compatibility) and getAuthInstance
+export default auth;
+export { auth }; 

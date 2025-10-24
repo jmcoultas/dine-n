@@ -10,8 +10,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
 import { type User, type PublicUser } from "./types";
-import { createFirebaseToken } from "./services/firebase";
-import auth from "./services/firebase";
+import { createFirebaseToken, getAuthInstance } from "./services/firebase";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -181,7 +180,7 @@ export function setupAuth(app: Express) {
       if (!isMobileVerification) {
         try {
           console.log("Verifying Firebase token...");
-          const decodedToken = await auth.verifyIdToken(authToken as string);
+          const decodedToken = await getAuthInstance().verifyIdToken(authToken as string);
           firebaseUid = decodedToken.uid;
           console.log(`Firebase token verified for UID: ${firebaseUid}`);
         } catch (error) {
@@ -197,7 +196,7 @@ export function setupAuth(app: Express) {
         // Instead of generating a placeholder UID, try to find existing Firebase user
         try {
           console.log(`Checking if Firebase user exists for ${email.toLowerCase().trim()}`);
-          const firebaseUser = await auth.getUserByEmail(email.toLowerCase().trim());
+          const firebaseUser = await getAuthInstance().getUserByEmail(email.toLowerCase().trim());
           if (firebaseUser) {
             firebaseUid = firebaseUser.uid;
             console.log(`Found existing Firebase user with UID: ${firebaseUid} for mobile flow`);
@@ -378,7 +377,7 @@ export function setupAuth(app: Express) {
           // If not cross-browser, try normal Firebase token verification
           if (!isCrossBrowserCompletion) {
             console.log("Verifying Firebase token for registration");
-            const decodedToken = await auth.verifyIdToken(userFirebaseToken as string);
+            const decodedToken = await getAuthInstance().verifyIdToken(userFirebaseToken as string);
             firebaseUid = decodedToken.uid;
             console.log(`Firebase token verified for UID: ${firebaseUid}`);
           }
@@ -488,7 +487,7 @@ export function setupAuth(app: Express) {
         // Check if this might be a Firebase-only user trying to complete registration
         if (!existingUser.firebase_uid && userFirebaseToken && !isCrossBrowserCompletion) {
           try {
-            const decodedToken = await auth.verifyIdToken(userFirebaseToken as string);
+            const decodedToken = await getAuthInstance().verifyIdToken(userFirebaseToken as string);
             if (decodedToken.email?.toLowerCase() === normalizedEmail) {
               console.log(`Firebase user trying to complete registration for existing native user ${existingUser.id}`);
               
@@ -564,7 +563,7 @@ export function setupAuth(app: Express) {
       if (!firebaseUid) {
         try {
           console.log(`No Firebase UID provided, checking if Firebase user exists for ${normalizedEmail}`);
-          const firebaseUser = await auth.getUserByEmail(normalizedEmail);
+          const firebaseUser = await getAuthInstance().getUserByEmail(normalizedEmail);
           if (firebaseUser) {
             firebaseUid = firebaseUser.uid;
             console.log(`Found existing Firebase user with UID: ${firebaseUid}`);
@@ -655,7 +654,7 @@ export function setupAuth(app: Express) {
     if (firebaseToken) {
       try {
         // Verify the Firebase token
-        const decodedToken = await auth.verifyIdToken(firebaseToken);
+        const decodedToken = await getAuthInstance().verifyIdToken(firebaseToken);
         const email = decodedToken.email;
         const uid = decodedToken.uid;
         

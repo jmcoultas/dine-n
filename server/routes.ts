@@ -9,8 +9,7 @@ import { requireActiveSubscription } from "./middleware/subscription";
 import { requireAdmin, checkAdminStatus } from "./middleware/admin";
 import { stripeService } from "./services/stripe";
 import { downloadAndStoreImage } from "./services/imageStorage";
-import auth from './services/firebase';
-import { createFirebaseToken } from './services/firebase';
+import { auth, createFirebaseToken, getAuthInstance } from './services/firebase';
 import { type PublicUser } from "./types";
 import { z } from "zod";
 import { MealTypeEnum, CuisineTypeEnum, DietaryTypeEnum, DifficultyEnum } from "@db/schema";
@@ -69,7 +68,7 @@ async function isAuthenticated(req: Request, res: Response, next: NextFunction) 
     try {
       // Verify the Firebase token
       console.log('🔍 Verifying Firebase token...');
-      const decodedToken = await auth.verifyIdToken(firebaseToken);
+      const decodedToken = await getAuthInstance().verifyIdToken(firebaseToken);
       const email = decodedToken.email;
       const uid = decodedToken.uid;
       console.log(`✅ Firebase token verified for user: ${email}`);
@@ -2059,7 +2058,7 @@ export function registerRoutes(app: express.Express) {
       const { idToken, isNewUser: firebaseIsNewUser } = req.body;
       
       // Verify the Firebase ID token
-      const decodedToken = await auth.verifyIdToken(idToken);
+      const decodedToken = await getAuthInstance().verifyIdToken(idToken);
       const email = decodedToken.email;
       
       if (!email) {
@@ -2150,7 +2149,7 @@ export function registerRoutes(app: express.Express) {
       }
 
       // Verify the Firebase ID token
-      const decodedToken = await auth.verifyIdToken(idToken);
+      const decodedToken = await getAuthInstance().verifyIdToken(idToken);
       const email = decodedToken.email;
       const uid = decodedToken.uid;
 
@@ -2271,7 +2270,7 @@ export function registerRoutes(app: express.Express) {
         // Check if user exists in Firebase but not in native DB (limbo state)
         try {
           // Try to get user from Firebase by email
-          const firebaseUser = await auth.getUserByEmail(normalizedEmail);
+          const firebaseUser = await getAuthInstance().getUserByEmail(normalizedEmail);
           
           if (firebaseUser) {
             console.log(`User found in Firebase but missing from native DB. Creating native user record for UID: ${firebaseUser.uid}`);
@@ -3395,7 +3394,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
       
       let firebaseUser = null;
       try {
-        firebaseUser = await auth.getUserByEmail(normalizedEmail);
+        firebaseUser = await getAuthInstance().getUserByEmail(normalizedEmail);
       } catch (firebaseError: any) {
         console.log('Firebase user lookup failed:', firebaseError.message);
       }
@@ -3832,7 +3831,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
       let firebaseStatus = null;
       if (user.firebase_uid) {
         try {
-          const firebaseUser = await auth.getUser(user.firebase_uid);
+          const firebaseUser = await getAuthInstance().getUser(user.firebase_uid);
           firebaseStatus = {
             exists: true,
             email: firebaseUser.email,
@@ -3885,7 +3884,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
       if (!user.firebase_uid && firebaseStatus === null) {
         // Check if Firebase user exists with this email
         try {
-          const firebaseUser = await auth.getUserByEmail(user.email);
+          const firebaseUser = await getAuthInstance().getUserByEmail(user.email);
           if (firebaseUser) {
             userAnalysis.user_state = 'limbo';
             userAnalysis.issues.push('Firebase user exists but not linked to native user');
@@ -3959,7 +3958,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         case 'link_firebase':
           // Try to link Firebase user by email
           try {
-            const firebaseUser = await auth.getUserByEmail(user.email);
+            const firebaseUser = await getAuthInstance().getUserByEmail(user.email);
             await db
               .update(users)
               .set({ firebase_uid: firebaseUser.uid })
