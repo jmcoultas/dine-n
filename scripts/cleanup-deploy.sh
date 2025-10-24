@@ -34,9 +34,12 @@ else
   echo "✅ package.json is clean"
 fi
 
-echo "Step 5: Installing dependencies with workaround flags..."
-# Use --prefer-offline=false to avoid cache issues
-# Use --legacy-peer-deps to avoid peer dependency conflicts
-npm install --prefer-offline=false --no-save --legacy-peer-deps
+echo "Step 5: Installing dependencies with npm ci (clean install)..."
+# npm ci does a clean install from package-lock.json, ignoring node_modules
+# This should bypass the shadcn-ui rename issue entirely
+npm ci --prefer-offline=false 2>&1 || {
+  echo "npm ci failed, trying npm install as fallback..."
+  npm install --prefer-offline=false --no-save --legacy-peer-deps
+}
 
 echo "✅ Dependencies installed successfully!"
