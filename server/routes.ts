@@ -2184,12 +2184,12 @@ export function registerRoutes(app: express.Express) {
             meal_plans_generated: 0,
             ingredient_recipes_generated: 0,
             created_at: new Date(),
-            is_partial_registration: false,
+            is_partial_registration: true, // New users need to complete onboarding
           })
           .returning();
 
         user = newUser;
-        console.log(`Created new user with ID ${newUser.id}`);
+        console.log(`Created new user with ID ${newUser.id} - marked for onboarding`);
       } else {
         // User exists, update Firebase UID if needed
         if (!user.firebase_uid || user.firebase_uid !== uid) {
