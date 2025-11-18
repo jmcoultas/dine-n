@@ -1444,6 +1444,51 @@ export function registerRoutes(app: express.Express) {
           .where(eq(users.id, user.id));
       }
 
+      // Create meal plan record and associate recipes
+      let mealPlanId: number | null = null;
+      if (savedRecipes.length > 0) {
+        const startDate = new Date();
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + days - 1);
+
+        const expirationDate = MealPlanExpirationService.calculateExpirationDate(startDate, days);
+
+        // Create the meal plan
+        const [mealPlan] = await db.insert(mealPlans).values({
+          user_id: user.id,
+          name: `${days}-Day Meal Plan`,
+          start_date: startDate,
+          end_date: endDate,
+          expiration_date: expirationDate,
+          days_generated: days,
+          is_expired: false,
+          created_at: new Date()
+        }).returning();
+
+        mealPlanId = mealPlan.id;
+
+        // Associate recipes with the meal plan
+        const mealPlanRecipeValues = savedRecipes.map((recipe, index) => {
+          const dayOffset = Math.floor(index / 3);
+          const recipeDate = new Date(startDate);
+          recipeDate.setDate(recipeDate.getDate() + dayOffset);
+
+          const mealIndex = index % 3;
+          const mealType = mealTypes[mealIndex];
+
+          return {
+            meal_plan_id: mealPlan.id,
+            recipe_id: recipe.id,
+            day: recipeDate,
+            meal: mealType,
+            created_at: new Date()
+          };
+        });
+
+        await db.insert(mealPlanRecipes).values(mealPlanRecipeValues);
+        console.log(`Created meal plan ${mealPlan.id} with ${savedRecipes.length} recipes`);
+      }
+
       const totalTime = Date.now() - startTime;
       console.log(`Total meal plan generation completed in ${totalTime}ms`);
 
