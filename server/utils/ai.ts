@@ -427,15 +427,7 @@ async function generateRecipeImage(recipeName: string, allergies: string[] = [],
         model: "gemini-2.5-flash-image",
       });
 
-      const result = await model.generateContent({
-        contents: [{
-          role: 'user',
-          parts: [{ text: prompt }]
-        }],
-        generationConfig: {
-          responseMimeType: 'image/jpeg',
-        }
-      });
+      const result = await model.generateContent(prompt);
 
       if (result?.response) {
         const response = result.response;
@@ -444,25 +436,20 @@ async function generateRecipeImage(recipeName: string, allergies: string[] = [],
           const candidate = response.candidates[0];
           
           if (candidate.content?.parts && candidate.content.parts.length > 0) {
-            const part = candidate.content.parts[0];
-            
-            if (part.inlineData?.data) {
-              const base64Data = part.inlineData.data;
-              const dataUrl = `data:${part.inlineData.mimeType || 'image/jpeg'};base64,${base64Data}`;
-              console.log('AI Service: Successfully generated image with Gemini (base64 format)');
-              return dataUrl;
+            for (const part of candidate.content.parts) {
+              if (part.inlineData?.data) {
+                const base64Data = part.inlineData.data;
+                const mimeType = part.inlineData.mimeType || 'image/png';
+                const dataUrl = `data:${mimeType};base64,${base64Data}`;
+                console.log(`AI Service: Successfully generated image with Gemini (${mimeType} format, ${base64Data.length} bytes)`);
+                return dataUrl;
+              }
             }
           }
         }
-        
-        if (response.text) {
-          const imageUrl = response.text();
-          console.log('AI Service: Successfully generated image URL:', imageUrl);
-          return imageUrl;
-        }
       }
       
-      throw new Error('No image data in response');
+      throw new Error('No image data found in response');
     } catch (error: any) {
       lastError = error;
       console.error(`AI Service: Error generating image with Gemini (attempt ${attempt}/${retries}):`, error);
