@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Recipe, TemporaryRecipe } from "@db/schema";
 import { MealTypeEnum } from "@db/schema";
 import { z } from "zod";
@@ -9,6 +10,8 @@ type MealType = z.infer<typeof MealTypeEnum>;
 const openai = new OpenAI({
   apiKey: config.openaiApiKey,
 });
+
+const genAI = new GoogleGenerativeAI(config.googleAiApiKey);
 
 interface RecipeGenerationParams {
   dietary: string[];
@@ -412,43 +415,71 @@ async function generateRecipeImage(recipeName: string, allergies: string[] = [],
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`AI Service: Generating image for recipe: ${recipeName} (attempt ${attempt}/${retries})`);
+      console.log(`AI Service: Generating image with Gemini Nano Banana for recipe: ${recipeName} (attempt ${attempt}/${retries})`);
       
       const allergenWarning = allergies.length > 0 
-        ? ` STRICT REQUIREMENT - The photo must NOT show or include any ${allergies.join(", ")} or foods containing these allergens.`
+        ? ` IMPORTANT: The photo must NOT show or include any ${allergies.join(", ")} or foods containing these allergens.`
         : '';
       
-      const imageResponse = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: `Create an image of ${recipeName}. DO NOT INCLUDE any ${allergenWarning} in the photo for unlettered viewers only`,
-        n: 1,
-        size: "1024x1024",
-        quality: "standard",
-        style: "natural"
+      const prompt = `Professional food photography of ${recipeName}. High quality, appetizing, well-lit, natural style. Shot from a flattering angle on a clean background.${allergenWarning}`;
+      
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash-image",
       });
 
-      if (imageResponse.data?.[0]?.url) {
-        console.log('AI Service: Successfully generated image URL:', imageResponse.data[0].url);
-        return imageResponse.data[0].url;
+      const result = await model.generateContent({
+        contents: [{
+          role: 'user',
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          responseMimeType: 'image/jpeg',
+        }
+      });
+
+      if (result?.response) {
+        const response = result.response;
+        
+        if (response.candidates && response.candidates.length > 0) {
+          const candidate = response.candidates[0];
+          
+          if (candidate.content?.parts && candidate.content.parts.length > 0) {
+            const part = candidate.content.parts[0];
+            
+            if (part.inlineData?.data) {
+              const base64Data = part.inlineData.data;
+              const dataUrl = `data:${part.inlineData.mimeType || 'image/jpeg'};base64,${base64Data}`;
+              console.log('AI Service: Successfully generated image with Gemini (base64 format)');
+              return dataUrl;
+            }
+          }
+        }
+        
+        if (response.text) {
+          const imageUrl = response.text();
+          console.log('AI Service: Successfully generated image URL:', imageUrl);
+          return imageUrl;
+        }
       }
+      
+      throw new Error('No image data in response');
     } catch (error: any) {
       lastError = error;
-      console.error(`AI Service: Error generating image (attempt ${attempt}/${retries}):`, error);
+      console.error(`AI Service: Error generating image with Gemini (attempt ${attempt}/${retries}):`, error);
       
-      // Don't retry on these errors
-      if (error.status === 401 || error.status === 403) {
+      if (error.message?.includes('API key') || error.status === 401 || error.status === 403) {
+        console.error('AI Service: Authentication error, will not retry');
         break;
       }
       
-      // Wait before retrying (exponential backoff)
       if (attempt < retries) {
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+        console.log(`AI Service: Waiting ${delay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
-  // If all attempts failed, log the final error and return fallback URL
   console.error('AI Service: All image generation attempts failed:', lastError);
   return 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
 }

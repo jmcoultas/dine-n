@@ -13,6 +13,7 @@ interface EnvironmentConfig {
   
   // API Keys
   openaiApiKey: string;
+  googleAiApiKey: string;
   instacartApiKey: string;
   stripeSecretKey: string;
   stripePriceId?: string;
@@ -67,6 +68,7 @@ export const config: EnvironmentConfig = {
   
   // API Keys - automatically select dev or prod versions
   openaiApiKey: getEnvironmentVariable('OPENAI_API_KEY_DEV', 'OPENAI_API_KEY_PROD'),
+  googleAiApiKey: getEnvironmentVariable('GOOGLE_AI_API_KEY_DEV', 'GOOGLE_AI_API_KEY_PROD'),
   instacartApiKey: getEnvironmentVariable('INSTACART_API_KEY_DEV', 'INSTACART_API_KEY_PROD') || process.env.INSTACART_TEST_KEY || '',
   stripeSecretKey: getEnvironmentVariable('STRIPE_SECRET_KEY_DEV', 'STRIPE_SECRET_KEY_PROD'),
   stripePriceId: getEnvironmentVariable('STRIPE_PRICE_ID_DEV', 'STRIPE_PRICE_ID_PROD'),
@@ -93,6 +95,7 @@ console.log('Environment Configuration:', {
   isProduction: config.isProduction,
   isDevelopment: config.isDevelopment,
   hasOpenaiKey: !!config.openaiApiKey,
+  hasGoogleAiKey: !!config.googleAiApiKey,
   hasInstacartKey: !!config.instacartApiKey,
   hasStripeKey: !!config.stripeSecretKey,
   hasFirebaseConfig: !!(config.firebaseProjectId && config.firebaseClientEmail && config.firebasePrivateKey),
