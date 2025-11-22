@@ -4,22 +4,25 @@ import { uploadImage } from './cloudinary';
 
 export async function downloadAndStoreImage(imageUrl: string, recipeId: string): Promise<string> {
   try {
-    console.log('Starting image download for recipe:', recipeId, 'from URL:', imageUrl);
+    const isDataUrl = imageUrl.startsWith('data:');
     
-    // Download image from OpenAI or other source
-    const response: Response = await fetch(imageUrl);
-    if (!response.ok) {
-      console.error('Failed to download image:', response.status, response.statusText);
-      throw new Error('Failed to download image');
+    if (isDataUrl) {
+      console.log('Processing base64 data URL for recipe:', recipeId);
+    } else {
+      console.log('Starting image download for recipe:', recipeId, 'from URL:', imageUrl.substring(0, 100));
+      
+      const response: Response = await fetch(imageUrl);
+      if (!response.ok) {
+        console.error('Failed to download image:', response.status, response.statusText);
+        throw new Error('Failed to download image');
+      }
+      
+      console.log('Successfully downloaded image for recipe:', recipeId);
     }
     
-    console.log('Successfully downloaded image for recipe:', recipeId);
-    
-    // Upload to Cloudinary and get CDN URL
     const cdnUrl = await uploadImage(imageUrl, recipeId);
     console.log('Successfully uploaded to Cloudinary:', cdnUrl);
     
-    // Test URL accessibility
     try {
       const testResponse = await fetch(cdnUrl);
       if (!testResponse.ok) {
