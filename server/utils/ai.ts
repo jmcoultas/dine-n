@@ -27,7 +27,9 @@ interface RecipeGenerationResponse extends Partial<TemporaryRecipe> {
   meal_type: MealType;
 }
 
-export async function generateRecipeRecommendation(params: RecipeGenerationParams): Promise<RecipeGenerationResponse> {
+export async function generateRecipeRecommendation(
+  params: RecipeGenerationParams,
+): Promise<RecipeGenerationResponse> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
@@ -39,30 +41,48 @@ export async function generateRecipeRecommendation(params: RecipeGenerationParam
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const cleanParams = {
-        dietary: Array.isArray(params.dietary) ? params.dietary.filter(Boolean) : [],
-        allergies: Array.isArray(params.allergies) ? params.allergies.filter(Boolean) : [],
-        cuisine: Array.isArray(params.cuisine) ? params.cuisine.filter(Boolean) : [],
-        meatTypes: Array.isArray(params.meatTypes) ? params.meatTypes.filter(Boolean) : [],
+        dietary: Array.isArray(params.dietary)
+          ? params.dietary.filter(Boolean)
+          : [],
+        allergies: Array.isArray(params.allergies)
+          ? params.allergies.filter(Boolean)
+          : [],
+        cuisine: Array.isArray(params.cuisine)
+          ? params.cuisine.filter(Boolean)
+          : [],
+        meatTypes: Array.isArray(params.meatTypes)
+          ? params.meatTypes.filter(Boolean)
+          : [],
         mealType: params.mealType,
-        excludeNames: Array.isArray(params.excludeNames) ? params.excludeNames.filter(Boolean) : []
+        excludeNames: Array.isArray(params.excludeNames)
+          ? params.excludeNames.filter(Boolean)
+          : [],
       };
 
-      console.log(`AI Service: Generating recipe with cleaned params (attempt ${attempt}/${maxRetries}, relaxation level ${relaxationLevel}):`, JSON.stringify(cleanParams, null, 2));
+      console.log(
+        `AI Service: Generating recipe with cleaned params (attempt ${attempt}/${maxRetries}, relaxation level ${relaxationLevel}):`,
+        JSON.stringify(cleanParams, null, 2),
+      );
 
-      const excludeNamesStr = params.excludeNames && params.excludeNames.length > 0 
-        ? `\nMust NOT generate any of these exact recipes: ${params.excludeNames.join(", ")}`
-        : "";
+      const excludeNamesStr =
+        params.excludeNames && params.excludeNames.length > 0
+          ? `\nMust NOT generate any of these exact recipes: ${params.excludeNames.join(", ")}`
+          : "";
 
       // Build the prompt based on relaxation level - OPTIMIZED FOR SPEED
       let uniquenessConstraint = "";
       if (relaxationLevel === 1) {
-        uniquenessConstraint = "Create a completely unique recipe name that hasn't been used before.";
+        uniquenessConstraint =
+          "Create a completely unique recipe name that hasn't been used before.";
       } else if (relaxationLevel === 2) {
-        uniquenessConstraint = "Create a recipe with a creative variation on common dishes.";
+        uniquenessConstraint =
+          "Create a recipe with a creative variation on common dishes.";
       } else if (relaxationLevel === 3) {
-        uniquenessConstraint = "Create any suitable recipe, variations of existing dishes are acceptable.";
+        uniquenessConstraint =
+          "Create any suitable recipe, variations of existing dishes are acceptable.";
       } else {
-        uniquenessConstraint = "Create any recipe that meets the basic requirements.";
+        uniquenessConstraint =
+          "Create any recipe that meets the basic requirements.";
       }
 
       // OPTIMIZED PROMPT - Reduced token count while maintaining quality
@@ -89,13 +109,14 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
   "complexity": number
 }`;
 
-      console.log('AI Service: Generated optimized prompt');
+      console.log("AI Service: Generated optimized prompt");
 
       const completion = await openai.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: "You are a professional chef. Create detailed, healthy recipes following dietary restrictions exactly. Use US customary units only. Always respond with complete, valid JSON.",
+            content:
+              "You are a professional chef. Create detailed, healthy recipes following dietary restrictions exactly. Use US customary units only. Always respond with complete, valid JSON.",
           },
           {
             role: "user",
@@ -104,7 +125,7 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
         ],
         model: "gpt-4o-2024-08-06",
         response_format: { type: "json_object" },
-        temperature: 0.7 + (attempt * 0.1) + (relaxationLevel * 0.1), // Increase temperature with each retry and relaxation level
+        temperature: 0.7 + attempt * 0.1 + relaxationLevel * 0.1, // Increase temperature with each retry and relaxation level
         max_tokens: 800, // Reduced from 1000 for faster generation
       });
 
@@ -117,11 +138,11 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
         throw new Error("Empty response from OpenAI API");
       }
 
-      console.log('AI Service: Received response from OpenAI');
+      console.log("AI Service: Received response from OpenAI");
 
       try {
         const parsedRecipe = JSON.parse(content);
-        
+
         // Validate the parsed recipe structure
         const validatedRecipe = {
           name: parsedRecipe.name || "Untitled Recipe",
@@ -129,51 +150,84 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
           prep_time: Number(parsedRecipe.prep_time) || 15,
           cook_time: Number(parsedRecipe.cook_time) || 30,
           servings: Number(parsedRecipe.servings) || 4,
-          ingredients: Array.isArray(parsedRecipe.ingredients) ? parsedRecipe.ingredients : [],
-          instructions: Array.isArray(parsedRecipe.instructions) ? parsedRecipe.instructions : [],
-          meal_type: parsedRecipe.meal_type || params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
+          ingredients: Array.isArray(parsedRecipe.ingredients)
+            ? parsedRecipe.ingredients
+            : [],
+          instructions: Array.isArray(parsedRecipe.instructions)
+            ? parsedRecipe.instructions
+            : [],
+          meal_type:
+            parsedRecipe.meal_type ||
+            params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
           tags: Array.isArray(parsedRecipe.tags) ? parsedRecipe.tags : [],
-          nutrition: parsedRecipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+          nutrition: parsedRecipe.nutrition || {
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+          },
           complexity: Number(parsedRecipe.complexity) || 2,
-          image_url: parsedRecipe.image_url || null
+          image_url: parsedRecipe.image_url || null,
         };
 
         // Validate ingredients structure
-        if (!Array.isArray(validatedRecipe.ingredients) || validatedRecipe.ingredients.length === 0) {
-          console.error('AI Service: Invalid ingredients array');
+        if (
+          !Array.isArray(validatedRecipe.ingredients) ||
+          validatedRecipe.ingredients.length === 0
+        ) {
+          console.error("AI Service: Invalid ingredients array");
           lastError = new Error("Generated recipe has invalid ingredients");
           continue;
         }
 
         // Validate instructions
-        if (!Array.isArray(validatedRecipe.instructions) || validatedRecipe.instructions.length === 0) {
-          console.error('AI Service: Invalid instructions array');
+        if (
+          !Array.isArray(validatedRecipe.instructions) ||
+          validatedRecipe.instructions.length === 0
+        ) {
+          console.error("AI Service: Invalid instructions array");
           lastError = new Error("Generated recipe has invalid instructions");
           continue;
         }
 
         // Add validation check for meal type
-        if (validatedRecipe.meal_type !== (params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1))) {
-          console.error('AI Service: Generated recipe has incorrect meal type:', {
-            expected: params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1),
-            received: validatedRecipe.meal_type
-          });
+        if (
+          validatedRecipe.meal_type !==
+          params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1)
+        ) {
+          console.error(
+            "AI Service: Generated recipe has incorrect meal type:",
+            {
+              expected:
+                params.mealType.charAt(0).toUpperCase() +
+                params.mealType.slice(1),
+              received: validatedRecipe.meal_type,
+            },
+          );
           lastError = new Error("Generated recipe has incorrect meal type");
           continue;
         }
 
-        console.log('AI Service: Successfully generated and validated recipe:', validatedRecipe.name);
+        console.log(
+          "AI Service: Successfully generated and validated recipe:",
+          validatedRecipe.name,
+        );
         return validatedRecipe;
       } catch (parseError) {
-        console.error('AI Service: Error parsing OpenAI response:', parseError);
-        lastError = new Error("Failed to parse recipe data from OpenAI response");
+        console.error("AI Service: Error parsing OpenAI response:", parseError);
+        lastError = new Error(
+          "Failed to parse recipe data from OpenAI response",
+        );
         if (attempt < maxRetries) {
           continue;
         }
         throw lastError;
       }
     } catch (error: any) {
-      console.error(`AI Service: Error in attempt ${attempt}/${maxRetries}:`, error);
+      console.error(
+        `AI Service: Error in attempt ${attempt}/${maxRetries}:`,
+        error,
+      );
       lastError = error;
 
       // Don't retry on these errors
@@ -185,7 +239,7 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
       if (attempt < maxRetries) {
         continue;
       }
-      
+
       // If we've exhausted retries at this relaxation level, try the next level
       if (relaxationLevel < 4) {
         relaxationLevel++;
@@ -196,7 +250,12 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
   }
 
   // If we've exhausted all retries and relaxation levels, throw the last error
-  throw lastError || new Error("Failed to generate recipe after all retries and relaxation levels");
+  throw (
+    lastError ||
+    new Error(
+      "Failed to generate recipe after all retries and relaxation levels",
+    )
+  );
 }
 
 interface SubstitutionRequest {
@@ -205,7 +264,14 @@ interface SubstitutionRequest {
   allergies?: string[];
 }
 
-export async function generateIngredientSubstitution({ ingredient, dietary = [], allergies = [] }: SubstitutionRequest): Promise<{ substitutions: string[], reasoning: string }> {
+export async function generateIngredientSubstitution({
+  ingredient,
+  dietary = [],
+  allergies = [],
+}: SubstitutionRequest): Promise<{
+  substitutions: string[];
+  reasoning: string;
+}> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
@@ -229,7 +295,8 @@ Consider dietary restrictions and allergies as absolute requirements - do not su
       messages: [
         {
           role: "system",
-          content: "You are a professional chef specializing in ingredient substitutions and dietary accommodations. Provide accurate, practical substitutions that maintain the culinary function of ingredients while respecting dietary restrictions.",
+          content:
+            "You are a professional chef specializing in ingredient substitutions and dietary accommodations. Provide accurate, practical substitutions that maintain the culinary function of ingredients while respecting dietary restrictions.",
         },
         {
           role: "user",
@@ -249,7 +316,10 @@ Consider dietary restrictions and allergies as absolute requirements - do not su
     const content = completion.choices[0].message.content;
     const response = JSON.parse(content);
 
-    if (!Array.isArray(response.substitutions) || typeof response.reasoning !== 'string') {
+    if (
+      !Array.isArray(response.substitutions) ||
+      typeof response.reasoning !== "string"
+    ) {
       throw new Error("Invalid response format from OpenAI API");
     }
 
@@ -270,16 +340,18 @@ interface IngredientBasedRecipeParams {
   pantryOnlyMode?: boolean;
 }
 
-export async function generateRecipeSuggestionsFromIngredients(params: IngredientBasedRecipeParams): Promise<string[]> {
+export async function generateRecipeSuggestionsFromIngredients(
+  params: IngredientBasedRecipeParams,
+): Promise<string[]> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
 
   try {
-    const ingredientContext = params.pantryOnlyMode 
+    const ingredientContext = params.pantryOnlyMode
       ? `ONLY using these pantry ingredients: ${params.ingredients.join(", ")}`
       : `primarily using these ingredients: ${params.ingredients.join(", ")}`;
-      
+
     const additionalIngredientRule = params.pantryOnlyMode
       ? "STRICT REQUIREMENT: You may ONLY use the ingredients listed above. Do not suggest any additional ingredients or seasonings beyond what is provided."
       : "You may suggest a few additional common ingredients that would complement the provided ones, but keep additional ingredients minimal and common.";
@@ -326,7 +398,7 @@ Respond with exactly 3 recipe titles in this JSON format:
 
     const content = completion.choices[0].message.content;
     const data = JSON.parse(content);
-    
+
     if (!Array.isArray(data.recipes) || data.recipes.length !== 3) {
       throw new Error("Invalid recipe suggestions format from API");
     }
@@ -362,7 +434,9 @@ interface RecipeAPIResponse {
 }
 
 // Add transformation function
-function transformRecipeToSnakeCase(recipe: RecipeAPIResponse): Partial<TemporaryRecipe> {
+function transformRecipeToSnakeCase(
+  recipe: RecipeAPIResponse,
+): Partial<TemporaryRecipe> {
   return {
     name: recipe.name,
     description: recipe.description,
@@ -371,59 +445,104 @@ function transformRecipeToSnakeCase(recipe: RecipeAPIResponse): Partial<Temporar
     servings: recipe.servings,
     ingredients: recipe.ingredients,
     instructions: recipe.instructions,
-    meal_type: (Array.isArray(recipe.tags) 
-      ? (recipe.tags.find(tag => 
-          ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"].includes(tag)
-        ) || "Dinner")
-      : "Dinner"),
-    cuisine_type: (Array.isArray(recipe.tags)
-      ? (recipe.tags.find(tag => 
-          ["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"].includes(tag)
-        ) || "Other")
-      : "Other"),
-    dietary_restrictions: (Array.isArray(recipe.tags)
-      ? recipe.tags.filter(tag => 
-          ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag)
+    meal_type: Array.isArray(recipe.tags)
+      ? recipe.tags.find((tag) =>
+          ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"].includes(tag),
+        ) || "Dinner"
+      : "Dinner",
+    cuisine_type: Array.isArray(recipe.tags)
+      ? recipe.tags.find((tag) =>
+          [
+            "Italian",
+            "Mexican",
+            "Chinese",
+            "Japanese",
+            "Indian",
+            "Thai",
+            "Mediterranean",
+            "American",
+            "French",
+          ].includes(tag),
+        ) || "Other"
+      : "Other",
+    dietary_restrictions: Array.isArray(recipe.tags)
+      ? recipe.tags.filter((tag) =>
+          [
+            "Vegetarian",
+            "Vegan",
+            "Gluten-Free",
+            "Dairy-Free",
+            "Keto",
+            "Paleo",
+            "Low-Carb",
+          ].includes(tag),
         )
-      : []),
+      : [],
     difficulty: (() => {
-      switch(recipe.complexity) {
-        case 1: return "Easy" as const;
-        case 2: return "Moderate" as const;
-        case 3: return "Advanced" as const;
-        default: return "Moderate" as const;
+      switch (recipe.complexity) {
+        case 1:
+          return "Easy" as const;
+        case 2:
+          return "Moderate" as const;
+        case 3:
+          return "Advanced" as const;
+        default:
+          return "Moderate" as const;
       }
     })(),
-    tags: (Array.isArray(recipe.tags)
-      ? recipe.tags.filter(tag => 
-          !["Breakfast", "Lunch", "Dinner", "Snack", "Dessert",
-            "Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French",
-            "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo", "Low-Carb"].includes(tag)
+    tags: Array.isArray(recipe.tags)
+      ? recipe.tags.filter(
+          (tag) =>
+            ![
+              "Breakfast",
+              "Lunch",
+              "Dinner",
+              "Snack",
+              "Dessert",
+              "Italian",
+              "Mexican",
+              "Chinese",
+              "Japanese",
+              "Indian",
+              "Thai",
+              "Mediterranean",
+              "American",
+              "French",
+              "Vegetarian",
+              "Vegan",
+              "Gluten-Free",
+              "Dairy-Free",
+              "Keto",
+              "Paleo",
+              "Low-Carb",
+            ].includes(tag),
         )
-      : []),
+      : [],
     nutrition: recipe.nutrition,
     complexity: Math.min(3, Math.max(1, recipe.complexity)),
     image_url: null,
     permanent_url: null,
     favorites_count: 0,
-    favorited: false
+    favorited: false,
   };
 }
 
-async function generateRecipeImage(recipeName: string, allergies: string[] = [], retries = 3): Promise<string | null> {
+async function generateRecipeImage(
+  recipeName: string,
+  allergies: string[] = [],
+  retries = 3,
+): Promise<string | null> {
   let lastError: any = null;
-  
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`AI Service: Generating image with Gemini Nano Banana for recipe: ${recipeName} (attempt ${attempt}/${retries})`);
-      
-      const allergenWarning = allergies.length > 0 
-        ? ` IMPORTANT: The photo must NOT show or include any ${allergies.join(", ")} or foods containing these allergens.`
-        : '';
-      
-      const prompt = `Professional food photography of ${recipeName}. High quality, appetizing, well-lit, natural style. Shot from a flattering angle on a clean background.${allergenWarning}`;
-      
-      const model = genAI.getGenerativeModel({ 
+      console.log(
+        `AI Service: Generating image with Gemini Nano Banana for recipe: ${recipeName} (attempt ${attempt}/${retries})`,
+      );
+
+      const prompt = `Professional food photography of ${recipeName}. High quality, appetizing, well-lit, natural style. Shot from a flattering angle on a clean background.`;
+
+      const model = genAI.getGenerativeModel({
         model: "gemini-2.5-flash-image",
       });
 
@@ -431,62 +550,72 @@ async function generateRecipeImage(recipeName: string, allergies: string[] = [],
 
       if (result?.response) {
         const response = result.response;
-        
+
         if (response.candidates && response.candidates.length > 0) {
           const candidate = response.candidates[0];
-          
+
           if (candidate.content?.parts && candidate.content.parts.length > 0) {
             for (const part of candidate.content.parts) {
               if (part.inlineData?.data) {
                 const base64Data = part.inlineData.data;
-                const mimeType = part.inlineData.mimeType || 'image/png';
+                const mimeType = part.inlineData.mimeType || "image/png";
                 const dataUrl = `data:${mimeType};base64,${base64Data}`;
-                console.log(`AI Service: Successfully generated image with Gemini (${mimeType} format, ${base64Data.length} bytes)`);
+                console.log(
+                  `AI Service: Successfully generated image with Gemini (${mimeType} format, ${base64Data.length} bytes)`,
+                );
                 return dataUrl;
               }
             }
           }
         }
       }
-      
-      throw new Error('No image data found in response');
+
+      throw new Error("No image data found in response");
     } catch (error: any) {
       lastError = error;
-      console.error(`AI Service: Error generating image with Gemini (attempt ${attempt}/${retries}):`, error);
-      
-      if (error.message?.includes('API key') || error.status === 401 || error.status === 403) {
-        console.error('AI Service: Authentication error, will not retry');
+      console.error(
+        `AI Service: Error generating image with Gemini (attempt ${attempt}/${retries}):`,
+        error,
+      );
+
+      if (
+        error.message?.includes("API key") ||
+        error.status === 401 ||
+        error.status === 403
+      ) {
+        console.error("AI Service: Authentication error, will not retry");
         break;
       }
-      
+
       if (attempt < retries) {
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
         console.log(`AI Service: Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
 
-  console.error('AI Service: All image generation attempts failed:', lastError);
-  return 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
+  console.error("AI Service: All image generation attempts failed:", lastError);
+  return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
 }
 
 export async function generateRecipeFromTitleAI(
-  title: string, 
-  allergies: string[] = [], 
+  title: string,
+  allergies: string[] = [],
   options?: {
     ingredients?: string[];
     pantryOnlyMode?: boolean;
-  }
+  },
 ): Promise<Partial<TemporaryRecipe>> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
   }
 
   try {
-    const pantryConstraint = options?.pantryOnlyMode && options?.ingredients 
-      ? `PANTRY CONSTRAINT - You may ONLY use these available ingredients: ${options.ingredients.join(", ")}. Do not use any ingredients not listed here.`
-      : "";
+    const pantryConstraint =
+      options?.pantryOnlyMode && options?.ingredients
+        ? `PANTRY CONSTRAINT - You may ONLY use these available ingredients: ${options.ingredients.join(", ")}. Do not use any ingredients not listed here.`
+        : "";
 
     const prompt = `Generate a detailed recipe for "${title}".
 ${allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${allergies.join(", ")}` : ""}
@@ -550,27 +679,31 @@ ALL ingredient measurements MUST use US customary units only (no grams, kilogram
       let imageUrl: string | null = null;
 
       try {
-        console.log('AI Service: Generating image for recipe:', title);
+        console.log("AI Service: Generating image for recipe:", title);
         imageUrl = await generateRecipeImage(title, allergies);
       } catch (error) {
-        console.error('AI Service: Error in image generation flow:', error);
-        imageUrl = 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
+        console.error("AI Service: Error in image generation flow:", error);
+        imageUrl =
+          "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
       }
 
       // Transform the recipe data to snake_case
       const transformedRecipe = transformRecipeToSnakeCase(recipeData);
       transformedRecipe.image_url = imageUrl;
 
-      console.log('AI Service: Generated recipe:', JSON.stringify(transformedRecipe, null, 2));
+      console.log(
+        "AI Service: Generated recipe:",
+        JSON.stringify(transformedRecipe, null, 2),
+      );
       return transformedRecipe;
     } catch (parseError) {
-      console.error('AI Service: Error parsing OpenAI response:', parseError);
+      console.error("AI Service: Error parsing OpenAI response:", parseError);
       throw new Error("Failed to parse recipe data from OpenAI response");
     }
   } catch (error: any) {
     console.error("AI Service: OpenAI API Error:", error);
 
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+    if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
       throw new Error("Failed to connect to OpenAI API");
     }
 
