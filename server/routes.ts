@@ -1342,12 +1342,19 @@ Respond with valid JSON:
 
       console.log(`Generated preview ${previewId} with ${previews.length} recipes`);
 
-      // Return preview data
-      res.json({
+      // Prepare response
+      const response = {
         previewId,
         previews,
         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
-      });
+      };
+
+      // Debug: Log a sample preview to verify structure
+      console.log('Sample preview structure:', JSON.stringify(previews[0], null, 2));
+      console.log('Response keys:', Object.keys(response));
+
+      // Return preview data
+      res.json(response);
 
     } catch (error: any) {
       console.error("Error generating meal plan preview:", error);
