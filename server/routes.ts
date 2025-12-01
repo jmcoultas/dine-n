@@ -1407,18 +1407,24 @@ export function registerRoutes(app: express.Express) {
             .values(parseResult.data)
             .returning();
 
-          // Handle image storage asynchronously (don't block the response)
+          // Upload image to Cloudinary and update permanent_url (await to ensure images are ready)
           if (savedRecipe.image_url) {
-            downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id))
-              .then(permanentUrl => {
-                if (permanentUrl) {
-                  db.update(temporaryRecipes)
-                    .set({ permanent_url: permanentUrl })
-                    .where(eq(temporaryRecipes.id, savedRecipe.id))
-                    .catch(error => console.error('Failed to update permanent URL:', error));
-                }
-              })
-              .catch(error => console.error('Failed to store image:', error));
+            try {
+              console.log(`Uploading image for recipe ${savedRecipe.id}...`);
+              const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+              if (permanentUrl) {
+                const [updatedRecipe] = await db
+                  .update(temporaryRecipes)
+                  .set({ permanent_url: permanentUrl })
+                  .where(eq(temporaryRecipes.id, savedRecipe.id))
+                  .returning();
+                console.log(`Successfully uploaded image for recipe ${savedRecipe.id}`);
+                return updatedRecipe;
+              }
+            } catch (error) {
+              console.error('Failed to store image:', error);
+              // Continue with recipe even if image fails
+            }
           }
 
           return savedRecipe;
