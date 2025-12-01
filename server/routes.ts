@@ -1187,6 +1187,408 @@ export function registerRoutes(app: express.Express) {
     }
   });
 
+  // MARK: - Tasting Menu Feature
+
+  // In-memory cache for preview data (in production, use Redis)
+  const previewCache = new Map<string, {
+    previews: any[];
+    preferences: any;
+    days: number;
+    userId: number;
+    createdAt: Date;
+  }>();
+
+  // Clean up expired previews every 30 minutes
+  setInterval(() => {
+    const now = Date.now();
+    const thirtyMinutes = 30 * 60 * 1000;
+    for (const [key, value] of previewCache.entries()) {
+      if (now - value.createdAt.getTime() > thirtyMinutes) {
+        previewCache.delete(key);
+      }
+    }
+  }, 30 * 60 * 1000);
+
+  // Generate meal plan preview (lightweight title + description only)
+  app.post("/api/generate-meal-plan-preview", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { preferences, days } = req.body;
+
+      console.log('Generating meal plan preview for user:', user.id);
+
+      // Validate input
+      if (!preferences || !days) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: preferences and days"
+        });
+      }
+
+      // Normalize preferences
+      const normalizedPreferences = {
+        dietary: Array.isArray(preferences.dietary) ? preferences.dietary : [],
+        allergies: Array.isArray(preferences.allergies) ? preferences.allergies : [],
+        cuisine: Array.isArray(preferences.cuisine) ? preferences.cuisine : [],
+        meatTypes: Array.isArray(preferences.meatTypes) ? preferences.meatTypes : [],
+        chefPreferences: preferences.chefPreferences || {}
+      };
+
+      const mealTypes: Array<"breakfast" | "lunch" | "dinner"> = ["breakfast", "lunch", "dinner"];
+      const expectedRecipeCount = days * 3;
+
+      // Pre-assign cuisines in round-robin fashion for variety
+      const availableCuisines = normalizedPreferences.cuisine.length > 0
+        ? normalizedPreferences.cuisine
+        : ['Italian', 'Mexican', 'Chinese', 'American'];
+
+      let cuisineIndex = 0;
+      const previewTasks = [];
+
+      for (let day = 0; day < days; day++) {
+        for (const mealType of mealTypes) {
+          const assignedCuisine = availableCuisines[cuisineIndex % availableCuisines.length];
+          cuisineIndex++;
+
+          previewTasks.push({
+            day,
+            mealType,
+            cuisine: assignedCuisine,
+            taskId: `day-${day}-${mealType}`
+          });
+        }
+      }
+
+      console.log(`Generating ${expectedRecipeCount} recipe previews...`);
+
+      // Generate all previews in one GPT-4o call for efficiency
+      const previewPrompt = `Generate ${expectedRecipeCount} recipe title and description pairs for a ${days}-day meal plan.
+
+Requirements:
+${normalizedPreferences.dietary.length > 0 ? `- Dietary: ${normalizedPreferences.dietary.join(", ")}` : ""}
+${normalizedPreferences.allergies.length > 0 ? `- Avoid allergens: ${normalizedPreferences.allergies.join(", ")}` : ""}
+${normalizedPreferences.meatTypes.length > 0 ? `- Proteins: ${normalizedPreferences.meatTypes.join(", ")}` : ""}
+
+Cuisine rotation plan:
+${previewTasks.map((t, i) => `${i + 1}. ${t.mealType} (${t.cuisine})`).join('\n')}
+
+For each recipe, provide:
+- title: Creative, appealing name (3-6 words)
+- description: One engaging sentence (10-15 words)
+- estimatedTime: Total time in minutes
+
+Respond with valid JSON:
+{
+  "recipes": [
+    {
+      "title": "Mediterranean Veggie Scramble",
+      "description": "Fluffy eggs with roasted tomatoes, spinach, and feta cheese",
+      "estimatedTime": 15
+    }
+    // ...${expectedRecipeCount - 1} more
+  ]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "You are a creative chef. Generate appealing recipe titles and descriptions that match dietary requirements and cuisines exactly. Be concise and enticing."
+          },
+          {
+            role: "user",
+            content: previewPrompt
+          }
+        ],
+        model: "gpt-4o-2024-08-06",
+        response_format: { type: "json_object" },
+        temperature: 0.8,
+        max_tokens: 3000
+      });
+
+      if (!completion.choices?.[0]?.message?.content) {
+        throw new Error("Invalid response from OpenAI API");
+      }
+
+      const content = completion.choices[0].message.content;
+      const parsedResponse = JSON.parse(content);
+
+      if (!Array.isArray(parsedResponse.recipes) || parsedResponse.recipes.length !== expectedRecipeCount) {
+        throw new Error(`Expected ${expectedRecipeCount} recipes, got ${parsedResponse.recipes?.length || 0}`);
+      }
+
+      // Combine GPT response with our task metadata
+      const previews = previewTasks.map((task, index) => ({
+        id: `preview_${Date.now()}_${index}`,
+        day: task.day,
+        mealType: task.mealType,
+        title: parsedResponse.recipes[index].title,
+        description: parsedResponse.recipes[index].description,
+        cuisine: task.cuisine,
+        estimatedTime: parsedResponse.recipes[index].estimatedTime || 30
+      }));
+
+      // Generate unique preview ID
+      const previewId = `preview_${user.id}_${Date.now()}`;
+
+      // Store in cache with preferences
+      previewCache.set(previewId, {
+        previews,
+        preferences: normalizedPreferences,
+        days,
+        userId: user.id,
+        createdAt: new Date()
+      });
+
+      console.log(`Generated preview ${previewId} with ${previews.length} recipes`);
+
+      // Return preview data
+      res.json({
+        previewId,
+        previews,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
+      });
+
+    } catch (error: any) {
+      console.error("Error generating meal plan preview:", error);
+      res.status(500).json({
+        error: "Failed to generate meal plan preview",
+        details: error.message
+      });
+    }
+  });
+
+  // Generate full meal plan from preview selections
+  app.post("/api/generate-meal-plan-from-preview", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { previewId, selections } = req.body;
+
+      console.log('Generating meal plan from preview:', previewId);
+
+      // Validate input
+      if (!previewId || !Array.isArray(selections)) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameters: previewId and selections"
+        });
+      }
+
+      // Retrieve cached preview data
+      const cachedData = previewCache.get(previewId);
+      if (!cachedData) {
+        return res.status(404).json({
+          error: "Preview not found",
+          message: "Preview has expired or doesn't exist. Please generate a new preview."
+        });
+      }
+
+      // Verify user owns this preview
+      if (cachedData.userId !== user.id) {
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "This preview belongs to another user"
+        });
+      }
+
+      console.log(`Found cached preview with ${cachedData.previews.length} recipes`);
+      console.log(`User selected ${selections.length} recipes`);
+
+      // Get the selected previews
+      const selectedPreviews = selections.map((sel: any) => {
+        const preview = cachedData.previews.find(p => p.id === sel.previewId);
+        if (!preview) {
+          throw new Error(`Preview not found: ${sel.previewId}`);
+        }
+        return {
+          ...preview,
+          assignedDay: sel.day,
+          assignedMealType: sel.mealType
+        };
+      });
+
+      // Generate full recipes for selections
+      console.log('Generating full recipes for selected previews...');
+      const startTime = Date.now();
+
+      const recipePromises = selectedPreviews.map(async (preview: any, index: number) => {
+        try {
+          console.log(`Generating recipe ${index + 1}/${selectedPreviews.length}: ${preview.title}`);
+
+          // Use the stored preferences from cache
+          const fullRecipe = await generateRecipeFromTitleAI(
+            preview.title,
+            cachedData.preferences.allergies,
+            {
+              ingredients: [], // No pantry constraint
+              pantryOnlyMode: false
+            }
+          );
+
+          return {
+            ...fullRecipe,
+            day: preview.assignedDay,
+            mealType: preview.assignedMealType,
+            cuisine: preview.cuisine
+          };
+        } catch (error) {
+          console.error(`Failed to generate recipe: ${preview.title}:`, error);
+          return null;
+        }
+      });
+
+      const generatedRecipes = (await Promise.all(recipePromises)).filter(r => r !== null);
+      const generationTime = Date.now() - startTime;
+
+      console.log(`Generated ${generatedRecipes.length} recipes in ${generationTime}ms`);
+
+      if (generatedRecipes.length === 0) {
+        return res.status(500).json({
+          error: "Failed to generate recipes",
+          message: "Could not generate any recipes from your selections"
+        });
+      }
+
+      // Save recipes to database
+      console.log('Saving recipes to database...');
+      const saveStartTime = Date.now();
+
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 2);
+
+      const savedRecipes = [];
+
+      for (const recipe of generatedRecipes) {
+        try {
+          const mealTypeCapitalized = recipe.mealType.charAt(0).toUpperCase() + recipe.mealType.slice(1);
+
+          const [savedRecipe] = await db
+            .insert(temporaryRecipes)
+            .values({
+              user_id: user.id,
+              name: recipe.name || 'Untitled Recipe',
+              description: recipe.description || null,
+              image_url: recipe.image_url || null,
+              permanent_url: null,
+              prep_time: recipe.prep_time || 0,
+              cook_time: recipe.cook_time || 0,
+              servings: recipe.servings || 4,
+              ingredients: recipe.ingredients || [],
+              instructions: recipe.instructions || [],
+              meal_type: mealTypeCapitalized as z.infer<typeof MealTypeEnum>,
+              cuisine_type: (recipe.cuisine || "Other") as z.infer<typeof CuisineTypeEnum>,
+              dietary_restrictions: (recipe.dietary_restrictions || []) as z.infer<typeof DietaryTypeEnum>[],
+              difficulty: (recipe.difficulty || "Moderate") as z.infer<typeof DifficultyEnum>,
+              tags: recipe.tags || [],
+              nutrition: recipe.nutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+              complexity: recipe.complexity || 2,
+              created_at: new Date(),
+              expires_at: expirationDate,
+              favorited: false,
+              favorites_count: 0
+            })
+            .returning();
+
+          // Upload image to Cloudinary
+          if (savedRecipe.image_url) {
+            try {
+              console.log(`Uploading image for recipe ${savedRecipe.id}...`);
+              const permanentUrl = await downloadAndStoreImage(savedRecipe.image_url, String(savedRecipe.id));
+              if (permanentUrl) {
+                const [updatedRecipe] = await db
+                  .update(temporaryRecipes)
+                  .set({ permanent_url: permanentUrl })
+                  .where(eq(temporaryRecipes.id, savedRecipe.id))
+                  .returning();
+                savedRecipes.push({ ...updatedRecipe, day: recipe.day, mealType: recipe.mealType });
+                console.log(`Successfully uploaded image for recipe ${savedRecipe.id}`);
+              } else {
+                savedRecipes.push({ ...savedRecipe, day: recipe.day, mealType: recipe.mealType });
+              }
+            } catch (error) {
+              console.error('Failed to store image:', error);
+              savedRecipes.push({ ...savedRecipe, day: recipe.day, mealType: recipe.mealType });
+            }
+          } else {
+            savedRecipes.push({ ...savedRecipe, day: recipe.day, mealType: recipe.mealType });
+          }
+        } catch (error) {
+          console.error('Failed to save recipe:', error);
+        }
+      }
+
+      const saveTime = Date.now() - saveStartTime;
+      console.log(`Saved ${savedRecipes.length} recipes in ${saveTime}ms`);
+
+      // Create meal plan record
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + cachedData.days - 1);
+
+      const mealPlanExpirationDate = MealPlanExpirationService.calculateExpirationDate(startDate, cachedData.days);
+
+      const [mealPlan] = await db.insert(mealPlans).values({
+        user_id: user.id,
+        name: `${cachedData.days}-Day Meal Plan`,
+        start_date: startDate,
+        end_date: endDate,
+        expiration_date: mealPlanExpirationDate,
+        days_generated: cachedData.days,
+        is_expired: false,
+        created_at: new Date()
+      }).returning();
+
+      // Associate recipes with meal plan
+      const mealPlanRecipeValues = savedRecipes.map((recipe) => {
+        const dayOffset = recipe.day;
+        const recipeDate = new Date(startDate);
+        recipeDate.setDate(recipeDate.getDate() + dayOffset);
+
+        return {
+          meal_plan_id: mealPlan.id,
+          recipe_id: recipe.id,
+          day: recipeDate,
+          meal: recipe.mealType,
+          created_at: new Date()
+        };
+      });
+
+      await db.insert(mealPlanRecipes).values(mealPlanRecipeValues);
+
+      // Increment meal plans generated counter
+      await db
+        .update(users)
+        .set({ meal_plans_generated: user.meal_plans_generated + 1 })
+        .where(eq(users.id, user.id));
+
+      console.log(`Created meal plan ${mealPlan.id} with ${savedRecipes.length} recipes`);
+
+      // Clean up cache
+      previewCache.delete(previewId);
+
+      const totalTime = Date.now() - startTime;
+
+      res.json({
+        mealPlanId: mealPlan.id,
+        recipes: savedRecipes,
+        status: 'success',
+        message: `Successfully created meal plan with ${savedRecipes.length} recipes`,
+        performance: {
+          generationTimeMs: generationTime,
+          saveTimeMs: saveTime,
+          totalTimeMs: totalTime
+        }
+      });
+
+    } catch (error: any) {
+      console.error("Error generating meal plan from preview:", error);
+      res.status(500).json({
+        error: "Failed to generate meal plan",
+        details: error.message
+      });
+    }
+  });
+
   // Protected Routes requiring subscription
   app.post("/api/generate-meal-plan", isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -1260,24 +1662,32 @@ export function registerRoutes(app: express.Express) {
 
       // Create all recipe generation tasks upfront for maximum parallelization
       const recipeGenerationTasks = [];
-      
+
+      // Pre-assign cuisines in round-robin fashion for variety
+      const availableCuisines = normalizedPreferences.cuisine.length > 0
+        ? normalizedPreferences.cuisine
+        : ['Italian', 'Mexican', 'Chinese', 'American'];
+
+      let cuisineIndex = 0;
+
       for (let day = 0; day < days; day++) {
         for (const mealType of mealTypes) {
-          // Get cuisines sorted by least used for variety
-          const prioritizedCuisines = [...normalizedPreferences.cuisine].sort((a, b) => 
-            (cuisineUsage[a] || 0) - (cuisineUsage[b] || 0)
-          );
-          
+          // Rotate through cuisines for variety
+          const assignedCuisine = availableCuisines[cuisineIndex % availableCuisines.length];
+          cuisineIndex++;
+
           const task = {
             day,
             mealType,
-            cuisines: prioritizedCuisines.length > 0 ? prioritizedCuisines : normalizedPreferences.cuisine,
+            cuisines: [assignedCuisine], // Single cuisine for this recipe
             taskId: `day-${day}-${mealType}`
           };
-          
+
           recipeGenerationTasks.push(task);
         }
       }
+
+      console.log('Cuisine rotation plan:', recipeGenerationTasks.map(t => `${t.taskId}: ${t.cuisines[0]}`).join(', '));
 
       // Execute all recipe generations in parallel with improved error handling
       console.log(`Executing ${recipeGenerationTasks.length} recipe generation tasks in parallel`);
