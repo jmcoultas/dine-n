@@ -212,6 +212,21 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
           "AI Service: Successfully generated and validated recipe:",
           validatedRecipe.name,
         );
+
+        // Generate image for the recipe using Gemini
+        console.log('AI Service: Generating image for recipe:', validatedRecipe.name);
+        try {
+          const imageUrl = await generateRecipeImage(
+            validatedRecipe.name,
+            cleanParams.allergies
+          );
+          validatedRecipe.image_url = imageUrl;
+          console.log('AI Service: Image generated successfully with Gemini');
+        } catch (imageError) {
+          console.error('AI Service: Failed to generate image, using fallback:', imageError);
+          validatedRecipe.image_url = 'https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg';
+        }
+
         return validatedRecipe;
       } catch (parseError) {
         console.error("AI Service: Error parsing OpenAI response:", parseError);
