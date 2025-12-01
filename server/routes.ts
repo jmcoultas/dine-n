@@ -1202,11 +1202,11 @@ export function registerRoutes(app: express.Express) {
   setInterval(() => {
     const now = Date.now();
     const thirtyMinutes = 30 * 60 * 1000;
-    for (const [key, value] of previewCache.entries()) {
+    Array.from(previewCache.entries()).forEach(([key, value]) => {
       if (now - value.createdAt.getTime() > thirtyMinutes) {
         previewCache.delete(key);
       }
-    }
+    });
   }, 30 * 60 * 1000);
 
   // Generate meal plan preview (lightweight title + description only)
