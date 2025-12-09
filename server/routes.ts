@@ -4992,7 +4992,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
   app.post("/api/pantry", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user as any;
-      const { name, category, quantity, unit, estimatedShelfLifeDays, notes, isStaple } = req.body;
+      const { name, category, quantity, quantity_status, unit, estimatedShelfLifeDays, notes, isStaple } = req.body;
 
       // Check if user is on free tier and has reached limit
       const currentCount = await db.select({ count: sql<number>`count(*)` })
@@ -5011,6 +5011,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         name: name.trim(),
         category: category || 'other',
         quantity: quantity || null,
+        quantity_status: quantity_status || 'full',
         unit: unit || null,
         estimated_shelf_life_days: estimatedShelfLifeDays || null,
         user_notes: notes || null,
