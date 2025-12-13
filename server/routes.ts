@@ -394,12 +394,18 @@ export function registerRoutes(app: express.Express) {
     try {
       const user = req.user!;
       const { couponCode } = req.body; // Extract coupon code from request body
-      
+
+      // Detect platform from request headers or body
+      // iOS app sends firebase-token header, web uses session auth
+      const firebaseToken = req.headers['firebase-token'];
+      const platform: 'ios' | 'web' = firebaseToken ? 'ios' : 'web';
+
       console.log('Creating checkout session for user:', {
         userId: user.id,
         email: user.email,
         hasStripeCustomerId: !!user.stripe_customer_id,
         couponCode: couponCode || 'none',
+        platform,
         timestamp: new Date().toISOString()
       });
 
@@ -430,8 +436,8 @@ export function registerRoutes(app: express.Express) {
         console.log('Stripe customer created:', customer.id);
       }
 
-      const session = await stripeService.createCheckoutSession(user.stripe_customer_id, couponCode);
-      console.log('Checkout session created successfully:', session.id);
+      const session = await stripeService.createCheckoutSession(user.stripe_customer_id, couponCode, platform);
+      console.log('Checkout session created successfully:', session.id, 'for platform:', platform);
       
       res.json({ url: session.url });
     } catch (error) {

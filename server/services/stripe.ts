@@ -187,8 +187,8 @@ export const stripeService = {
     }
   },
 
-  async createCheckoutSession(customerId: string, couponCode?: string) {
-    console.log('Creating checkout session for customer:', customerId);
+  async createCheckoutSession(customerId: string, couponCode?: string, platform?: 'ios' | 'web') {
+    console.log('Creating checkout session for customer:', customerId, 'platform:', platform);
     const [user] = await db
       .select()
       .from(users)
@@ -202,9 +202,9 @@ export const stripeService = {
     try {
       // Create a custom token for Firebase authentication
       const firebaseToken = await createFirebaseToken(user.id.toString());
-      
+
       console.log('Creating Stripe checkout session with customer ID:', customerId);
-      
+
       // Determine line item configuration
       let lineItem;
       if (SUBSCRIPTION_CONFIG.PRICE_ID) {
@@ -224,14 +224,26 @@ export const stripeService = {
         };
       }
 
+      // Determine success/cancel URLs based on platform
+      // iOS uses deep links, web uses hash router URLs
+      const isIOS = platform === 'ios';
+      const successUrl = isIOS
+        ? `dinen://subscription/success?session_id={CHECKOUT_SESSION_ID}`
+        : `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}&auth_token=${encodeURIComponent(firebaseToken)}`;
+      const cancelUrl = isIOS
+        ? `dinen://subscription/canceled`
+        : `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}`;
+
+      console.log('Checkout URLs configured:', { isIOS, successUrl: successUrl.substring(0, 50) + '...' });
+
       // Base session configuration
       const sessionConfig: any = {
         customer: customerId,
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [lineItem],
-        success_url: `${baseUrl}/#/subscription/success?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}&auth_token=${encodeURIComponent(firebaseToken)}`,
-        cancel_url: `${baseUrl}/#/subscription/canceled?session_id={CHECKOUT_SESSION_ID}&user_id=${user.id}`,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         subscription_data: {
           metadata: {
             tier: 'premium',
