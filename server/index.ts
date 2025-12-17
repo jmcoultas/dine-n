@@ -33,15 +33,16 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 // This is handled in routes.ts with express.raw({ type: 'application/json' })
 
 // Apply JSON parsing to all routes EXCEPT the webhook endpoint
+// Increased limit to 10MB to support base64 image uploads (receipt scanning)
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/webhook') {
     // Skip JSON parsing for webhook endpoint - it needs raw body
     next();
   } else {
-    express.json()(req, res, next);
+    express.json({ limit: '10mb' })(req, res, next);
   }
 });
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 // CORS settings - allow both web and mobile clients
 app.use((req, res, next) => {
