@@ -614,6 +614,196 @@ async function generateRecipeImage(
   return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
 }
 
+// MARK: - Receipt Scanning with Gemini Vision
+
+interface ScannedPantryItem {
+  name: string;
+  category: string;
+  quantity: number | null;
+  unit: string | null;
+  estimatedShelfLifeDays: number | null;
+}
+
+export async function parseReceiptWithVision(
+  base64Image: string,
+  mimeType: string = "image/jpeg"
+): Promise<ScannedPantryItem[]> {
+  if (!config.googleAiApiKey) {
+    throw new Error("Google AI API key is not configured");
+  }
+
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(
+        `AI Service: Parsing receipt with Gemini Vision (attempt ${attempt}/${maxRetries})`
+      );
+
+      const prompt = `Analyze this grocery receipt image and extract all food/grocery items.
+
+For each item found, return:
+1. name: Simplified product name (e.g., "Organic Milk" not "KIRKLAND ORG MILK 2% 1GL")
+2. category: One of: produce, dairy, meat, pantry, frozen, condiments, spices, beverages, other
+3. quantity: Number of items purchased (if visible, otherwise null)
+4. unit: Unit of measurement if applicable (e.g., "lb", "oz", "gallon", null if just count)
+5. estimatedShelfLifeDays: Estimated days the item typically stays fresh (null if unknown)
+
+RULES:
+- Only extract FOOD items (ignore household goods, cleaning supplies, bags, etc.)
+- Normalize product names to simple, recognizable names
+- If quantity is not clear, default to 1
+- Use standard US units
+- If the image is not a receipt or no food items are found, return an empty items array
+
+Respond with valid JSON only in this exact format:
+{
+  "items": [
+    {
+      "name": "Product Name",
+      "category": "category",
+      "quantity": 1,
+      "unit": "unit or null",
+      "estimatedShelfLifeDays": 7
+    }
+  ]
+}`;
+
+      const model = genAI.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: {
+          responseMimeType: "application/json",
+        },
+      });
+
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Image,
+          },
+        },
+        { text: prompt },
+      ]);
+
+      if (!result?.response) {
+        throw new Error("Empty response from Gemini Vision");
+      }
+
+      const content = result.response.text();
+      if (!content) {
+        throw new Error("No text content in Gemini response");
+      }
+
+      console.log("AI Service: Received response from Gemini Vision");
+
+      const parsed = JSON.parse(content);
+
+      if (!Array.isArray(parsed.items)) {
+        throw new Error("Invalid response format - items must be an array");
+      }
+
+      // Validate and normalize each item
+      const validatedItems: ScannedPantryItem[] = parsed.items
+        .filter((item: any) => item.name && typeof item.name === "string")
+        .map((item: any) => ({
+          name: item.name.trim().substring(0, 100), // Limit name length
+          category: normalizeReceiptCategory(item.category),
+          quantity: typeof item.quantity === "number" ? item.quantity : null,
+          unit: item.unit ? String(item.unit).trim() : null,
+          estimatedShelfLifeDays:
+            typeof item.estimatedShelfLifeDays === "number"
+              ? item.estimatedShelfLifeDays
+              : null,
+        }));
+
+      console.log(
+        `AI Service: Successfully parsed ${validatedItems.length} items from receipt`
+      );
+      return validatedItems;
+    } catch (error: any) {
+      console.error(
+        `AI Service: Receipt parsing error (attempt ${attempt}):`,
+        error
+      );
+      lastError = error;
+
+      // Don't retry on auth errors
+      if (
+        error.message?.includes("API key") ||
+        error.status === 401 ||
+        error.status === 403
+      ) {
+        throw error;
+      }
+
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+        console.log(`AI Service: Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to parse receipt after all retries");
+}
+
+// Helper function to normalize category strings from receipt scanning
+function normalizeReceiptCategory(category: string | undefined): string {
+  if (!category) return "other";
+
+  const normalized = category.toLowerCase().trim();
+  const validCategories = [
+    "produce",
+    "dairy",
+    "meat",
+    "pantry",
+    "frozen",
+    "condiments",
+    "spices",
+    "beverages",
+    "other",
+  ];
+
+  if (validCategories.includes(normalized)) {
+    return normalized;
+  }
+
+  // Map common variations
+  const categoryMap: Record<string, string> = {
+    fruit: "produce",
+    fruits: "produce",
+    vegetable: "produce",
+    vegetables: "produce",
+    veggies: "produce",
+    milk: "dairy",
+    cheese: "dairy",
+    eggs: "dairy",
+    beef: "meat",
+    chicken: "meat",
+    pork: "meat",
+    seafood: "meat",
+    fish: "meat",
+    protein: "meat",
+    proteins: "meat",
+    drinks: "beverages",
+    drink: "beverages",
+    sauce: "condiments",
+    sauces: "condiments",
+    seasoning: "spices",
+    seasonings: "spices",
+    herb: "spices",
+    herbs: "spices",
+    grain: "pantry",
+    grains: "pantry",
+    canned: "pantry",
+    "dry goods": "pantry",
+  };
+
+  return categoryMap[normalized] || "other";
+}
+
 export async function generateRecipeFromTitleAI(
   title: string,
   allergies: string[] = [],

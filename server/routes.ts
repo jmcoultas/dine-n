@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "drizzle-orm";
-import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI } from "./utils/ai";
+import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI, parseReceiptWithVision } from "./utils/ai";
 import { instacartService, getInstacartService } from "./lib/instacart";
 import { config } from "./config/environment";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, pantryItems, ingredientDefaults, pantryUsageLog, type Recipe, type PantryItem, type IngredientDefault, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema, insertPantryItemSchema, selectPantryItemSchema } from "@db/schema";
@@ -5364,14 +5364,57 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         });
       }
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         addedItems,
-        count: addedItems.length 
+        count: addedItems.length
       });
     } catch (error) {
       console.error('Error bulk adding pantry items:', error);
       res.status(500).json({ error: 'Failed to bulk add pantry items' });
+    }
+  });
+
+  // POST /api/pantry/scan-receipt - Scan receipt with Gemini Vision (Premium feature)
+  app.post("/api/pantry/scan-receipt", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as any;
+
+      // Premium-only feature check
+      if (user.subscription_tier !== 'premium') {
+        return res.status(403).json({
+          error: 'Receipt scanning is a Premium feature. Upgrade to access this feature.'
+        });
+      }
+
+      const { image, mimeType } = req.body;
+
+      if (!image) {
+        return res.status(400).json({ error: 'Image data is required' });
+      }
+
+      // Validate mime type
+      const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      const actualMimeType = mimeType || 'image/jpeg';
+      if (!validMimeTypes.includes(actualMimeType)) {
+        return res.status(400).json({ error: 'Invalid image type. Supported: JPEG, PNG, WebP, GIF' });
+      }
+
+      console.log(`📸 Receipt scan requested by user ${user.id}`);
+
+      // Call Gemini Vision to parse the receipt
+      const scannedItems = await parseReceiptWithVision(image, actualMimeType);
+
+      console.log(`✅ Scanned ${scannedItems.length} items from receipt`);
+
+      res.json({
+        success: true,
+        items: scannedItems,
+        itemCount: scannedItems.length
+      });
+    } catch (error) {
+      console.error('Error scanning receipt:', error);
+      res.status(500).json({ error: 'Failed to scan receipt. Please try again.' });
     }
   });
 
