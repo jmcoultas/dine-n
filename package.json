@@ -11,7 +11,8 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "migrate": "drizzle-kit migrate",
-    "predeploy": "npm run check && npm run build"
+    "predeploy": "npm run check && npm run build",
+    "verify-users": "tsx scripts/verify-existing-users.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
