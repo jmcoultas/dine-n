@@ -822,7 +822,19 @@ export async function generateRecipeFromTitleAI(
         ? `PANTRY CONSTRAINT - You may ONLY use these available ingredients: ${options.ingredients.join(", ")}. Do not use any ingredients not listed here.`
         : "";
 
-    const prompt = `Generate a detailed recipe for "${title}".
+    const prompt = `USER REQUEST: "${title}"
+
+Based on the user's request above, create an appropriate recipe that fulfills their requirements.
+
+RECIPE TITLE REQUIREMENTS:
+- Create a concise, professional recipe title (2-5 words)
+- The title should describe the dish, not the user's request
+- Examples:
+  * User: "Pizza, three meats, three cheeses, and 6 vegetables" → Title: "Supreme Pizza"
+  * User: "Quick Italian dinner under 30 minutes" → Title: "Chicken Carbonara"
+  * User: "Healthy breakfast with eggs" → Title: "Veggie Omelet"
+  * User: "comfort food for a rainy day" → Title: "Creamy Mac and Cheese"
+
 ${allergies.length > 0 ? `STRICT REQUIREMENT - Must completely avoid these allergens and any ingredients that contain them: ${allergies.join(", ")}` : ""}
 ${pantryConstraint}
 
@@ -834,7 +846,7 @@ MEASUREMENT REQUIREMENTS:
 
 You must respond with a valid recipe in this exact JSON format:
 {
-  "name": "${title}",
+  "name": "Professional Recipe Title Here",
   "description": "Brief description",
   "prepTime": number,
   "cookTime": number,
@@ -846,6 +858,7 @@ You must respond with a valid recipe in this exact JSON format:
   "complexity": number (1 for easy, 2 for medium, 3 for hard)
 }
 
+IMPORTANT: The "name" field should be a concise, professional recipe title (2-5 words), NOT the user's original request.
 The recipe should be practical and detailed. Include all necessary ingredients and clear step-by-step instructions.
 ALL ingredient measurements MUST use US customary units only (no grams, kilograms, milliliters, etc.).`;
 
@@ -883,9 +896,13 @@ ALL ingredient measurements MUST use US customary units only (no grams, kilogram
       const recipeData = JSON.parse(content) as RecipeAPIResponse;
       let imageUrl: string | null = null;
 
+      // Use the AI-generated recipe name for image generation (not user's input)
+      const recipeName = recipeData.name || title;
+
       try {
-        console.log("AI Service: Generating image for recipe:", title);
-        imageUrl = await generateRecipeImage(title, allergies);
+        console.log("AI Service: Generating image for recipe:", recipeName);
+        console.log("AI Service: Original user request was:", title);
+        imageUrl = await generateRecipeImage(recipeName, allergies);
       } catch (error) {
         console.error("AI Service: Error in image generation flow:", error);
         imageUrl =
