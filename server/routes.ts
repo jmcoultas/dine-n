@@ -601,10 +601,34 @@ export function registerRoutes(app: express.Express) {
     try {
       console.log('Fetching temporary recipes for user:', req.user?.id);
       const now = new Date();
-      const { source } = req.query;
+      const { source, limit: queryLimit, offset: queryOffset } = req.query;
 
+      // Parse pagination params with defaults
+      const limit = queryLimit ? parseInt(queryLimit as string) : 100;
+      const offset = queryOffset ? parseInt(queryOffset as string) : 0;
+
+      // Validate pagination params
+      const validLimit = Math.min(Math.max(1, limit), 200); // Cap at 200
+      const validOffset = Math.max(0, offset);
+
+      // Only select fields needed for recipe list display (not full recipe details)
       const activeRecipes = await db
-        .select()
+        .select({
+          id: temporaryRecipes.id,
+          name: temporaryRecipes.name,
+          description: temporaryRecipes.description,
+          image_url: temporaryRecipes.image_url,
+          permanent_url: temporaryRecipes.permanent_url,
+          prep_time: temporaryRecipes.prep_time,
+          cook_time: temporaryRecipes.cook_time,
+          servings: temporaryRecipes.servings,
+          meal_type: temporaryRecipes.meal_type,
+          cuisine_type: temporaryRecipes.cuisine_type,
+          difficulty: temporaryRecipes.difficulty,
+          favorites_count: temporaryRecipes.favorites_count,
+          created_at: temporaryRecipes.created_at,
+          // Explicitly exclude large JSONB fields: ingredients, instructions, tags, nutrition
+        })
         .from(temporaryRecipes)
         .where(
           and(
@@ -612,14 +636,16 @@ export function registerRoutes(app: express.Express) {
             gt(temporaryRecipes.expires_at, now),
             // For meal plan recipes, only return recipes with meal_type set
             // For PantryPal recipes, only return recipes without meal_type
-            source === 'mealplan' 
+            source === 'mealplan'
               ? isNotNull(temporaryRecipes.meal_type)
               : isNull(temporaryRecipes.meal_type)
           )
         )
-        .orderBy(temporaryRecipes.created_at);
+        .orderBy(temporaryRecipes.created_at)
+        .limit(validLimit)
+        .offset(validOffset);
 
-      console.log('Found recipes:', activeRecipes.length);
+      console.log('Found recipes:', activeRecipes.length, `(limit: ${validLimit}, offset: ${validOffset})`);
       console.log('Recipe meal types:', activeRecipes.map(r => r.meal_type));
       res.json(activeRecipes);
     } catch (error: any) {
@@ -1054,7 +1080,13 @@ export function registerRoutes(app: express.Express) {
           )
         );
 
-      res.json(favoriteRecipes);
+      // Add is_favorite: true to all recipes since they're from the favorites endpoint
+      const recipesWithFavorite = favoriteRecipes.map(recipe => ({
+        ...recipe,
+        is_favorite: true
+      }));
+
+      res.json(recipesWithFavorite);
     } catch (error) {
       console.error("Error fetching favorite recipes:", error);
       res.status(500).json({ error: "Failed to fetch favorite recipes" });
@@ -1659,10 +1691,14 @@ Respond with valid JSON:
       });
 
       // Count existing cuisines to prioritize less-used ones
-      const allUserRecipes = await db.query.temporaryRecipes.findMany({
-        where: eq(temporaryRecipes.user_id, user.id)
-      });
-      
+      // Only select the fields we actually use (not full recipes with large JSONB data)
+      const allUserRecipes = await db
+        .select({
+          cuisine_type: temporaryRecipes.cuisine_type
+        })
+        .from(temporaryRecipes)
+        .where(eq(temporaryRecipes.user_id, user.id));
+
       allUserRecipes.forEach(recipe => {
         if (recipe.cuisine_type && normalizedPreferences.cuisine.includes(recipe.cuisine_type)) {
           cuisineUsage[recipe.cuisine_type] = (cuisineUsage[recipe.cuisine_type] || 0) + 1;
@@ -3161,9 +3197,13 @@ Respond with valid JSON:
       };
 
       // Get all recipe names to exclude (simplified approach)
-      const allUserRecipes = await db.query.temporaryRecipes.findMany({
-        where: eq(temporaryRecipes.user_id, user.id)
-      });
+      const allUserRecipes = await db
+        .select({
+          name: temporaryRecipes.name,
+          cuisine_type: temporaryRecipes.cuisine_type
+        })
+        .from(temporaryRecipes)
+        .where(eq(temporaryRecipes.user_id, user.id));
       
       const usedRecipeNames = new Set<string>();
       allUserRecipes.forEach(recipe => {
