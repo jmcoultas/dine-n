@@ -447,18 +447,19 @@ export default function IngredientRecipes() {
       // Save the dietary and allergy preferences to user account
       if (user) {
         try {
-          // Filter to only include valid values from the schema enums
+          // Filter dietary to only include valid values from the schema enum
           const dietaryOptions = PreferenceSchema.shape.dietary.element.enum;
-          const allergiesOptions = PreferenceSchema.shape.allergies.element.enum;
-          
-          const validatedDietary = preferences.dietary.filter(item => 
+
+          const validatedDietary = preferences.dietary.filter(item =>
             Object.values(dietaryOptions).includes(item as any)
           );
-          
-          const validatedAllergies = combinedAllergies.filter(item => 
-            Object.values(allergiesOptions).includes(item as any)
+
+          // Allergies now support custom values (any non-empty string up to 50 chars)
+          // Filter out empty strings but allow all other values
+          const validatedAllergies = combinedAllergies.filter(item =>
+            item && item.trim().length > 0 && item.trim().length <= 50
           );
-          
+
           await savePreferencesToAccount({
             dietary: validatedDietary as any,
             allergies: validatedAllergies as any

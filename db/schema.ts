@@ -13,6 +13,10 @@ export const ChefPreferencesSchema = z.object({
   servingSize: z.enum(["1", "2", "3", "4", "5", "6", "7", "8"])
 }).optional();
 
+// Predefined allergen options (exported for web UI components)
+// Users can also add custom allergens beyond these options
+export const PREDEFINED_ALLERGENS = ["Dairy", "Eggs", "Tree Nuts", "Peanuts", "Shellfish", "Wheat", "Soy"] as const;
+
 export const PreferenceSchema = z.object({
   dietary: z.array(z.enum(["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo", "Mediterranean Diet", "Protein Heavy", "Organic"])),
   allergies: z.array(

@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Settings2, Wand2, AlertTriangle } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { SnakeLoadingGame } from "@/components/SnakeLoadingGame";
-import { PreferenceSchema, type Preferences } from "@db/schema";
+import { PreferenceSchema, PREDEFINED_ALLERGENS, type Preferences } from "@db/schema";
 import { ChefPreferencesSchema, type ChefPreferences } from "@/lib/types";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -50,7 +50,7 @@ const STEPS = [
     title: "Food Allergies & Intolerances",
     description: "Your safety matters. Select any food allergies or intolerances you have.",
     field: "allergies" as const,
-    options: PreferenceSchema.shape.allergies.element.options
+    options: PREDEFINED_ALLERGENS
   },
   {
     title: "Cuisine Preferences",
@@ -89,7 +89,7 @@ const ONBOARDING_STEPS = [
     title: "Let's Keep You Safe & Sound 🛡️",
     description: "Nobody wants a surprise ingredient ruining the party! Tell us about any food allergies or things that don't play nice with your system.",
     field: "allergies" as const,
-    options: PreferenceSchema.shape.allergies.element.options
+    options: PREDEFINED_ALLERGENS
   },
   {
     title: "Around the World in 80 Bites 🌍",
@@ -679,7 +679,7 @@ export default function PreferenceSheet({
                               <div className="flex-1 overflow-y-auto">
                                 <div className="p-4 space-y-1 pb-20">
                                   {currentStepConfig.field && currentStepConfig.options
-                                    .map((option) => {
+                                    .map((option: string) => {
                                       const field = currentStepConfig.field!;
                                       const isSelected = (tempPreferences[field] as string[]).includes(option);
                                       

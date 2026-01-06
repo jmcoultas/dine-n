@@ -1,6 +1,6 @@
 import { OnboardingStep } from "./OnboardingStep";
 import { ButtonSelection } from "./ButtonSelection";
-import { PreferenceSchema } from "@db/schema";
+import { PREDEFINED_ALLERGENS } from "@db/schema";
 
 interface AllergiesStepProps {
   selectedAllergies: string[];
@@ -9,7 +9,7 @@ interface AllergiesStepProps {
   onBack: () => void;
 }
 
-const ALLERGY_OPTIONS = PreferenceSchema.shape.allergies.element.options;
+const ALLERGY_OPTIONS = PREDEFINED_ALLERGENS;
 
 export function AllergiesStep({
   selectedAllergies,
