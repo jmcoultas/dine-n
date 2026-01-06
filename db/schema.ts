@@ -15,7 +15,21 @@ export const ChefPreferencesSchema = z.object({
 
 export const PreferenceSchema = z.object({
   dietary: z.array(z.enum(["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo", "Mediterranean Diet", "Protein Heavy", "Organic"])),
-  allergies: z.array(z.enum(["Dairy", "Eggs", "Tree Nuts", "Peanuts", "Shellfish", "Wheat", "Soy"])),
+  allergies: z.array(
+    z.string()
+      .trim()
+      .min(1, "Allergen cannot be empty")
+      .max(50, "Allergen must be 50 characters or less")
+  ).transform(arr => {
+    // Remove duplicates case-insensitively, preserving first occurrence's casing
+    const seen = new Set<string>();
+    return arr.filter(item => {
+      const lower = item.toLowerCase().trim();
+      if (seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    });
+  }),
   cuisine: z.array(z.enum(["Italian", "Mexican", "Chinese", "Japanese", "Indian", "Thai", "Mediterranean", "American", "French"])),
   meatTypes: z.array(z.enum(["Chicken", "Beef", "Pork", "Fish", "Lamb", "Turkey", "None"])),
   chefPreferences: ChefPreferencesSchema
