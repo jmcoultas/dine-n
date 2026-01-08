@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "drizzle-orm";
-import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI, parseReceiptWithVision, generateMealPrepComponent, generateMealPrepAssemblies } from "./utils/ai";
+import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI, parseReceiptWithVision, generateMealPrepComponent, generateMealPrepAssemblies, generateRecipeImage } from "./utils/ai";
 import { instacartService, getInstacartService } from "./lib/instacart";
 import { config } from "./config/environment";
 import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, pantryItems, ingredientDefaults, pantryUsageLog, mealPrepPlans, mealPrepComponents, mealPrepAssemblies, type Recipe, type PantryItem, type IngredientDefault, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema, insertPantryItemSchema, selectPantryItemSchema } from "@db/schema";
@@ -4237,54 +4237,83 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
 
       console.log(`🍱 Selections - Proteins: ${proteinSelections.join(', ')}, Carbs: ${carbSelections.join(', ')}, Vegetables: ${vegetableSelections.join(', ')}`);
 
-      // Generate components using AI
-      const generatedComponents: Array<{
-        type: "protein" | "carb" | "vegetable";
-        recipe: any;
-        prepTimeMinutes: number;
-        storageInstructions: string;
-        reheatInstructions: string;
-      }> = [];
+      // ===== PARALLEL GENERATION PHASE 1: Generate all component recipes in parallel =====
+      console.log('🚀 Starting parallel component recipe generation...');
+      const componentPromises: Array<Promise<{ type: "protein" | "carb" | "vegetable"; result: any }>> = [];
 
-      // Generate protein component
-      console.log('🍖 Generating protein component...');
-      const proteinResult = await generateMealPrepComponent({
-        componentType: "protein",
-        goal,
-        servings,
-        selectedIngredients: proteinSelections.length > 0 ? proteinSelections : ["Chicken Breast"],
-        dietaryRestrictions: dietaryRestrictions || [],
-        allergies: allergies || []
-      });
-      generatedComponents.push({ type: "protein", ...proteinResult });
+      // Always generate protein component
+      componentPromises.push(
+        generateMealPrepComponent({
+          componentType: "protein",
+          goal,
+          servings,
+          selectedIngredients: proteinSelections.length > 0 ? proteinSelections : ["Chicken Breast"],
+          dietaryRestrictions: dietaryRestrictions || [],
+          allergies: allergies || [],
+          skipImage: true // Skip image for parallel processing
+        }).then(result => ({ type: "protein" as const, result }))
+      );
 
       // Generate carb component if selected
       if (carbSelections.length > 0) {
-        console.log('🍚 Generating carb component...');
-        const carbResult = await generateMealPrepComponent({
-          componentType: "carb",
-          goal,
-          servings,
-          selectedIngredients: carbSelections,
-          dietaryRestrictions: dietaryRestrictions || [],
-          allergies: allergies || []
-        });
-        generatedComponents.push({ type: "carb", ...carbResult });
+        componentPromises.push(
+          generateMealPrepComponent({
+            componentType: "carb",
+            goal,
+            servings,
+            selectedIngredients: carbSelections,
+            dietaryRestrictions: dietaryRestrictions || [],
+            allergies: allergies || [],
+            skipImage: true
+          }).then(result => ({ type: "carb" as const, result }))
+        );
       }
 
       // Generate vegetable component if selected
       if (vegetableSelections.length > 0) {
-        console.log('🥦 Generating vegetable component...');
-        const vegResult = await generateMealPrepComponent({
-          componentType: "vegetable",
-          goal,
-          servings,
-          selectedIngredients: vegetableSelections,
-          dietaryRestrictions: dietaryRestrictions || [],
-          allergies: allergies || []
-        });
-        generatedComponents.push({ type: "vegetable", ...vegResult });
+        componentPromises.push(
+          generateMealPrepComponent({
+            componentType: "vegetable",
+            goal,
+            servings,
+            selectedIngredients: vegetableSelections,
+            dietaryRestrictions: dietaryRestrictions || [],
+            allergies: allergies || [],
+            skipImage: true
+          }).then(result => ({ type: "vegetable" as const, result }))
+        );
       }
+
+      // Wait for all component recipes to complete
+      const componentResults = await Promise.all(componentPromises);
+      console.log(`✅ Generated ${componentResults.length} component recipes in parallel`);
+
+      // ===== PARALLEL GENERATION PHASE 2: Generate all component images in parallel =====
+      console.log('🖼️ Starting parallel component image generation...');
+      const componentImagePromises = componentResults.map(async (comp) => {
+        try {
+          const imageUrl = await generateRecipeImage(comp.result.recipe.name, allergies || []);
+          return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+        } catch (error) {
+          console.error(`Error generating image for ${comp.result.recipe.name}:`, error);
+          return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+        }
+      });
+
+      const componentImageUrls = await Promise.all(componentImagePromises);
+      console.log(`✅ Generated ${componentImageUrls.length} component images in parallel`);
+
+      // Combine recipes with images
+      const generatedComponents = componentResults.map((comp, index) => ({
+        type: comp.type,
+        recipe: {
+          ...comp.result.recipe,
+          image_url: componentImageUrls[index]
+        },
+        prepTimeMinutes: comp.result.prepTimeMinutes,
+        storageInstructions: comp.result.storageInstructions,
+        reheatInstructions: comp.result.reheatInstructions
+      }));
 
       // Calculate total prep time
       const totalPrepTime = generatedComponents.reduce((sum, c) => sum + c.prepTimeMinutes, 0);
@@ -4372,7 +4401,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         });
       }
 
-      // Generate assemblies
+      // ===== PARALLEL GENERATION PHASE 3: Generate assembly recipes (single call) =====
       console.log('🍱 Generating assembly meals...');
       const assemblyParams = {
         components: storedComponents.map(c => ({
@@ -4382,10 +4411,36 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         })),
         goal,
         servings,
-        numberOfAssemblies: 3
+        numberOfAssemblies: 3,
+        skipImages: true // Skip images for parallel processing
       };
 
       const assemblyResults = await generateMealPrepAssemblies(assemblyParams);
+      console.log(`✅ Generated ${assemblyResults.length} assembly recipes`);
+
+      // ===== PARALLEL GENERATION PHASE 4: Generate all assembly images in parallel =====
+      console.log('🖼️ Starting parallel assembly image generation...');
+      const assemblyImagePromises = assemblyResults.map(async (assembly) => {
+        try {
+          const imageUrl = await generateRecipeImage(assembly.name, []);
+          return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+        } catch (error) {
+          console.error(`Error generating image for ${assembly.name}:`, error);
+          return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+        }
+      });
+
+      const assemblyImageUrls = await Promise.all(assemblyImagePromises);
+      console.log(`✅ Generated ${assemblyImageUrls.length} assembly images in parallel`);
+
+      // Attach images to assembly results
+      const assembliesWithImages = assemblyResults.map((assembly, index) => ({
+        ...assembly,
+        recipe: {
+          ...assembly.recipe,
+          image_url: assemblyImageUrls[index]
+        }
+      }));
 
       // Store assembly recipes and create assembly records
       const storedAssemblies: Array<{
@@ -4397,7 +4452,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         sauceSuggestion: string;
       }> = [];
 
-      for (const assembly of assemblyResults) {
+      for (const assembly of assembliesWithImages) {
         // Store recipe in temporaryRecipes
         const [storedRecipe] = await db
           .insert(temporaryRecipes)

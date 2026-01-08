@@ -542,7 +542,7 @@ function transformRecipeToSnakeCase(
   };
 }
 
-async function generateRecipeImage(
+export async function generateRecipeImage(
   recipeName: string,
   allergies: string[] = [],
   retries = 3,
@@ -960,7 +960,7 @@ export interface MealPrepComponentResult {
 }
 
 export async function generateMealPrepComponent(
-  params: MealPrepComponentParams
+  params: MealPrepComponentParams & { skipImage?: boolean }
 ): Promise<MealPrepComponentResult> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
@@ -1042,13 +1042,15 @@ Respond with valid JSON:
 
     const parsed = JSON.parse(completion.choices[0].message.content);
 
-    // Generate image
+    // Only generate image if not skipped (for parallel processing)
     let imageUrl: string | null = null;
-    try {
-      imageUrl = await generateRecipeImage(parsed.name, params.allergies || []);
-    } catch (error) {
-      console.error("Error generating meal prep component image:", error);
-      imageUrl = "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+    if (!params.skipImage) {
+      try {
+        imageUrl = await generateRecipeImage(parsed.name, params.allergies || []);
+      } catch (error) {
+        console.error("Error generating meal prep component image:", error);
+        imageUrl = "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+      }
     }
 
     // Transform to snake_case
@@ -1100,7 +1102,7 @@ export interface MealPrepAssemblyResult {
 }
 
 export async function generateMealPrepAssemblies(
-  params: MealPrepAssemblyParams
+  params: MealPrepAssemblyParams & { skipImages?: boolean }
 ): Promise<MealPrepAssemblyResult[]> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured");
@@ -1174,16 +1176,20 @@ Respond with valid JSON:
       throw new Error("Invalid assemblies format");
     }
 
-    // Generate images and transform results
+    // Transform results (skip images if requested for parallel processing)
     const results: MealPrepAssemblyResult[] = [];
 
     for (const assembly of parsed.assemblies) {
       let imageUrl: string | null = null;
-      try {
-        imageUrl = await generateRecipeImage(assembly.name, []);
-      } catch (error) {
-        console.error("Error generating assembly image:", error);
-        imageUrl = "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+
+      // Only generate images inline if not skipping (for backward compatibility)
+      if (!params.skipImages) {
+        try {
+          imageUrl = await generateRecipeImage(assembly.name, []);
+        } catch (error) {
+          console.error("Error generating assembly image:", error);
+          imageUrl = "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+        }
       }
 
       const recipe: Partial<TemporaryRecipe> = {
