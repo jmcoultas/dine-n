@@ -1,9 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { eq, and, gt, or, sql, inArray, desc, isNotNull, isNull, lt } from "drizzle-orm";
-import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI, parseReceiptWithVision } from "./utils/ai";
+import { generateRecipeRecommendation, generateIngredientSubstitution, generateRecipeSuggestionsFromIngredients, generateRecipeFromTitleAI, parseReceiptWithVision, generateMealPrepComponent, generateMealPrepAssemblies } from "./utils/ai";
 import { instacartService, getInstacartService } from "./lib/instacart";
 import { config } from "./config/environment";
-import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, pantryItems, ingredientDefaults, pantryUsageLog, type Recipe, type PantryItem, type IngredientDefault, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema, insertPantryItemSchema, selectPantryItemSchema } from "@db/schema";
+import { recipes, mealPlans, groceryLists, users, userRecipes, temporaryRecipes, mealPlanRecipes, mealPlanFeedback, pantryItems, ingredientDefaults, pantryUsageLog, mealPrepPlans, mealPrepComponents, mealPrepAssemblies, type Recipe, type PantryItem, type IngredientDefault, PreferenceSchema, insertTemporaryRecipeSchema, insertMealPlanFeedbackSchema, insertPantryItemSchema, selectPantryItemSchema } from "@db/schema";
 import { db } from "../db";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { requireAdmin, checkAdminStatus } from "./middleware/admin";
@@ -4146,8 +4146,638 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
     }
   });
 
+  // ============================================
+  // MEAL PREP MODE ROUTES
+  // ============================================
+
+  // Generate a meal prep plan
+  app.post("/api/generate-meal-prep", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { goal, servings, prepDay, proteins, sides, dietaryRestrictions, allergies } = req.body;
+
+      // Validate required fields
+      if (!goal || !servings || !prepDay) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "goal, servings, and prepDay are required"
+        });
+      }
+
+      // Validate goal enum
+      const validGoals = ["high_protein", "budget_friendly", "time_saving", "kid_friendly", "low_carb"];
+      if (!validGoals.includes(goal)) {
+        return res.status(400).json({
+          error: "Invalid goal",
+          message: `goal must be one of: ${validGoals.join(", ")}`
+        });
+      }
+
+      // Validate prep day enum
+      const validPrepDays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      if (!validPrepDays.includes(prepDay)) {
+        return res.status(400).json({
+          error: "Invalid prep day",
+          message: `prepDay must be one of: ${validPrepDays.join(", ")}`
+        });
+      }
+
+      console.log(`🍱 Generating meal prep plan for user ${user.id} with goal: ${goal}, servings: ${servings}`);
+
+      // Deactivate any existing active meal prep plans for this user
+      await db
+        .update(mealPrepPlans)
+        .set({ is_active: false })
+        .where(and(
+          eq(mealPrepPlans.user_id, user.id),
+          eq(mealPrepPlans.is_active, true)
+        ));
+
+      // Calculate expiration (7 days from now)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      // Extract protein selections
+      const proteinSelections: string[] = [];
+      if (proteins && typeof proteins === 'object') {
+        for (const [category, cuts] of Object.entries(proteins)) {
+          if (Array.isArray(cuts)) {
+            for (const cut of cuts) {
+              proteinSelections.push(`${category} ${cut}`);
+            }
+          }
+        }
+      }
+
+      // Extract carb and vegetable selections
+      const carbSelections: string[] = [];
+      const vegetableSelections: string[] = [];
+      if (sides && typeof sides === 'object') {
+        if (sides.carbs && typeof sides.carbs === 'object') {
+          for (const [category, varieties] of Object.entries(sides.carbs)) {
+            if (Array.isArray(varieties)) {
+              for (const variety of varieties) {
+                carbSelections.push(`${variety} ${category}`);
+              }
+            }
+          }
+        }
+        if (sides.vegetables && typeof sides.vegetables === 'object') {
+          for (const [category, varieties] of Object.entries(sides.vegetables)) {
+            if (Array.isArray(varieties) && varieties.length > 0) {
+              for (const variety of varieties) {
+                vegetableSelections.push(variety === category ? category : `${variety} ${category}`);
+              }
+            } else {
+              vegetableSelections.push(category);
+            }
+          }
+        }
+      }
+
+      console.log(`🍱 Selections - Proteins: ${proteinSelections.join(', ')}, Carbs: ${carbSelections.join(', ')}, Vegetables: ${vegetableSelections.join(', ')}`);
+
+      // Generate components using AI
+      const generatedComponents: Array<{
+        type: "protein" | "carb" | "vegetable";
+        recipe: any;
+        prepTimeMinutes: number;
+        storageInstructions: string;
+        reheatInstructions: string;
+      }> = [];
+
+      // Generate protein component
+      console.log('🍖 Generating protein component...');
+      const proteinResult = await generateMealPrepComponent({
+        componentType: "protein",
+        goal,
+        servings,
+        selectedIngredients: proteinSelections.length > 0 ? proteinSelections : ["Chicken Breast"],
+        dietaryRestrictions: dietaryRestrictions || [],
+        allergies: allergies || []
+      });
+      generatedComponents.push({ type: "protein", ...proteinResult });
+
+      // Generate carb component if selected
+      if (carbSelections.length > 0) {
+        console.log('🍚 Generating carb component...');
+        const carbResult = await generateMealPrepComponent({
+          componentType: "carb",
+          goal,
+          servings,
+          selectedIngredients: carbSelections,
+          dietaryRestrictions: dietaryRestrictions || [],
+          allergies: allergies || []
+        });
+        generatedComponents.push({ type: "carb", ...carbResult });
+      }
+
+      // Generate vegetable component if selected
+      if (vegetableSelections.length > 0) {
+        console.log('🥦 Generating vegetable component...');
+        const vegResult = await generateMealPrepComponent({
+          componentType: "vegetable",
+          goal,
+          servings,
+          selectedIngredients: vegetableSelections,
+          dietaryRestrictions: dietaryRestrictions || [],
+          allergies: allergies || []
+        });
+        generatedComponents.push({ type: "vegetable", ...vegResult });
+      }
+
+      // Calculate total prep time
+      const totalPrepTime = generatedComponents.reduce((sum, c) => sum + c.prepTimeMinutes, 0);
+
+      // Create the meal prep plan
+      const [mealPrepPlan] = await db
+        .insert(mealPrepPlans)
+        .values({
+          user_id: user.id,
+          name: `${goal.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())} Meal Prep`,
+          goal,
+          total_servings: servings,
+          prep_day: prepDay,
+          total_prep_time: totalPrepTime,
+          reheat_tips: "Proteins: Microwave 2-3 min or pan-sear until heated through. Carbs: Add a splash of water, cover, microwave 90 sec. Veggies: Microwave 1-2 min or enjoy cold in salads.",
+          expires_at: expiresAt,
+          is_active: true,
+        })
+        .returning();
+
+      // Store component recipes and create component records
+      const storedComponents: Array<{
+        id: number;
+        type: string;
+        recipe: any;
+        prepTimeMinutes: number;
+        storageInstructions: string;
+        reheatInstructions: string;
+      }> = [];
+
+      for (const comp of generatedComponents) {
+        // Store recipe in temporaryRecipes
+        const [storedRecipe] = await db
+          .insert(temporaryRecipes)
+          .values({
+            user_id: user.id,
+            name: comp.recipe.name,
+            description: comp.recipe.description,
+            prep_time: comp.recipe.prep_time,
+            cook_time: comp.recipe.cook_time,
+            servings: comp.recipe.servings,
+            ingredients: comp.recipe.ingredients,
+            instructions: comp.recipe.instructions,
+            meal_type: comp.recipe.meal_type || "Dinner",
+            tags: comp.recipe.tags,
+            nutrition: comp.recipe.nutrition,
+            complexity: comp.recipe.complexity,
+            image_url: comp.recipe.image_url,
+            expires_at: expiresAt
+          })
+          .returning();
+
+        // Store component record
+        const [storedComponent] = await db
+          .insert(mealPrepComponents)
+          .values({
+            meal_prep_plan_id: mealPrepPlan.id,
+            recipe_id: storedRecipe.id,
+            component_type: comp.type,
+            prep_time_minutes: comp.prepTimeMinutes,
+            storage_instructions: comp.storageInstructions,
+            reheat_instructions: comp.reheatInstructions
+          })
+          .returning();
+
+        storedComponents.push({
+          id: storedComponent.id,
+          type: comp.type,
+          recipe: {
+            id: storedRecipe.id,
+            name: storedRecipe.name,
+            description: storedRecipe.description,
+            prepTime: storedRecipe.prep_time,
+            cookTime: storedRecipe.cook_time,
+            servings: storedRecipe.servings,
+            ingredients: storedRecipe.ingredients,
+            instructions: storedRecipe.instructions,
+            tags: storedRecipe.tags,
+            nutrition: storedRecipe.nutrition,
+            displayImageUrl: storedRecipe.image_url
+          },
+          prepTimeMinutes: comp.prepTimeMinutes,
+          storageInstructions: comp.storageInstructions,
+          reheatInstructions: comp.reheatInstructions
+        });
+      }
+
+      // Generate assemblies
+      console.log('🍱 Generating assembly meals...');
+      const assemblyParams = {
+        components: storedComponents.map(c => ({
+          id: c.id,
+          name: c.recipe.name,
+          type: c.type as "protein" | "carb" | "vegetable"
+        })),
+        goal,
+        servings,
+        numberOfAssemblies: 3
+      };
+
+      const assemblyResults = await generateMealPrepAssemblies(assemblyParams);
+
+      // Store assembly recipes and create assembly records
+      const storedAssemblies: Array<{
+        id: number;
+        name: string;
+        description: string;
+        recipe: any;
+        componentIds: number[];
+        sauceSuggestion: string;
+      }> = [];
+
+      for (const assembly of assemblyResults) {
+        // Store recipe in temporaryRecipes
+        const [storedRecipe] = await db
+          .insert(temporaryRecipes)
+          .values({
+            user_id: user.id,
+            name: assembly.recipe.name || assembly.name,
+            description: assembly.recipe.description || null,
+            prep_time: assembly.recipe.prep_time || 10,
+            cook_time: assembly.recipe.cook_time || 5,
+            servings: assembly.recipe.servings || servings,
+            ingredients: assembly.recipe.ingredients || [],
+            instructions: assembly.recipe.instructions || [],
+            meal_type: "Dinner",
+            tags: assembly.recipe.tags || [],
+            nutrition: assembly.recipe.nutrition || null,
+            complexity: 1,
+            image_url: assembly.recipe.image_url || null,
+            expires_at: expiresAt
+          })
+          .returning();
+
+        // Store assembly record
+        const [storedAssembly] = await db
+          .insert(mealPrepAssemblies)
+          .values({
+            meal_prep_plan_id: mealPrepPlan.id,
+            recipe_id: storedRecipe.id,
+            name: assembly.name,
+            description: assembly.description,
+            component_ids: assembly.componentIds,
+            sauce_suggestion: assembly.sauceSuggestion
+          })
+          .returning();
+
+        storedAssemblies.push({
+          id: storedAssembly.id,
+          name: assembly.name,
+          description: assembly.description,
+          recipe: {
+            id: storedRecipe.id,
+            name: storedRecipe.name,
+            description: storedRecipe.description,
+            prepTime: storedRecipe.prep_time,
+            cookTime: storedRecipe.cook_time,
+            servings: storedRecipe.servings,
+            ingredients: storedRecipe.ingredients,
+            instructions: storedRecipe.instructions,
+            tags: storedRecipe.tags,
+            nutrition: storedRecipe.nutrition,
+            displayImageUrl: storedRecipe.image_url
+          },
+          componentIds: assembly.componentIds,
+          sauceSuggestion: assembly.sauceSuggestion
+        });
+      }
+
+      // Increment user's meal_plans_generated counter
+      await db
+        .update(users)
+        .set({
+          meal_plans_generated: sql`${users.meal_plans_generated} + 1`
+        })
+        .where(eq(users.id, user.id));
+
+      console.log(`✅ Meal prep plan ${mealPrepPlan.id} created with ${storedComponents.length} components and ${storedAssemblies.length} assemblies`);
+
+      res.json({
+        status: "success",
+        message: "Meal prep plan created successfully",
+        mealPrepPlan: {
+          id: mealPrepPlan.id,
+          name: mealPrepPlan.name,
+          goal: mealPrepPlan.goal,
+          totalServings: mealPrepPlan.total_servings,
+          prepDay: mealPrepPlan.prep_day,
+          totalPrepTime: mealPrepPlan.total_prep_time,
+          reheatTips: mealPrepPlan.reheat_tips,
+          components: storedComponents.map(c => ({
+            id: c.id,
+            component_type: c.type,
+            recipe: c.recipe,
+            prep_time_minutes: c.prepTimeMinutes,
+            storage_instructions: c.storageInstructions,
+            reheat_instructions: c.reheatInstructions
+          })),
+          assemblies: storedAssemblies.map(a => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            recipe: a.recipe,
+            component_ids: a.componentIds,
+            sauce_suggestion: a.sauceSuggestion
+          })),
+          createdAt: mealPrepPlan.created_at
+        }
+      });
+
+    } catch (error) {
+      console.error('Error generating meal prep plan:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to generate meal prep plan"
+      });
+    }
+  });
+
+  // Get current active meal prep plan
+  app.get("/api/meal-prep/current", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+
+      // Get active meal prep plan
+      const [mealPrepPlan] = await db
+        .select()
+        .from(mealPrepPlans)
+        .where(and(
+          eq(mealPrepPlans.user_id, user.id),
+          eq(mealPrepPlans.is_active, true)
+        ))
+        .orderBy(desc(mealPrepPlans.created_at))
+        .limit(1);
+
+      if (!mealPrepPlan) {
+        return res.json({ mealPrepPlan: null });
+      }
+
+      // Get components with recipes
+      const componentsWithRecipes = await db
+        .select({
+          component: mealPrepComponents,
+          recipe: temporaryRecipes
+        })
+        .from(mealPrepComponents)
+        .leftJoin(temporaryRecipes, eq(mealPrepComponents.recipe_id, temporaryRecipes.id))
+        .where(eq(mealPrepComponents.meal_prep_plan_id, mealPrepPlan.id));
+
+      // Get assemblies with recipes
+      const assembliesWithRecipes = await db
+        .select({
+          assembly: mealPrepAssemblies,
+          recipe: temporaryRecipes
+        })
+        .from(mealPrepAssemblies)
+        .leftJoin(temporaryRecipes, eq(mealPrepAssemblies.recipe_id, temporaryRecipes.id))
+        .where(eq(mealPrepAssemblies.meal_prep_plan_id, mealPrepPlan.id));
+
+      res.json({
+        mealPrepPlan: {
+          id: mealPrepPlan.id,
+          name: mealPrepPlan.name,
+          goal: mealPrepPlan.goal,
+          totalServings: mealPrepPlan.total_servings,
+          prepDay: mealPrepPlan.prep_day,
+          totalPrepTime: mealPrepPlan.total_prep_time,
+          reheatTips: mealPrepPlan.reheat_tips,
+          components: componentsWithRecipes.map(({ component, recipe }) => ({
+            id: component.id,
+            component_type: component.component_type,
+            prep_time_minutes: component.prep_time_minutes,
+            storage_instructions: component.storage_instructions,
+            reheat_instructions: component.reheat_instructions,
+            recipe: recipe ? {
+              id: recipe.id,
+              name: recipe.name,
+              description: recipe.description,
+              prepTime: recipe.prep_time,
+              cookTime: recipe.cook_time,
+              servings: recipe.servings,
+              ingredients: recipe.ingredients,
+              instructions: recipe.instructions,
+              tags: recipe.tags,
+              nutrition: recipe.nutrition,
+              displayImageUrl: recipe.image_url
+            } : null
+          })),
+          assemblies: assembliesWithRecipes.map(({ assembly, recipe }) => ({
+            id: assembly.id,
+            name: assembly.name,
+            description: assembly.description,
+            component_ids: assembly.component_ids,
+            sauce_suggestion: assembly.sauce_suggestion,
+            recipe: recipe ? {
+              id: recipe.id,
+              name: recipe.name,
+              description: recipe.description,
+              prepTime: recipe.prep_time,
+              cookTime: recipe.cook_time,
+              servings: recipe.servings,
+              ingredients: recipe.ingredients,
+              instructions: recipe.instructions,
+              tags: recipe.tags,
+              nutrition: recipe.nutrition,
+              displayImageUrl: recipe.image_url
+            } : null
+          })),
+          createdAt: mealPrepPlan.created_at
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching current meal prep plan:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to fetch meal prep plan"
+      });
+    }
+  });
+
+  // Get all meal prep plans for user (history)
+  app.get("/api/meal-prep", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+
+      const plans = await db
+        .select()
+        .from(mealPrepPlans)
+        .where(eq(mealPrepPlans.user_id, user.id))
+        .orderBy(desc(mealPrepPlans.created_at));
+
+      res.json({
+        mealPrepPlans: plans.map(p => ({
+          id: p.id,
+          name: p.name,
+          goal: p.goal,
+          totalServings: p.total_servings,
+          prepDay: p.prep_day,
+          isActive: p.is_active,
+          createdAt: p.created_at
+        }))
+      });
+
+    } catch (error) {
+      console.error('Error fetching meal prep plans:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to fetch meal prep plans"
+      });
+    }
+  });
+
+  // Instacart Integration - Create Shopping List for Meal Prep Plan
+  app.post("/api/instacart/meal-prep-shopping-list", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { meal_prep_plan_id, title } = req.body;
+
+      if (!meal_prep_plan_id) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Missing required parameter: meal_prep_plan_id"
+        });
+      }
+
+      // Get the meal prep plan and verify ownership
+      const mealPrepPlan = await db.query.mealPrepPlans.findFirst({
+        where: eq(mealPrepPlans.id, meal_prep_plan_id)
+      });
+
+      if (!mealPrepPlan) {
+        return res.status(404).json({ error: "Meal prep plan not found" });
+      }
+
+      if (mealPrepPlan.user_id !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized to access this meal prep plan" });
+      }
+
+      // Get all components for this meal prep plan
+      const components = await db
+        .select({
+          id: mealPrepComponents.id,
+          recipe_id: mealPrepComponents.recipe_id,
+          component_type: mealPrepComponents.component_type
+        })
+        .from(mealPrepComponents)
+        .where(eq(mealPrepComponents.meal_prep_plan_id, meal_prep_plan_id));
+
+      console.log('Meal prep components found:', {
+        mealPrepPlanId: meal_prep_plan_id,
+        count: components.length,
+        components: components
+      });
+
+      const recipeIds = components.map(c => c.recipe_id);
+
+      console.log('Recipe IDs to fetch:', recipeIds);
+
+      // Get recipe details from temporary_recipes
+      let recipes: any[] = [];
+      if (recipeIds.length > 0) {
+        recipes = await db
+          .select()
+          .from(temporaryRecipes)
+          .where(inArray(temporaryRecipes.id, recipeIds));
+      } else {
+        console.warn('No recipe IDs found for meal prep plan:', meal_prep_plan_id);
+      }
+
+      console.log('Recipes fetched from database:', {
+        count: recipes.length,
+        recipeNames: recipes.map(r => r.name)
+      });
+
+      // Extract ingredients from all component recipes
+      const ingredients: Array<{ name: string; amount: number; unit: string }> = [];
+
+      recipes.forEach(recipe => {
+        console.log(`Processing recipe: ${recipe.name} (ID: ${recipe.id})`);
+
+        if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+          console.log(`Recipe has ${recipe.ingredients.length} ingredients`);
+
+          recipe.ingredients.forEach((ingredient: any, index: number) => {
+            // More robust validation
+            const hasName = ingredient.name && String(ingredient.name).trim().length > 0;
+            const hasAmount = ingredient.amount !== null && ingredient.amount !== undefined && !isNaN(Number(ingredient.amount)) && Number(ingredient.amount) > 0;
+            const hasUnit = ingredient.unit && String(ingredient.unit).trim().length > 0;
+
+            if (hasName && hasAmount && hasUnit) {
+              const processedIngredient = {
+                name: String(ingredient.name).trim(),
+                amount: Number(ingredient.amount),
+                unit: String(ingredient.unit).trim()
+              };
+
+              ingredients.push(processedIngredient);
+            } else {
+              console.warn(`Skipping ingredient due to validation failures:`, {
+                ingredient,
+                validationResults: { hasName, hasAmount, hasUnit }
+              });
+            }
+          });
+        } else {
+          console.warn('Recipe has no ingredients or ingredients is not an array:', {
+            recipeId: recipe.id,
+            recipeName: recipe.name
+          });
+        }
+      });
+
+      console.log('Final ingredient extraction summary:', {
+        totalRecipes: recipes.length,
+        totalIngredients: ingredients.length,
+        sampleIngredients: ingredients.slice(0, 3)
+      });
+
+      if (ingredients.length === 0) {
+        console.error('No ingredients found for meal prep plan:', {
+          mealPrepPlanId: meal_prep_plan_id,
+          componentsCount: components.length,
+          recipeIds: recipeIds
+        });
+
+        return res.status(400).json({
+          error: "No ingredients found",
+          message: "This meal prep plan doesn't contain any ingredients to shop for"
+        });
+      }
+
+      // Create Instacart shopping list
+      const instacartResponse = await instacartService.createShoppingList(
+        ingredients,
+        title || `${mealPrepPlan.name} - Prep Day Shopping List`
+      );
+
+      res.json({
+        success: true,
+        instacart_url: instacartResponse.products_link_url,
+        ingredient_count: ingredients.length
+      });
+    } catch (error: any) {
+      console.error("Error creating Instacart meal prep shopping list:", error);
+      res.status(500).json({
+        error: "Failed to create Instacart shopping list",
+        message: error.message || "Unknown error"
+      });
+    }
+  });
+
   // Admin Routes - User Management and Troubleshooting
-  
+
   // Get current user's admin status
   app.get('/api/admin/status', isAuthenticated, checkAdminStatus, (req, res) => {
     res.json({

@@ -940,3 +940,280 @@ ALL ingredient measurements MUST use US customary units only (no grams, kilogram
     throw new Error("Failed to generate recipe");
   }
 }
+
+// MARK: - Meal Prep Mode AI Functions
+
+export interface MealPrepComponentParams {
+  componentType: "protein" | "carb" | "vegetable";
+  goal: string;
+  servings: number;
+  selectedIngredients: string[]; // e.g., ["Chicken Breast", "Chicken Thighs"] or ["Brown Rice", "White Rice"]
+  dietaryRestrictions?: string[];
+  allergies?: string[];
+}
+
+export interface MealPrepComponentResult {
+  recipe: Partial<TemporaryRecipe>;
+  prepTimeMinutes: number;
+  storageInstructions: string;
+  reheatInstructions: string;
+}
+
+export async function generateMealPrepComponent(
+  params: MealPrepComponentParams
+): Promise<MealPrepComponentResult> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI API key is not configured");
+  }
+
+  try {
+    const goalContext = {
+      high_protein: "Focus on maximizing protein content. Choose lean preparations with minimal added fats.",
+      budget_friendly: "Use cost-effective cooking methods. Stretch ingredients efficiently.",
+      time_saving: "Simple preparation, minimal active cooking time. Easy batch cooking.",
+      kid_friendly: "Mild flavors, familiar textures. Easy to reheat and eat.",
+      low_carb: "Minimize carbohydrates. Use keto-friendly seasonings."
+    }[params.goal] || "";
+
+    const componentContext = {
+      protein: "This is a protein component for meal prep. It should be versatile enough to pair with various carbs and vegetables.",
+      carb: "This is a carb/starch component for meal prep. It should be a neutral base that pairs well with proteins and vegetables.",
+      vegetable: "This is a vegetable component for meal prep. It should reheat well and maintain texture."
+    }[params.componentType];
+
+    const ingredientsList = params.selectedIngredients.length > 0
+      ? `Use one of these ingredients: ${params.selectedIngredients.join(", ")}`
+      : `Choose an appropriate ${params.componentType} ingredient`;
+
+    const prompt = `Create a meal prep ${params.componentType} recipe optimized for batch cooking.
+
+${componentContext}
+
+Goal: ${params.goal.replace(/_/g, " ")}
+${goalContext}
+
+${ingredientsList}
+Total servings needed: ${params.servings}
+${params.dietaryRestrictions?.length ? `Dietary restrictions: ${params.dietaryRestrictions.join(", ")}` : ""}
+${params.allergies?.length ? `STRICT - Avoid allergens: ${params.allergies.join(", ")}` : ""}
+
+Requirements:
+- Optimized for batch cooking and storing for up to 5 days
+- Should reheat well in microwave or stovetop
+- Simple seasoning that pairs with various dishes
+- Use US customary units only
+
+Respond with valid JSON:
+{
+  "name": "Recipe Name",
+  "description": "Brief description",
+  "prep_time": minutes,
+  "cook_time": minutes,
+  "servings": ${params.servings},
+  "ingredients": [{"name": "ingredient", "amount": number, "unit": "unit"}],
+  "instructions": ["step 1", "step 2"],
+  "tags": ["Meal Prep", "${params.componentType}"],
+  "nutrition": {"calories": number, "protein": number, "carbs": number, "fat": number},
+  "complexity": 1,
+  "storage_instructions": "How to store (container type, fridge duration)",
+  "reheat_instructions": "How to reheat (method, time)"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a professional meal prep chef. Create simple, batch-friendly recipes optimized for storage and reheating. Always use US customary units. Always respond with valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "gpt-4o-2024-08-06",
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 800
+    });
+
+    if (!completion.choices?.[0]?.message?.content) {
+      throw new Error("Invalid response from OpenAI API");
+    }
+
+    const parsed = JSON.parse(completion.choices[0].message.content);
+
+    // Generate image
+    let imageUrl: string | null = null;
+    try {
+      imageUrl = await generateRecipeImage(parsed.name, params.allergies || []);
+    } catch (error) {
+      console.error("Error generating meal prep component image:", error);
+      imageUrl = "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+    }
+
+    // Transform to snake_case
+    const recipe: Partial<TemporaryRecipe> = {
+      name: parsed.name,
+      description: parsed.description,
+      prep_time: parsed.prep_time,
+      cook_time: parsed.cook_time,
+      servings: parsed.servings,
+      ingredients: parsed.ingredients,
+      instructions: parsed.instructions,
+      meal_type: "Dinner", // Components are general
+      tags: parsed.tags,
+      nutrition: parsed.nutrition,
+      complexity: parsed.complexity || 1,
+      image_url: imageUrl
+    };
+
+    return {
+      recipe,
+      prepTimeMinutes: (parsed.prep_time || 10) + (parsed.cook_time || 20),
+      storageInstructions: parsed.storage_instructions || "Store in airtight container, refrigerate up to 5 days",
+      reheatInstructions: parsed.reheat_instructions || "Microwave 2-3 minutes or pan-heat until warm"
+    };
+
+  } catch (error: any) {
+    console.error("Error generating meal prep component:", error);
+    throw new Error(`Failed to generate ${params.componentType} component`);
+  }
+}
+
+export interface MealPrepAssemblyParams {
+  components: Array<{
+    id: number;
+    name: string;
+    type: "protein" | "carb" | "vegetable";
+  }>;
+  goal: string;
+  servings: number;
+  numberOfAssemblies: number;
+}
+
+export interface MealPrepAssemblyResult {
+  name: string;
+  description: string;
+  recipe: Partial<TemporaryRecipe>;
+  componentIds: number[];
+  sauceSuggestion: string;
+}
+
+export async function generateMealPrepAssemblies(
+  params: MealPrepAssemblyParams
+): Promise<MealPrepAssemblyResult[]> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI API key is not configured");
+  }
+
+  try {
+    const componentsList = params.components.map(c =>
+      `ID:${c.id} - ${c.name} (${c.type})`
+    ).join("\n");
+
+    const prompt = `Create ${params.numberOfAssemblies} meal assembly recipes using these pre-cooked meal prep components:
+
+AVAILABLE COMPONENTS:
+${componentsList}
+
+Goal: ${params.goal.replace(/_/g, " ")}
+
+Requirements:
+- Each assembly uses 1 protein + 1 carb + 1-2 vegetables from the available components
+- Suggest a sauce/seasoning for each that elevates the combination
+- Vary flavor profiles (e.g., Asian, Mediterranean, Mexican, American)
+- These are "assembly" meals - minimal cooking, just combining prepped components
+- Assembly time should be 5-10 minutes max
+
+For each assembly, provide a FULL recipe that includes:
+- All ingredients from the components used
+- A simple sauce/seasoning recipe
+- Brief assembly instructions
+
+Respond with valid JSON:
+{
+  "assemblies": [
+    {
+      "name": "Assembly Name",
+      "description": "Brief appetizing description",
+      "component_ids": [1, 2, 3],
+      "sauce_suggestion": "Name of sauce/seasoning to add",
+      "flavor_profile": "Asian/Mediterranean/Mexican/American/etc",
+      "prep_time": 5,
+      "ingredients": [{"name": "ingredient", "amount": number, "unit": "unit"}],
+      "instructions": ["Combine protein with carb", "Add vegetables", "Drizzle with sauce"],
+      "nutrition": {"calories": number, "protein": number, "carbs": number, "fat": number}
+    }
+  ]
+}`;
+
+    const completion = await openai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a meal prep expert who creates delicious meal combinations from pre-cooked components. Create varied, appetizing assemblies with complementary flavors. Always respond with valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "gpt-4o-2024-08-06",
+      response_format: { type: "json_object" },
+      temperature: 0.8,
+      max_tokens: 1500
+    });
+
+    if (!completion.choices?.[0]?.message?.content) {
+      throw new Error("Invalid response from OpenAI API");
+    }
+
+    const parsed = JSON.parse(completion.choices[0].message.content);
+
+    if (!Array.isArray(parsed.assemblies)) {
+      throw new Error("Invalid assemblies format");
+    }
+
+    // Generate images and transform results
+    const results: MealPrepAssemblyResult[] = [];
+
+    for (const assembly of parsed.assemblies) {
+      let imageUrl: string | null = null;
+      try {
+        imageUrl = await generateRecipeImage(assembly.name, []);
+      } catch (error) {
+        console.error("Error generating assembly image:", error);
+        imageUrl = "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+      }
+
+      const recipe: Partial<TemporaryRecipe> = {
+        name: assembly.name,
+        description: assembly.description,
+        prep_time: assembly.prep_time || 5,
+        cook_time: 0, // Assembly meals have no cook time
+        servings: Math.ceil(params.servings / params.numberOfAssemblies),
+        ingredients: assembly.ingredients || [],
+        instructions: assembly.instructions || [],
+        meal_type: "Dinner",
+        tags: ["Meal Prep", "Quick Assembly", assembly.flavor_profile].filter(Boolean),
+        nutrition: assembly.nutrition,
+        complexity: 1,
+        image_url: imageUrl
+      };
+
+      results.push({
+        name: assembly.name,
+        description: assembly.description,
+        recipe,
+        componentIds: assembly.component_ids || [],
+        sauceSuggestion: assembly.sauce_suggestion || ""
+      });
+    }
+
+    return results;
+
+  } catch (error: any) {
+    console.error("Error generating meal prep assemblies:", error);
+    throw new Error("Failed to generate meal assemblies");
+  }
+}

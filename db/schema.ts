@@ -226,6 +226,50 @@ export const pantryUsageLog = pgTable("pantry_usage_log", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Meal Prep Mode schemas
+export const MealPrepGoalEnum = z.enum(["high_protein", "budget_friendly", "time_saving", "kid_friendly", "low_carb"]);
+export const MealPrepComponentTypeEnum = z.enum(["protein", "carb", "vegetable"]);
+export const PrepDayEnum = z.enum(["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]);
+
+// Meal Prep Plans table
+export const mealPrepPlans = pgTable("meal_prep_plans", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  goal: text("goal").$type<z.infer<typeof MealPrepGoalEnum>>().notNull(),
+  total_servings: integer("total_servings").notNull(),
+  prep_day: text("prep_day").$type<z.infer<typeof PrepDayEnum>>().notNull(),
+  total_prep_time: integer("total_prep_time"), // in minutes
+  reheat_tips: text("reheat_tips"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  expires_at: timestamp("expires_at").notNull(),
+  is_active: boolean("is_active").default(true).notNull(),
+});
+
+// Meal Prep Components table (proteins, carbs, veggies)
+export const mealPrepComponents = pgTable("meal_prep_components", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  meal_prep_plan_id: integer("meal_prep_plan_id").notNull().references(() => mealPrepPlans.id, { onDelete: "cascade" }),
+  recipe_id: integer("recipe_id").notNull().references(() => temporaryRecipes.id),
+  component_type: text("component_type").$type<z.infer<typeof MealPrepComponentTypeEnum>>().notNull(),
+  prep_time_minutes: integer("prep_time_minutes").notNull(),
+  storage_instructions: text("storage_instructions"),
+  reheat_instructions: text("reheat_instructions"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Meal Prep Assemblies table (daily meal combinations)
+export const mealPrepAssemblies = pgTable("meal_prep_assemblies", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  meal_prep_plan_id: integer("meal_prep_plan_id").notNull().references(() => mealPrepPlans.id, { onDelete: "cascade" }),
+  recipe_id: integer("recipe_id").notNull().references(() => temporaryRecipes.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  component_ids: jsonb("component_ids").$type<number[]>().notNull(),
+  sauce_suggestion: text("sauce_suggestion"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Create validation schemas for inserting/selecting data
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -247,6 +291,14 @@ export const insertIngredientDefaultSchema = createInsertSchema(ingredientDefaul
 export const selectIngredientDefaultSchema = createSelectSchema(ingredientDefaults);
 export const insertPantryUsageLogSchema = createInsertSchema(pantryUsageLog);
 export const selectPantryUsageLogSchema = createSelectSchema(pantryUsageLog);
+
+// Meal Prep schemas
+export const insertMealPrepPlanSchema = createInsertSchema(mealPrepPlans);
+export const selectMealPrepPlanSchema = createSelectSchema(mealPrepPlans);
+export const insertMealPrepComponentSchema = createInsertSchema(mealPrepComponents);
+export const selectMealPrepComponentSchema = createSelectSchema(mealPrepComponents);
+export const insertMealPrepAssemblySchema = createInsertSchema(mealPrepAssemblies);
+export const selectMealPrepAssemblySchema = createSelectSchema(mealPrepAssemblies);
 
 export const insertTemporaryRecipeSchema = z.object({
   user_id: z.number(),
@@ -292,3 +344,11 @@ export type IngredientDefault = z.infer<typeof selectIngredientDefaultSchema>;
 export type PantryUsageLog = z.infer<typeof selectPantryUsageLogSchema>;
 export type PantryCategory = z.infer<typeof PantryCategoryEnum>;
 export type QuantityStatus = z.infer<typeof QuantityStatusEnum>;
+
+// Meal Prep types
+export type MealPrepPlan = z.infer<typeof selectMealPrepPlanSchema>;
+export type MealPrepComponent = z.infer<typeof selectMealPrepComponentSchema>;
+export type MealPrepAssembly = z.infer<typeof selectMealPrepAssemblySchema>;
+export type MealPrepGoal = z.infer<typeof MealPrepGoalEnum>;
+export type MealPrepComponentType = z.infer<typeof MealPrepComponentTypeEnum>;
+export type PrepDay = z.infer<typeof PrepDayEnum>;
