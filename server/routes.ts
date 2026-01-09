@@ -4355,18 +4355,29 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
 
         // ===== Generate all component images in parallel =====
         console.log('🖼️ Starting parallel component image generation...');
-        const componentImagePromises = componentResults.map(async (comp) => {
+        const componentImagePromises = componentResults.map(async (comp, index) => {
           try {
-            const imageUrl = await generateRecipeImage(comp.result.recipe.name, allergies || []);
-            return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+            // Generate image with Gemini (returns base64 data URL)
+            const base64ImageUrl = await generateRecipeImage(comp.result.recipe.name, allergies || []);
+
+            if (!base64ImageUrl || !base64ImageUrl.startsWith('data:')) {
+              console.log(`⚠️ No valid image generated for ${comp.result.recipe.name}, using fallback`);
+              return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+            }
+
+            // Upload base64 image to Cloudinary
+            console.log(`☁️ Uploading image to Cloudinary for ${comp.result.recipe.name}`);
+            const cdnUrl = await downloadAndStoreImage(base64ImageUrl, `meal-prep-component-${Date.now()}-${index}`);
+            console.log(`✅ Image uploaded to Cloudinary: ${cdnUrl}`);
+            return cdnUrl;
           } catch (error) {
-            console.error(`Error generating image for ${comp.result.recipe.name}:`, error);
+            console.error(`Error generating/uploading image for ${comp.result.recipe.name}:`, error);
             return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
           }
         });
 
         const componentImageUrls = await Promise.all(componentImagePromises);
-        console.log(`✅ Generated ${componentImageUrls.length} component images in parallel`);
+        console.log(`✅ Generated and uploaded ${componentImageUrls.length} component images to Cloudinary`);
 
         // Combine recipes with images
         return componentResults.map((comp, index) => ({
@@ -4467,7 +4478,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
             instructions: storedRecipe.instructions,
             tags: storedRecipe.tags,
             nutrition: storedRecipe.nutrition,
-            displayImageUrl: storedRecipe.image_url
+            image_url: storedRecipe.image_url  // Fixed: use snake_case to match iOS CodingKeys
           },
           prepTimeMinutes: comp.prepTimeMinutes,
           storageInstructions: comp.storageInstructions,
@@ -4579,7 +4590,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               instructions: recipe.instructions,
               tags: recipe.tags,
               nutrition: recipe.nutrition,
-              displayImageUrl: recipe.image_url
+              image_url: recipe.image_url  // Fixed: use snake_case to match iOS CodingKeys
             } : null
           }))
         });
@@ -4625,18 +4636,29 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
 
         // ===== Generate all assembly images in parallel =====
         console.log('🖼️ Starting parallel assembly image generation...');
-        const assemblyImagePromises = assemblyResults.map(async (assembly) => {
+        const assemblyImagePromises = assemblyResults.map(async (assembly, index) => {
           try {
-            const imageUrl = await generateRecipeImage(assembly.name, []);
-            return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+            // Generate image with Gemini (returns base64 data URL)
+            const base64ImageUrl = await generateRecipeImage(assembly.name, []);
+
+            if (!base64ImageUrl || !base64ImageUrl.startsWith('data:')) {
+              console.log(`⚠️ No valid image generated for ${assembly.name}, using fallback`);
+              return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+            }
+
+            // Upload base64 image to Cloudinary
+            console.log(`☁️ Uploading image to Cloudinary for ${assembly.name}`);
+            const cdnUrl = await downloadAndStoreImage(base64ImageUrl, `meal-prep-assembly-${Date.now()}-${index}`);
+            console.log(`✅ Image uploaded to Cloudinary: ${cdnUrl}`);
+            return cdnUrl;
           } catch (error) {
-            console.error(`Error generating image for ${assembly.name}:`, error);
+            console.error(`Error generating/uploading image for ${assembly.name}:`, error);
             return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
           }
         });
 
         const assemblyImageUrls = await Promise.all(assemblyImagePromises);
-        console.log(`✅ Generated ${assemblyImageUrls.length} assembly images in parallel`);
+        console.log(`✅ Generated and uploaded ${assemblyImageUrls.length} assembly images to Cloudinary`);
 
         // Attach images to assembly results
         return assemblyResults.map((assembly, index) => ({
@@ -4718,7 +4740,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
             instructions: storedRecipe.instructions,
             tags: storedRecipe.tags,
             nutrition: storedRecipe.nutrition,
-            displayImageUrl: storedRecipe.image_url
+            image_url: storedRecipe.image_url  // Fixed: use snake_case to match iOS CodingKeys
           },
           componentIds: assembly.componentIds,
           sauceSuggestion: assembly.sauceSuggestion
@@ -4830,7 +4852,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               instructions: recipe.instructions,
               tags: recipe.tags,
               nutrition: recipe.nutrition,
-              displayImageUrl: recipe.image_url
+              image_url: recipe.image_url  // Fixed: use snake_case to match iOS CodingKeys
             } : null
           })),
           assemblies: assembliesWithRecipes.map(({ assembly, recipe }) => ({
@@ -4850,7 +4872,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               instructions: recipe.instructions,
               tags: recipe.tags,
               nutrition: recipe.nutrition,
-              displayImageUrl: recipe.image_url
+              image_url: recipe.image_url  // Fixed: use snake_case to match iOS CodingKeys
             } : null
           })),
           createdAt: mealPrepPlan.created_at
