@@ -244,6 +244,7 @@ export const mealPrepPlans = pgTable("meal_prep_plans", {
   created_at: timestamp("created_at").defaultNow().notNull(),
   expires_at: timestamp("expires_at").notNull(),
   is_active: boolean("is_active").default(true).notNull(),
+  status: text("status").default("complete").notNull(), // "components_complete" or "complete"
 });
 
 // Meal Prep Components table (proteins, carbs, veggies)
