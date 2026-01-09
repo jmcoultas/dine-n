@@ -44,6 +44,30 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Timeout wrapper for long-running operations
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutHandle!);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutHandle!);
+    throw error;
+  }
+}
+
 // Middleware to check if user is authenticated (supports both session and Firebase token)
 async function isAuthenticated(req: Request, res: Response, next: NextFunction) {
   // First check if user is authenticated via session (web app)
@@ -4147,11 +4171,11 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
   });
 
   // ============================================
-  // MEAL PREP MODE ROUTES
+  // MEAL PREP MODE ROUTES (Two-Phase Flow)
   // ============================================
 
-  // Generate a meal prep plan
-  app.post("/api/generate-meal-prep", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
+  // Phase 1: Generate meal prep components (protein, carbs, vegetables)
+  app.post("/api/generate-meal-prep-components", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
       const { goal, servings, prepDay, proteins, sides, dietaryRestrictions, allergies } = req.body;
@@ -4237,88 +4261,137 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
 
       console.log(`🍱 Selections - Proteins: ${proteinSelections.join(', ')}, Carbs: ${carbSelections.join(', ')}, Vegetables: ${vegetableSelections.join(', ')}`);
 
-      // ===== PARALLEL GENERATION PHASE 1: Generate all component recipes in parallel =====
-      console.log('🚀 Starting parallel component recipe generation...');
-      const componentPromises: Array<Promise<{ type: "protein" | "carb" | "vegetable"; result: any }>> = [];
-
-      // Always generate protein component
-      componentPromises.push(
-        generateMealPrepComponent({
-          componentType: "protein",
-          goal,
-          servings,
-          selectedIngredients: proteinSelections.length > 0 ? proteinSelections : ["Chicken Breast"],
-          dietaryRestrictions: dietaryRestrictions || [],
-          allergies: allergies || [],
-          skipImage: true // Skip image for parallel processing
-        }).then(result => ({ type: "protein" as const, result }))
-      );
-
-      // Generate carb component if selected
-      if (carbSelections.length > 0) {
-        componentPromises.push(
-          generateMealPrepComponent({
-            componentType: "carb",
-            goal,
-            servings,
-            selectedIngredients: carbSelections,
-            dietaryRestrictions: dietaryRestrictions || [],
-            allergies: allergies || [],
-            skipImage: true
-          }).then(result => ({ type: "carb" as const, result }))
-        );
+      // Validate total selections (max 8)
+      const totalSelections = proteinSelections.length + carbSelections.length + vegetableSelections.length;
+      if (totalSelections > 8) {
+        return res.status(400).json({
+          error: "Too many selections",
+          message: `You can select a maximum of 8 ingredients total. You selected ${totalSelections}.`
+        });
       }
 
-      // Generate vegetable component if selected
-      if (vegetableSelections.length > 0) {
-        componentPromises.push(
-          generateMealPrepComponent({
-            componentType: "vegetable",
-            goal,
-            servings,
-            selectedIngredients: vegetableSelections,
-            dietaryRestrictions: dietaryRestrictions || [],
-            allergies: allergies || [],
-            skipImage: true
-          }).then(result => ({ type: "vegetable" as const, result }))
-        );
+      if (totalSelections === 0) {
+        return res.status(400).json({
+          error: "No selections",
+          message: "Please select at least one ingredient."
+        });
       }
 
-      // Wait for all component recipes to complete
-      const componentResults = await Promise.all(componentPromises);
-      console.log(`✅ Generated ${componentResults.length} component recipes in parallel`);
+      console.log(`✅ Validation passed: ${totalSelections} total selections (max 8)`);
 
-      // ===== PARALLEL GENERATION PHASE 2: Generate all component images in parallel =====
-      console.log('🖼️ Starting parallel component image generation...');
-      const componentImagePromises = componentResults.map(async (comp) => {
-        try {
-          const imageUrl = await generateRecipeImage(comp.result.recipe.name, allergies || []);
-          return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
-        } catch (error) {
-          console.error(`Error generating image for ${comp.result.recipe.name}:`, error);
-          return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+      // Wrap component generation in timeout (3 minutes)
+      const COMPONENT_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+
+      const generateComponentsWithTimeout = async () => {
+        // ===== PARALLEL GENERATION: Generate ONE component per ingredient selection =====
+        console.log('🚀 Starting parallel component recipe generation...');
+        console.log(`📊 Total selections: ${proteinSelections.length} proteins, ${carbSelections.length} carbs, ${vegetableSelections.length} vegetables`);
+
+        const componentPromises: Array<Promise<{ type: "protein" | "carb" | "vegetable"; ingredient: string; result: any }>> = [];
+
+        // Generate one protein component for EACH protein selection
+        if (proteinSelections.length > 0) {
+          for (const protein of proteinSelections) {
+            componentPromises.push(
+              generateMealPrepComponent({
+                componentType: "protein",
+                goal,
+                servings,
+                selectedIngredients: [protein], // One recipe per ingredient!
+                dietaryRestrictions: dietaryRestrictions || [],
+                allergies: allergies || [],
+                skipImage: true
+              }).then(result => ({ type: "protein" as const, ingredient: protein, result }))
+            );
+          }
+        } else {
+          // Default protein if none selected
+          componentPromises.push(
+            generateMealPrepComponent({
+              componentType: "protein",
+              goal,
+              servings,
+              selectedIngredients: ["Chicken Breast"],
+              dietaryRestrictions: dietaryRestrictions || [],
+              allergies: allergies || [],
+              skipImage: true
+            }).then(result => ({ type: "protein" as const, ingredient: "Chicken Breast", result }))
+          );
         }
-      });
 
-      const componentImageUrls = await Promise.all(componentImagePromises);
-      console.log(`✅ Generated ${componentImageUrls.length} component images in parallel`);
+        // Generate one carb component for EACH carb selection
+        for (const carb of carbSelections) {
+          componentPromises.push(
+            generateMealPrepComponent({
+              componentType: "carb",
+              goal,
+              servings,
+              selectedIngredients: [carb], // One recipe per ingredient!
+              dietaryRestrictions: dietaryRestrictions || [],
+              allergies: allergies || [],
+              skipImage: true
+            }).then(result => ({ type: "carb" as const, ingredient: carb, result }))
+          );
+        }
 
-      // Combine recipes with images
-      const generatedComponents = componentResults.map((comp, index) => ({
-        type: comp.type,
-        recipe: {
-          ...comp.result.recipe,
-          image_url: componentImageUrls[index]
-        },
-        prepTimeMinutes: comp.result.prepTimeMinutes,
-        storageInstructions: comp.result.storageInstructions,
-        reheatInstructions: comp.result.reheatInstructions
-      }));
+        // Generate one vegetable component for EACH vegetable selection
+        for (const vegetable of vegetableSelections) {
+          componentPromises.push(
+            generateMealPrepComponent({
+              componentType: "vegetable",
+              goal,
+              servings,
+              selectedIngredients: [vegetable], // One recipe per ingredient!
+              dietaryRestrictions: dietaryRestrictions || [],
+              allergies: allergies || [],
+              skipImage: true
+            }).then(result => ({ type: "vegetable" as const, ingredient: vegetable, result }))
+          );
+        }
+
+        // Wait for all component recipes to complete
+        const componentResults = await Promise.all(componentPromises);
+        console.log(`✅ Generated ${componentResults.length} component recipes in parallel (one per ingredient)`);
+
+        // ===== Generate all component images in parallel =====
+        console.log('🖼️ Starting parallel component image generation...');
+        const componentImagePromises = componentResults.map(async (comp) => {
+          try {
+            const imageUrl = await generateRecipeImage(comp.result.recipe.name, allergies || []);
+            return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+          } catch (error) {
+            console.error(`Error generating image for ${comp.result.recipe.name}:`, error);
+            return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+          }
+        });
+
+        const componentImageUrls = await Promise.all(componentImagePromises);
+        console.log(`✅ Generated ${componentImageUrls.length} component images in parallel`);
+
+        // Combine recipes with images
+        return componentResults.map((comp, index) => ({
+          type: comp.type,
+          recipe: {
+            ...comp.result.recipe,
+            image_url: componentImageUrls[index]
+          },
+          prepTimeMinutes: comp.result.prepTimeMinutes,
+          storageInstructions: comp.result.storageInstructions,
+          reheatInstructions: comp.result.reheatInstructions
+        }));
+      };
+
+      // Execute component generation with timeout
+      const generatedComponents = await withTimeout(
+        generateComponentsWithTimeout(),
+        COMPONENT_TIMEOUT_MS,
+        "Component generation timed out after 3 minutes"
+      );
 
       // Calculate total prep time
       const totalPrepTime = generatedComponents.reduce((sum, c) => sum + c.prepTimeMinutes, 0);
 
-      // Create the meal prep plan
+      // Create the meal prep plan with status "components_complete"
       const [mealPrepPlan] = await db
         .insert(mealPrepPlans)
         .values({
@@ -4331,6 +4404,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
           reheat_tips: "Proteins: Microwave 2-3 min or pan-sear until heated through. Carbs: Add a splash of water, cover, microwave 90 sec. Veggies: Microwave 1-2 min or enjoy cold in salads.",
           expires_at: expiresAt,
           is_active: true,
+          status: "components_complete", // Phase 1 complete, assemblies pending
         })
         .returning();
 
@@ -4401,46 +4475,188 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         });
       }
 
-      // ===== PARALLEL GENERATION PHASE 3: Generate assembly recipes (single call) =====
-      console.log('🍱 Generating assembly meals...');
-      const assemblyParams = {
-        components: storedComponents.map(c => ({
-          id: c.id,
-          name: c.recipe.name,
-          type: c.type as "protein" | "carb" | "vegetable"
-        })),
-        goal,
-        servings,
-        numberOfAssemblies: 3,
-        skipImages: true // Skip images for parallel processing
-      };
+      console.log(`✅ Phase 1 complete: Meal prep plan ${mealPrepPlan.id} created with ${storedComponents.length} components`);
 
-      const assemblyResults = await generateMealPrepAssemblies(assemblyParams);
-      console.log(`✅ Generated ${assemblyResults.length} assembly recipes`);
-
-      // ===== PARALLEL GENERATION PHASE 4: Generate all assembly images in parallel =====
-      console.log('🖼️ Starting parallel assembly image generation...');
-      const assemblyImagePromises = assemblyResults.map(async (assembly) => {
-        try {
-          const imageUrl = await generateRecipeImage(assembly.name, []);
-          return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
-        } catch (error) {
-          console.error(`Error generating image for ${assembly.name}:`, error);
-          return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+      // Return components immediately - iOS will call Phase 2 for assemblies
+      res.json({
+        status: "success",
+        message: "Meal prep components generated successfully",
+        mealPrepPlan: {
+          id: mealPrepPlan.id,
+          name: mealPrepPlan.name,
+          goal: mealPrepPlan.goal,
+          totalServings: mealPrepPlan.total_servings,
+          prepDay: mealPrepPlan.prep_day,
+          totalPrepTime: mealPrepPlan.total_prep_time,
+          reheatTips: mealPrepPlan.reheat_tips,
+          status: "components_complete",
+          components: storedComponents.map(c => ({
+            id: c.id,
+            component_type: c.type,
+            recipe: c.recipe,
+            prep_time_minutes: c.prepTimeMinutes,
+            storage_instructions: c.storageInstructions,
+            reheat_instructions: c.reheatInstructions
+          })),
+          createdAt: mealPrepPlan.created_at
         }
       });
 
-      const assemblyImageUrls = await Promise.all(assemblyImagePromises);
-      console.log(`✅ Generated ${assemblyImageUrls.length} assembly images in parallel`);
+    } catch (error) {
+      console.error('Error generating meal prep components:', error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to generate meal prep components",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 
-      // Attach images to assembly results
-      const assembliesWithImages = assemblyResults.map((assembly, index) => ({
-        ...assembly,
-        recipe: {
-          ...assembly.recipe,
-          image_url: assemblyImageUrls[index]
-        }
-      }));
+  // Phase 2: Generate meal prep assemblies
+  app.post("/api/generate-meal-prep-assemblies", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { meal_prep_plan_id } = req.body;
+
+      // Validate required fields
+      if (!meal_prep_plan_id) {
+        return res.status(400).json({
+          error: "Missing required field",
+          message: "meal_prep_plan_id is required"
+        });
+      }
+
+      console.log(`🍱 Generating assemblies for meal prep plan ${meal_prep_plan_id}`);
+
+      // Get the meal prep plan and verify ownership
+      const [mealPrepPlan] = await db
+        .select()
+        .from(mealPrepPlans)
+        .where(and(
+          eq(mealPrepPlans.id, meal_prep_plan_id),
+          eq(mealPrepPlans.user_id, user.id)
+        ))
+        .limit(1);
+
+      if (!mealPrepPlan) {
+        return res.status(404).json({
+          error: "Not Found",
+          message: "Meal prep plan not found"
+        });
+      }
+
+      // Check if assemblies already generated
+      if (mealPrepPlan.status === "complete") {
+        console.log(`⚠️ Assemblies already exist for plan ${meal_prep_plan_id}, returning existing`);
+
+        // Fetch existing assemblies
+        const assembliesWithRecipes = await db
+          .select({
+            assembly: mealPrepAssemblies,
+            recipe: temporaryRecipes
+          })
+          .from(mealPrepAssemblies)
+          .leftJoin(temporaryRecipes, eq(mealPrepAssemblies.recipe_id, temporaryRecipes.id))
+          .where(eq(mealPrepAssemblies.meal_prep_plan_id, meal_prep_plan_id));
+
+        return res.json({
+          status: "success",
+          message: "Assemblies already generated",
+          assemblies: assembliesWithRecipes.map(({ assembly, recipe }) => ({
+            id: assembly.id,
+            name: assembly.name,
+            description: assembly.description,
+            component_ids: assembly.component_ids,
+            sauce_suggestion: assembly.sauce_suggestion,
+            recipe: recipe ? {
+              id: recipe.id,
+              name: recipe.name,
+              description: recipe.description,
+              prepTime: recipe.prep_time,
+              cookTime: recipe.cook_time,
+              servings: recipe.servings,
+              ingredients: recipe.ingredients,
+              instructions: recipe.instructions,
+              tags: recipe.tags,
+              nutrition: recipe.nutrition,
+              displayImageUrl: recipe.image_url
+            } : null
+          }))
+        });
+      }
+
+      // Get components for this meal prep plan
+      const componentsWithRecipes = await db
+        .select({
+          component: mealPrepComponents,
+          recipe: temporaryRecipes
+        })
+        .from(mealPrepComponents)
+        .leftJoin(temporaryRecipes, eq(mealPrepComponents.recipe_id, temporaryRecipes.id))
+        .where(eq(mealPrepComponents.meal_prep_plan_id, meal_prep_plan_id));
+
+      if (componentsWithRecipes.length === 0) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "No components found for this meal prep plan"
+        });
+      }
+
+      // Wrap assembly generation in timeout (3 minutes)
+      const ASSEMBLY_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+
+      const generateAssembliesWithTimeout = async () => {
+        // ===== Generate assembly recipes =====
+        console.log('🍱 Generating assembly meals...');
+        const assemblyParams = {
+          components: componentsWithRecipes.map(({ component, recipe }) => ({
+            id: component.id,
+            name: recipe?.name || "Unknown",
+            type: component.component_type as "protein" | "carb" | "vegetable"
+          })),
+          goal: mealPrepPlan.goal,
+          servings: mealPrepPlan.total_servings,
+          numberOfAssemblies: 3,
+          skipImages: true // Skip images for parallel processing
+        };
+
+        const assemblyResults = await generateMealPrepAssemblies(assemblyParams);
+        console.log(`✅ Generated ${assemblyResults.length} assembly recipes`);
+
+        // ===== Generate all assembly images in parallel =====
+        console.log('🖼️ Starting parallel assembly image generation...');
+        const assemblyImagePromises = assemblyResults.map(async (assembly) => {
+          try {
+            const imageUrl = await generateRecipeImage(assembly.name, []);
+            return imageUrl || "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+          } catch (error) {
+            console.error(`Error generating image for ${assembly.name}:`, error);
+            return "https://res.cloudinary.com/dxv6zb1od/image/upload/v1732391429/samples/food/spices.jpg";
+          }
+        });
+
+        const assemblyImageUrls = await Promise.all(assemblyImagePromises);
+        console.log(`✅ Generated ${assemblyImageUrls.length} assembly images in parallel`);
+
+        // Attach images to assembly results
+        return assemblyResults.map((assembly, index) => ({
+          ...assembly,
+          recipe: {
+            ...assembly.recipe,
+            image_url: assemblyImageUrls[index]
+          }
+        }));
+      };
+
+      // Execute assembly generation with timeout
+      const assembliesWithImages = await withTimeout(
+        generateAssembliesWithTimeout(),
+        ASSEMBLY_TIMEOUT_MS,
+        "Assembly generation timed out after 3 minutes"
+      );
+
+      // Calculate expiration (use same as meal prep plan)
+      const expiresAt = mealPrepPlan.expires_at;
 
       // Store assembly recipes and create assembly records
       const storedAssemblies: Array<{
@@ -4462,7 +4678,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
             description: assembly.recipe.description || null,
             prep_time: assembly.recipe.prep_time || 10,
             cook_time: assembly.recipe.cook_time || 5,
-            servings: assembly.recipe.servings || servings,
+            servings: assembly.recipe.servings || mealPrepPlan.total_servings,
             ingredients: assembly.recipe.ingredients || [],
             instructions: assembly.recipe.instructions || [],
             meal_type: "Dinner",
@@ -4509,7 +4725,13 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         });
       }
 
-      // Increment user's meal_plans_generated counter
+      // Update meal prep plan status to "complete"
+      await db
+        .update(mealPrepPlans)
+        .set({ status: "complete" })
+        .where(eq(mealPrepPlans.id, meal_prep_plan_id));
+
+      // Increment user's meal_plans_generated counter (only once, in Phase 2)
       await db
         .update(users)
         .set({
@@ -4517,44 +4739,27 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
         })
         .where(eq(users.id, user.id));
 
-      console.log(`✅ Meal prep plan ${mealPrepPlan.id} created with ${storedComponents.length} components and ${storedAssemblies.length} assemblies`);
+      console.log(`✅ Phase 2 complete: Added ${storedAssemblies.length} assemblies to meal prep plan ${meal_prep_plan_id}`);
 
       res.json({
         status: "success",
-        message: "Meal prep plan created successfully",
-        mealPrepPlan: {
-          id: mealPrepPlan.id,
-          name: mealPrepPlan.name,
-          goal: mealPrepPlan.goal,
-          totalServings: mealPrepPlan.total_servings,
-          prepDay: mealPrepPlan.prep_day,
-          totalPrepTime: mealPrepPlan.total_prep_time,
-          reheatTips: mealPrepPlan.reheat_tips,
-          components: storedComponents.map(c => ({
-            id: c.id,
-            component_type: c.type,
-            recipe: c.recipe,
-            prep_time_minutes: c.prepTimeMinutes,
-            storage_instructions: c.storageInstructions,
-            reheat_instructions: c.reheatInstructions
-          })),
-          assemblies: storedAssemblies.map(a => ({
-            id: a.id,
-            name: a.name,
-            description: a.description,
-            recipe: a.recipe,
-            component_ids: a.componentIds,
-            sauce_suggestion: a.sauceSuggestion
-          })),
-          createdAt: mealPrepPlan.created_at
-        }
+        message: "Meal prep assemblies generated successfully",
+        assemblies: storedAssemblies.map(a => ({
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          recipe: a.recipe,
+          component_ids: a.componentIds,
+          sauce_suggestion: a.sauceSuggestion
+        }))
       });
 
     } catch (error) {
-      console.error('Error generating meal prep plan:', error);
+      console.error('Error generating meal prep assemblies:', error);
       res.status(500).json({
         error: "Internal Server Error",
-        message: "Failed to generate meal prep plan"
+        message: "Failed to generate meal prep assemblies",
+        details: error instanceof Error ? error.message : "Unknown error"
       });
     }
   });
