@@ -143,6 +143,16 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
       try {
         const parsedRecipe = JSON.parse(content);
 
+        // Normalize ingredients to ensure amounts are numbers, not strings
+        const normalizedIngredients = Array.isArray(parsedRecipe.ingredients)
+          ? parsedRecipe.ingredients.map((ing: any) => ({
+              name: ing.name,
+              amount: typeof ing.amount === 'string' ? parseFloat(ing.amount) : ing.amount,
+              unit: ing.unit,
+              notes: ing.notes
+            }))
+          : [];
+
         // Validate the parsed recipe structure
         const validatedRecipe = {
           name: parsedRecipe.name || "Untitled Recipe",
@@ -150,9 +160,7 @@ Use US units only (cups, tbsp, tsp, oz, lbs). Respond with valid JSON:
           prep_time: Number(parsedRecipe.prep_time) || 15,
           cook_time: Number(parsedRecipe.cook_time) || 30,
           servings: Number(parsedRecipe.servings) || 4,
-          ingredients: Array.isArray(parsedRecipe.ingredients)
-            ? parsedRecipe.ingredients
-            : [],
+          ingredients: normalizedIngredients,
           instructions: Array.isArray(parsedRecipe.instructions)
             ? parsedRecipe.instructions
             : [],
@@ -452,13 +460,21 @@ interface RecipeAPIResponse {
 function transformRecipeToSnakeCase(
   recipe: RecipeAPIResponse,
 ): Partial<TemporaryRecipe> {
+  // Normalize ingredients to ensure amounts are numbers, not strings
+  const normalizedIngredients = (recipe.ingredients || []).map((ing: any) => ({
+    name: ing.name,
+    amount: typeof ing.amount === 'string' ? parseFloat(ing.amount) : ing.amount,
+    unit: ing.unit,
+    notes: ing.notes
+  }));
+
   return {
     name: recipe.name,
     description: recipe.description,
     prep_time: recipe.prepTime,
     cook_time: recipe.cookTime,
     servings: recipe.servings,
-    ingredients: recipe.ingredients,
+    ingredients: normalizedIngredients,
     instructions: recipe.instructions,
     meal_type: Array.isArray(recipe.tags)
       ? recipe.tags.find((tag) =>
@@ -1053,6 +1069,14 @@ Respond with valid JSON:
       }
     }
 
+    // Normalize ingredients to ensure amounts are numbers, not strings
+    const normalizedIngredients = (parsed.ingredients || []).map((ing: any) => ({
+      name: ing.name,
+      amount: typeof ing.amount === 'string' ? parseFloat(ing.amount) : ing.amount,
+      unit: ing.unit,
+      notes: ing.notes
+    }));
+
     // Transform to snake_case
     const recipe: Partial<TemporaryRecipe> = {
       name: parsed.name,
@@ -1060,7 +1084,7 @@ Respond with valid JSON:
       prep_time: parsed.prep_time,
       cook_time: parsed.cook_time,
       servings: parsed.servings,
-      ingredients: parsed.ingredients,
+      ingredients: normalizedIngredients,
       instructions: parsed.instructions,
       meal_type: "Dinner", // Components are general
       tags: parsed.tags,
@@ -1192,13 +1216,21 @@ Respond with valid JSON:
         }
       }
 
+      // Normalize ingredients to ensure amounts are numbers, not strings
+      const normalizedIngredients = (assembly.ingredients || []).map((ing: any) => ({
+        name: ing.name,
+        amount: typeof ing.amount === 'string' ? parseFloat(ing.amount) : ing.amount,
+        unit: ing.unit,
+        notes: ing.notes
+      }));
+
       const recipe: Partial<TemporaryRecipe> = {
         name: assembly.name,
         description: assembly.description,
         prep_time: assembly.prep_time || 5,
         cook_time: 0, // Assembly meals have no cook time
         servings: Math.ceil(params.servings / params.numberOfAssemblies),
-        ingredients: assembly.ingredients || [],
+        ingredients: normalizedIngredients,
         instructions: assembly.instructions || [],
         meal_type: "Dinner",
         tags: ["Meal Prep", "Quick Assembly", assembly.flavor_profile].filter(Boolean),
