@@ -975,6 +975,48 @@ export interface MealPrepComponentResult {
   reheatInstructions: string;
 }
 
+/**
+ * Returns component-type-aware goal context to prevent over-application of goals.
+ * For example, "high_protein" should not add protein powder to rice.
+ */
+function getGoalContextForComponent(goal: string, componentType: string): string {
+  // Universal goals - apply to all components with full context
+  const universalGoals: Record<string, string> = {
+    budget_friendly: "Use cost-effective cooking methods. Stretch ingredients efficiently.",
+    time_saving: "Simple preparation, minimal active cooking time. Easy batch cooking.",
+    kid_friendly: "Mild flavors, familiar textures. Easy to reheat and eat."
+  };
+
+  // Apply universal goals to all types
+  if (universalGoals[goal]) {
+    return universalGoals[goal];
+  }
+
+  // High-protein goal: Different context per component type
+  if (goal === "high_protein") {
+    if (componentType === "protein") {
+      return "Focus on maximizing protein content. Choose lean preparations with minimal added fats.";
+    } else {
+      // Carbs and vegetables: Pairing guidance (not aggressive protein additions)
+      return "Create a neutral base that pairs well with high-protein dishes.";
+    }
+  }
+
+  // Low-carb goal: Different context per component type
+  if (goal === "low_carb") {
+    if (componentType === "carb") {
+      // Allow substitutions (rice → cauliflower rice)
+      return "Create a low-carb alternative to this ingredient (e.g., cauliflower rice instead of rice, zucchini noodles instead of pasta).";
+    } else {
+      // Proteins and vegetables: Full low-carb context
+      return "Minimize carbohydrates. Use keto-friendly seasonings.";
+    }
+  }
+
+  // No goal context for unknown combinations
+  return "";
+}
+
 export async function generateMealPrepComponent(
   params: MealPrepComponentParams & { skipImage?: boolean }
 ): Promise<MealPrepComponentResult> {
@@ -983,13 +1025,8 @@ export async function generateMealPrepComponent(
   }
 
   try {
-    const goalContext = {
-      high_protein: "Focus on maximizing protein content. Choose lean preparations with minimal added fats.",
-      budget_friendly: "Use cost-effective cooking methods. Stretch ingredients efficiently.",
-      time_saving: "Simple preparation, minimal active cooking time. Easy batch cooking.",
-      kid_friendly: "Mild flavors, familiar textures. Easy to reheat and eat.",
-      low_carb: "Minimize carbohydrates. Use keto-friendly seasonings."
-    }[params.goal] || "";
+    // Use component-type-aware goal context to prevent over-application
+    const goalContext = getGoalContextForComponent(params.goal, params.componentType);
 
     const componentContext = {
       protein: "This is a protein component for meal prep. It should be versatile enough to pair with various carbs and vegetables.",
@@ -1018,6 +1055,7 @@ Requirements:
 - Should reheat well in microwave or stovetop
 - Simple seasoning that pairs with various dishes
 - Use US customary units only
+- IMPORTANT: Recipe name should be descriptive and specific (e.g., "Cilantro Lime Rice", "Roasted Garlic Broccoli"). Do NOT include the goal in the name (no "High-Protein", "Kid-Friendly", "Budget", etc. prefixes)
 
 Respond with valid JSON:
 {
