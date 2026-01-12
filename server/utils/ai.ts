@@ -966,6 +966,7 @@ export interface MealPrepComponentParams {
   selectedIngredients: string[]; // e.g., ["Chicken Breast", "Chicken Thighs"] or ["Brown Rice", "White Rice"]
   dietaryRestrictions?: string[];
   allergies?: string[];
+  cuisinePreferences?: string[];
 }
 
 export interface MealPrepComponentResult {
@@ -1049,6 +1050,7 @@ ${ingredientsList}
 Total servings needed: ${params.servings}
 ${params.dietaryRestrictions?.length ? `Dietary restrictions: ${params.dietaryRestrictions.join(", ")}` : ""}
 ${params.allergies?.length ? `STRICT - Avoid allergens: ${params.allergies.join(", ")}` : ""}
+${params.cuisinePreferences?.length ? `Preferred cuisine styles: ${params.cuisinePreferences.join(", ")} (draw inspiration from these cuisines when appropriate for this component)` : ""}
 
 Requirements:
 - Optimized for batch cooking and storing for up to 5 days

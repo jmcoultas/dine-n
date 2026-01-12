@@ -4178,7 +4178,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
   app.post("/api/generate-meal-prep-components", isAuthenticated, requireActiveSubscription, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
-      const { goal, servings, prepDay, proteins, sides, dietaryRestrictions, allergies } = req.body;
+      const { goal, servings, prepDay, proteins, sides, dietaryRestrictions, allergies, cuisinePreferences } = req.body;
 
       // Validate required fields
       if (!goal || !servings || !prepDay) {
@@ -4300,6 +4300,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
                 selectedIngredients: [protein], // One recipe per ingredient!
                 dietaryRestrictions: dietaryRestrictions || [],
                 allergies: allergies || [],
+                cuisinePreferences: cuisinePreferences || [],
                 skipImage: true
               }).then(result => ({ type: "protein" as const, ingredient: protein, result }))
             );
@@ -4314,6 +4315,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               selectedIngredients: ["Chicken Breast"],
               dietaryRestrictions: dietaryRestrictions || [],
               allergies: allergies || [],
+              cuisinePreferences: cuisinePreferences || [],
               skipImage: true
             }).then(result => ({ type: "protein" as const, ingredient: "Chicken Breast", result }))
           );
@@ -4329,6 +4331,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               selectedIngredients: [carb], // One recipe per ingredient!
               dietaryRestrictions: dietaryRestrictions || [],
               allergies: allergies || [],
+              cuisinePreferences: cuisinePreferences || [],
               skipImage: true
             }).then(result => ({ type: "carb" as const, ingredient: carb, result }))
           );
@@ -4344,6 +4347,7 @@ Make sure the title is unique and not: ${Array.from(usedTitles).join(", ")}`;
               selectedIngredients: [vegetable], // One recipe per ingredient!
               dietaryRestrictions: dietaryRestrictions || [],
               allergies: allergies || [],
+              cuisinePreferences: cuisinePreferences || [],
               skipImage: true
             }).then(result => ({ type: "vegetable" as const, ingredient: vegetable, result }))
           );
