@@ -3149,12 +3149,12 @@ Respond with valid JSON:
     }
   });
 
-  // Add endpoint to get current meal plan
+  // Add endpoint to get current meal plan (checks both regular and meal prep plans)
   app.get("/api/meal-plans/current", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const user = req.user!;
-      
-      // Get the most recent non-expired meal plan
+
+      // Get the most recent non-expired traditional meal plan
       const currentMealPlan = await db.query.mealPlans.findFirst({
         where: and(
           eq(mealPlans.user_id, user.id),
@@ -3164,36 +3164,145 @@ Respond with valid JSON:
         orderBy: desc(mealPlans.created_at)
       });
 
-      if (!currentMealPlan) {
+      // Get the most recent active meal prep plan
+      const currentMealPrepPlan = await db.query.mealPrepPlans.findFirst({
+        where: and(
+          eq(mealPrepPlans.user_id, user.id),
+          eq(mealPrepPlans.is_active, true),
+          gt(mealPrepPlans.expires_at, new Date())
+        ),
+        orderBy: desc(mealPrepPlans.created_at)
+      });
+
+      // Determine which plan is most recent
+      let planToReturn: 'regular' | 'meal_prep' | null = null;
+
+      if (currentMealPlan && currentMealPrepPlan) {
+        // Both exist - compare created_at timestamps
+        const mealPlanDate = new Date(currentMealPlan.created_at);
+        const mealPrepDate = new Date(currentMealPrepPlan.created_at);
+        planToReturn = mealPrepDate > mealPlanDate ? 'meal_prep' : 'regular';
+      } else if (currentMealPlan) {
+        planToReturn = 'regular';
+      } else if (currentMealPrepPlan) {
+        planToReturn = 'meal_prep';
+      }
+
+      // If no active plans found
+      if (!planToReturn) {
         return res.status(404).json({ message: "No active meal plan found" });
       }
 
-      // Get associated recipes
-      const mealPlanRecipesList = await db
-        .select({
-          recipe_id: mealPlanRecipes.recipe_id,
-          meal: mealPlanRecipes.meal,
-          day: mealPlanRecipes.day
-        })
-        .from(mealPlanRecipes)
-        .where(eq(mealPlanRecipes.meal_plan_id, currentMealPlan.id));
+      // Return the appropriate plan
+      if (planToReturn === 'regular') {
+        // Get associated recipes for traditional meal plan
+        const mealPlanRecipesList = await db
+          .select({
+            recipe_id: mealPlanRecipes.recipe_id,
+            meal: mealPlanRecipes.meal,
+            day: mealPlanRecipes.day
+          })
+          .from(mealPlanRecipes)
+          .where(eq(mealPlanRecipes.meal_plan_id, currentMealPlan!.id));
 
-      const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
-      
-      // Get recipe details from temporary_recipes
-      const recipes = await db
-        .select()
-        .from(temporaryRecipes)
-        .where(inArray(temporaryRecipes.id, recipeIds));
+        const recipeIds = mealPlanRecipesList.map(mpr => mpr.recipe_id);
 
-      res.json({
-        ...currentMealPlan,
-        recipes: recipes.map(recipe => ({
-          ...recipe,
-          meal: mealPlanRecipesList.find(mpr => mpr.recipe_id === recipe.id)?.meal,
-          day: mealPlanRecipesList.find(mpr => mpr.recipe_id === recipe.id)?.day
-        }))
-      });
+        // Get recipe details from temporary_recipes
+        const recipes = await db
+          .select()
+          .from(temporaryRecipes)
+          .where(inArray(temporaryRecipes.id, recipeIds));
+
+        res.json({
+          ...currentMealPlan,
+          type: 'regular',
+          recipes: recipes.map(recipe => ({
+            ...recipe,
+            meal: mealPlanRecipesList.find(mpr => mpr.recipe_id === recipe.id)?.meal,
+            day: mealPlanRecipesList.find(mpr => mpr.recipe_id === recipe.id)?.day
+          }))
+        });
+      } else {
+        // Return meal prep plan with indicator
+        // Get components with recipes
+        const componentsWithRecipes = await db
+          .select({
+            component: mealPrepComponents,
+            recipe: temporaryRecipes
+          })
+          .from(mealPrepComponents)
+          .leftJoin(temporaryRecipes, eq(mealPrepComponents.recipe_id, temporaryRecipes.id))
+          .where(eq(mealPrepComponents.meal_prep_plan_id, currentMealPrepPlan!.id));
+
+        // Get assemblies with recipes
+        const assembliesWithRecipes = await db
+          .select({
+            assembly: mealPrepAssemblies,
+            recipe: temporaryRecipes
+          })
+          .from(mealPrepAssemblies)
+          .leftJoin(temporaryRecipes, eq(mealPrepAssemblies.recipe_id, temporaryRecipes.id))
+          .where(eq(mealPrepAssemblies.meal_prep_plan_id, currentMealPrepPlan!.id));
+
+        res.json({
+          type: 'meal_prep',
+          id: currentMealPrepPlan!.id,
+          user_id: currentMealPrepPlan!.user_id,
+          name: currentMealPrepPlan!.name,
+          created_at: currentMealPrepPlan!.created_at,
+          mealPrepPlan: {
+            id: currentMealPrepPlan!.id,
+            name: currentMealPrepPlan!.name,
+            goal: currentMealPrepPlan!.goal,
+            totalServings: currentMealPrepPlan!.total_servings,
+            prepDay: currentMealPrepPlan!.prep_day,
+            totalPrepTime: currentMealPrepPlan!.total_prep_time,
+            reheatTips: currentMealPrepPlan!.reheat_tips,
+            createdAt: currentMealPrepPlan!.created_at,
+            expiresAt: currentMealPrepPlan!.expires_at,
+            components: componentsWithRecipes.map(({ component, recipe }) => ({
+              id: component.id,
+              component_type: component.component_type,
+              prep_time_minutes: component.prep_time_minutes,
+              storage_instructions: component.storage_instructions,
+              reheat_instructions: component.reheat_instructions,
+              recipe: recipe ? {
+                id: recipe.id,
+                name: recipe.name,
+                description: recipe.description,
+                prepTime: recipe.prep_time,
+                cookTime: recipe.cook_time,
+                servings: recipe.servings,
+                ingredients: recipe.ingredients,
+                instructions: recipe.instructions,
+                tags: recipe.tags,
+                nutrition: recipe.nutrition,
+                image_url: recipe.image_url
+              } : null
+            })),
+            assemblies: assembliesWithRecipes.map(({ assembly, recipe }) => ({
+              id: assembly.id,
+              name: assembly.name,
+              description: assembly.description,
+              component_ids: assembly.component_ids,
+              sauce_suggestion: assembly.sauce_suggestion,
+              recipe: recipe ? {
+                id: recipe.id,
+                name: recipe.name,
+                description: recipe.description,
+                prepTime: recipe.prep_time,
+                cookTime: recipe.cook_time,
+                servings: recipe.servings,
+                ingredients: recipe.ingredients,
+                instructions: recipe.instructions,
+                tags: recipe.tags,
+                nutrition: recipe.nutrition,
+                image_url: recipe.image_url
+              } : null
+            }))
+          }
+        });
+      }
     } catch (error) {
       console.error("Error fetching current meal plan:", error);
       res.status(500).json({ error: "Failed to fetch current meal plan" });
