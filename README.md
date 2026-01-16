@@ -481,4 +481,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 <div align="center">
   <p>Made with ❤️ and a lot of ☕</p>
   <p><strong>Happy Cooking! 🍳</strong></p>
+  <br/>
+  <sub>Last updated: January 2026</sub>
 </div> 
